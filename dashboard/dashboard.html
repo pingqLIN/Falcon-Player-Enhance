@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shield Pro 控制台</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Shield Pro</h1>
+                <span class="version">v2.3.0</span>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-tab="general">一般設定</button>
+                <button class="nav-btn" data-tab="blocklists">封鎖列表</button>
+                <button class="nav-btn" data-tab="statistics">統計資料</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- General Settings -->
+            <section id="general" class="tab-content active">
+                <div class="card">
+                    <h2>一般防護</h2>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h3>啟用廣告攔截</h3>
+                            <p>攔截大多數網站上的廣告內容</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-ads" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h3>啟用彈窗攔截</h3>
+                            <p>防止惡意彈出視窗與背後彈窗</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-popups" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Blocklists -->
+            <section id="blocklists" class="tab-content">
+                <div class="card">
+                    <h2>主動防護列表</h2>
+                    <p class="description">管理啟用的過濾規則列表。啟用更多列表可能會影響瀏覽器效能。</p>
+                    
+                    <div class="list-item">
+                        <div class="list-info">
+                            <h3>Shield Pro 核心列表</h3>
+                            <p>內建的廣告與惡意程式防護規則 (必要)</p>
+                        </div>
+                        <div class="status-badge active">啟用中</div>
+                    </div>
+
+                    <div class="list-item">
+                        <div class="list-info">
+                            <h3>EasyList</h3>
+                            <p>主要的廣告過濾列表，適用於大多數國際網站</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-easylist" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+
+                    <div class="list-item">
+                        <div class="list-info">
+                            <h3>EasyPrivacy</h3>
+                            <p>攔截追蹤器與分析腳本，保護個人隱私</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-easyprivacy" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Statistics -->
+            <section id="statistics" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>已攔截廣告</h3>
+                        <div class="number" id="stats-ads">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>已攔截追蹤器</h3>
+                        <div class="number" id="stats-trackers">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>已攔截惡意程式</h3>
+                        <div class="number" id="stats-malware">0</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="dashboard.js"></script>
+</body>
+</html>

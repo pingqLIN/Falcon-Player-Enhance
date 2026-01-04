@@ -1,0 +1,120 @@
+/* ============================================================================
+   Shield Pro - Player Overlay Fix CSS  
+   針對 javboys.online 等播放器的覆蓋層強制移除樣式
+   
+   重要: 由於跨域 iframe 安全限制,CSS 無法影響 iframe 內部。
+   此檔案只處理父頁面 (javboys.com) 的覆蓋層。
+   ============================================================================ */
+
+/* ============================================================================
+   Shadow DOM 覆蓋層 - 強制移除
+   ============================================================================ */
+#preact-border-shadow-host,
+[id*="preact-border"],
+[id*="shadow-host"],
+[id*="preact_border"],
+div[id^="preact"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* ============================================================================
+   已知廣告覆蓋層 - 強制隱藏
+   ============================================================================ */
+.cvpboxOverlay,
+.cvpcolorbox,
+#cvpboxOverlay,
+#cvpcolorbox,
+[class*="cvpbox"],
+[id*="cvpbox"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    z-index: -9999 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* javboys 特定廣告元素 */
+.colorbox,
+#colorbox,
+.cbox-overlay,
+#cbox-overlay,
+[class*="colorbox"],
+[id*="colorbox"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* ============================================================================
+   通用廣告覆蓋層模式
+   ============================================================================ */
+[class*="overlay-ad"],
+[class*=" ad-overlay"],
+[class*="click-overlay"],
+[class*="clickjack"],
+[class*="popup-overlay"],
+[class*="interstitial"],
+[class*="preroll-overlay"],
+[id*="overlay-ad"],
+[id*="ad-overlay"],
+[id*="click-overlay"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================================
+   廣告攔截偵測提示框 - 強制隱藏
+   ============================================================================ */
+[class*="adblock"],
+[class*="ad-block"],
+[id*="adblock"],
+[id*="ad-block"],
+[class*="disable-ad"],
+[class*="please-disable"],
+[class*="turn-off-ad"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================================
+   燈箱/模態框相關
+   ============================================================================ */
+.colorbox,
+#colorbox,
+.cboxOverlay,
+#cboxOverlay,
+.fancybox-overlay,
+.modal-backdrop.ad,
+[class*="lightbox-overlay"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================================
+   確保 iframe 播放器可正常顯示與互動
+   重要:不干擾 iframe 內部,讓播放器自然運作
+   ============================================================================ */
+iframe,
+video,
+iframe[src*="player"],
+iframe[src*="embed"],
+iframe[src*="myvidplay"],
+.video-player,
+.player-container,
+[class*="video-wrapper"] {
+  pointer-events: auto !important;
+  position: relative !important;
+}
