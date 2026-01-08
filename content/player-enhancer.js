@@ -8,60 +8,205 @@
     const OVERLAY_CHECK_INTERVAL = 3000; // 每 3 秒檢查一次覆蓋元素
 
     /**
-     * 為播放器添加視覺標示
+     * 為播放器添加視覺標示（精簡版 - 無視覺干擾）
      */
     function enhancePlayer(player) {
         if (player.dataset.enhanced === 'true') return;
 
-        // 調整 z-index 至最高
-        const originalZIndex = window.getComputedStyle(player).zIndex;
-        player.style.zIndex = MAX_Z_INDEX;
-        player.dataset.originalZIndex = originalZIndex;
+        // 標記為已處理（不調整 z-index 避免干擾播放器行為）
         player.dataset.enhanced = 'true';
 
-        // 確保 position 不是 static (z-index 才會生效)
-        const position = window.getComputedStyle(player).position;
-        if (position === 'static') {
-            player.style.position = 'relative';
-        }
-
-        // 添加視覺標記 class
+        // 添加標記 class（僅供程式識別，無視覺效果）
         player.classList.add('player-enhanced-active');
 
-        // 添加角落標籤
-        addEnhancedBadge(player);
+        // 新增彈窗播放按鈕
+        addPopupButton(player);
 
-        console.log('✨ 播放器已優化:', player);
+        console.log('✅ 播放器已標記:', player.tagName);
     }
 
     /**
-     * 添加「已優化」標籤
+     * 新增彈窗播放按鈕
+     * 在播放器右上角顯示一個按鈕，點擊後開啟無干擾播放視窗
+     */
+    function addPopupButton(player) {
+        // 確保播放器有定位，才能正確放置按鈕
+        const computedStyle = window.getComputedStyle(player);
+        if (computedStyle.position === 'static') {
+            player.style.position = 'relative';
+        }
+
+        // 建立按鈕容器
+        const btn = document.createElement('button');
+        btn.className = 'shield-popup-player-btn';
+        btn.innerHTML = '🎬';
+        btn.title = '在新視窗無干擾播放';
+        
+        // 按鈕樣式
+        Object.assign(btn.style, {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            zIndex: '999999',
+            width: '36px',
+            height: '36px',
+            border: 'none',
+            borderRadius: '8px',
+            background: 'rgba(0, 0, 0, 0.7)',
+            color: '#fff',
+            fontSize: '18px',
+            cursor: 'pointer',
+            opacity: '0',
+            transition: 'opacity 0.2s, transform 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+            pointerEvents: 'auto'
+        });
+
+        // 建立影片位置提示
+        const tooltip = document.createElement('div');
+        tooltip.className = 'shield-video-tooltip';
+        Object.assign(tooltip.style, {
+            position: 'absolute',
+            top: '50px',
+            right: '10px',
+            zIndex: '999999',
+            background: 'rgba(0, 0, 0, 0.85)',
+            color: '#fff',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            opacity: '0',
+            transition: 'opacity 0.2s',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap'
+        });
+        tooltip.textContent = '00:00 / 00:00';
+
+        // 懸浮時顯示按鈕與位置資訊
+        player.addEventListener('mouseenter', () => {
+            btn.style.opacity = '1';
+            tooltip.style.opacity = '1';
+            updateVideoTooltip(player, tooltip);
+        });
+        player.addEventListener('mouseleave', () => {
+            btn.style.opacity = '0';
+            tooltip.style.opacity = '0';
+        });
+        
+        // 按鈕懸浮效果
+        btn.addEventListener('mouseenter', () => {
+            btn.style.transform = 'scale(1.1)';
+            btn.style.background = 'rgba(50, 50, 50, 0.9)';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.transform = 'scale(1)';
+            btn.style.background = 'rgba(0, 0, 0, 0.7)';
+        });
+
+        // 點擊開啟新視窗
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPopupPlayer(player);
+        });
+
+        player.appendChild(btn);
+        player.appendChild(tooltip);
+        
+        // 定期更新影片位置
+        setInterval(() => updateVideoTooltip(player, tooltip), 1000);
+    }
+
+    /**
+     * 更新影片位置提示
+     */
+    function updateVideoTooltip(player, tooltip) {
+        const video = player.tagName === 'VIDEO' ? player : player.querySelector('video');
+        if (video && !isNaN(video.duration)) {
+            const current = formatTime(video.currentTime);
+            const duration = formatTime(video.duration);
+            tooltip.textContent = `${current} / ${duration}`;
+        }
+    }
+
+    /**
+     * 格式化時間
+     */
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return '00:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * 開啟彈窗播放器視窗
+     */
+    function openPopupPlayer(player) {
+        // 取得影片來源
+        let videoSrc = null;
+        let iframeSrc = null;
+        let poster = null;
+
+        if (player.tagName === 'VIDEO') {
+            videoSrc = player.src || player.querySelector('source')?.src;
+            poster = player.poster;
+        } else if (player.tagName === 'IFRAME') {
+            iframeSrc = player.src;
+        } else {
+            const video = player.querySelector('video');
+            const iframe = player.querySelector('iframe');
+            
+            if (video) {
+                videoSrc = video.src || video.querySelector('source')?.src;
+                poster = video.poster;
+            } else if (iframe?.src) {
+                iframeSrc = iframe.src;
+            }
+        }
+
+        // 確保有有效來源
+        if (!videoSrc && !iframeSrc) {
+            console.warn('⚠️ 無法取得影片來源');
+            return;
+        }
+
+        // 透過 postMessage 通知 background script 開啟新視窗
+        // 因為 content script 可能無法直接使用 chrome.runtime.getURL
+        try {
+            // 嘗試直接開啟（如果在 isolated world）
+            const extensionUrl = chrome.runtime?.getURL?.('popup-player/popup-player.html');
+            if (extensionUrl) {
+                const params = new URLSearchParams();
+                if (videoSrc) params.set('videoSrc', videoSrc);
+                if (iframeSrc) params.set('iframeSrc', iframeSrc);
+                if (poster) params.set('poster', poster);
+                
+                const popupUrl = `${extensionUrl}?${params.toString()}`;
+                window.open(popupUrl, '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no');
+                console.log('🎬 開啟彈窗播放器:', popupUrl);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ 無法直接存取 chrome API，嘗試 message passing');
+        }
+
+        // Fallback: 直接在新視窗開啟影片來源
+        const targetUrl = videoSrc || iframeSrc;
+        window.open(targetUrl, '_blank', 'width=1280,height=720');
+        console.log('🎬 直接開啟影片:', targetUrl);
+    }
+
+    /**
+     * 添加「已優化」標籤 - 已停用
+     * 根據使用者要求移除視覺標示功能
      */
     function addEnhancedBadge(player) {
-        // 檢查父元素是否適合放置標籤 (relative/absolute/fixed)
-        const parent = player.parentElement;
-        if (!parent) return;
-
-        // 避免重複添加
-        if (parent.querySelector('.player-enhanced-badge')) return;
-        // 如果父元素有多個播放器，需要更精確的檢查，這裡假設一個 wrapper 一個播放器
-        
-        // 確保父元素有定位 context
-        const parentStyle = window.getComputedStyle(parent);
-        if (parentStyle.position === 'static') {
-            parent.style.position = 'relative';
-        }
-
-        const badge = document.createElement('div');
-        badge.className = 'player-enhanced-badge';
-        badge.textContent = '🛡️ 已優化';
-        
-        // 插入到播放器之後 (同層級)
-        if (player.nextSibling) {
-            parent.insertBefore(badge, player.nextSibling);
-        } else {
-            parent.appendChild(badge);
-        }
+        // 功能已停用 - 不再顯示任何視覺標示
+        return;
     }
 
 

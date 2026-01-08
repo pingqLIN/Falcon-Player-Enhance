@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Shield Pro - Ad Blocker & Player Enhancer",
-  "version": "2.3.0",
-  "description": "全方位網頁防護與媒體播放器優化 - 攔截廣告、彈窗、惡意程式、追蹤碼，並自動優化播放器顯示",
+  "version": "3.0.0",
+  "description": "進階內容封鎖與媒體播放器優化 - 可調封鎖強度、訂閱過濾清單、白/黑名單、危險網站沙盒隔離",
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
@@ -108,11 +108,20 @@
     {
       "resources": [
         "content/inject-blocker.js",
-        "rules/noop.js"
+        "rules/noop.js",
+        "sandbox/sandbox.html",
+        "sandbox/sandbox.js",
+        "popup-player/popup-player.html",
+        "popup-player/popup-player.js"
       ],
       "matches": [
         "<all_urls>"
       ]
     }
-  ]
+  ],
+  "sandbox": {
+    "pages": [
+      "sandbox/sandbox.html"
+    ]
+  }
 }

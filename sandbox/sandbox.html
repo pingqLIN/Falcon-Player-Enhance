@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shield Pro - 安全沙盒</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        
+        .warning-banner {
+            background: linear-gradient(90deg, #ff6b35, #f7931e);
+            color: #1a1a2e;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+        }
+        
+        .warning-icon {
+            font-size: 24px;
+        }
+        
+        .warning-text h2 {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        
+        .warning-text p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .toolbar {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .url-display {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 107, 53, 0.5);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #ff6b35;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .sandbox-container {
+            height: calc(100vh - 120px);
+            position: relative;
+        }
+        
+        .sandbox-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(26, 26, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .loading-overlay.hidden {
+            display: none;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 107, 53, 0.2);
+            border-top-color: #ff6b35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .security-info {
+            text-align: center;
+        }
+        
+        .security-info h3 {
+            color: #ff6b35;
+            margin-bottom: 8px;
+        }
+        
+        .security-info p {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="warning-banner">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-text">
+            <h2>安全沙盒模式</h2>
+            <p>此網頁在隔離環境中載入，可能包含潛在危險內容</p>
+        </div>
+    </div>
+    
+    <div class="toolbar">
+        <div class="url-display" id="url-display">載入中...</div>
+        <button class="btn btn-secondary" id="btn-copy">複製網址</button>
+        <button class="btn btn-secondary" id="btn-report">回報問題</button>
+        <button class="btn btn-danger" id="btn-close">關閉沙盒</button>
+    </div>
+    
+    <div class="sandbox-container">
+        <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            <div class="security-info">
+                <h3>🔒 安全檢查中</h3>
+                <p>正在隔離環境中載入網頁...</p>
+            </div>
+        </div>
+        <iframe 
+            id="sandbox-frame"
+            class="sandbox-frame"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            loading="lazy"
+        ></iframe>
+    </div>
+    
+    <script src="sandbox.js"></script>
+</body>
+</html>

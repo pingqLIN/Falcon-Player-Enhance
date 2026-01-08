@@ -3,104 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shield Pro 控制台</title>
+    <title>Shield Pro 設定</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo">
-                <h1>Shield Pro</h1>
-                <span class="version">v2.3.0</span>
+    <div class="dashboard">
+        <!-- Navigation Bar -->
+        <nav class="navbar">
+            <div class="nav-content">
+                <div class="nav-brand">
+                    <span class="nav-logo">🛡️</span>
+                    <h1>Shield Pro</h1>
+                    <span class="nav-version">v3.0</span>
+                </div>
             </div>
-            <nav>
-                <button class="nav-btn active" data-tab="general">一般設定</button>
-                <button class="nav-btn" data-tab="blocklists">封鎖列表</button>
-                <button class="nav-btn" data-tab="statistics">統計資料</button>
-            </nav>
-        </header>
+        </nav>
 
-        <main>
-            <!-- General Settings -->
-            <section id="general" class="tab-content active">
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+            <button class="tab-item active" data-tab="filters">
+                <span class="tab-label">過濾清單</span>
+            </button>
+            <button class="tab-item" data-tab="domains">
+                <span class="tab-label">網域清單</span>
+            </button>
+            <button class="tab-item" data-tab="elements">
+                <span class="tab-label">封鎖元素</span>
+            </button>
+            <button class="tab-item" data-tab="security">
+                <span class="tab-label">安全設定</span>
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Tab: Filters (Combined with Subscriptions) -->
+            <section id="filters" class="tab-panel active">
+                <!-- Built-in Lists -->
                 <div class="card">
-                    <h2>一般防護</h2>
-                    <div class="setting-item">
-                        <div class="setting-info">
-                            <h3>啟用廣告攔截</h3>
-                            <p>攔截大多數網站上的廣告內容</p>
+                    <h2 class="card-title">內建過濾列表</h2>
+                    <p class="card-description">管理核心過濾規則。</p>
+
+                    <div class="list-group">
+                        <div class="list-row">
+                            <div class="list-row-content">
+                                <span class="list-row-title">Shield Pro 核心列表</span>
+                                <span class="list-row-subtitle">內建廣告與惡意程式防護規則</span>
+                            </div>
+                            <span class="badge badge-active">必要</span>
                         </div>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-ads" checked>
-                            <span class="slider round"></span>
-                        </label>
+
+                        <div class="list-row">
+                            <div class="list-row-content">
+                                <span class="list-row-title">EasyList</span>
+                                <span class="list-row-subtitle">主要的廣告過濾列表</span>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="toggle-easylist" checked>
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="list-row">
+                            <div class="list-row-content">
+                                <span class="list-row-title">EasyPrivacy</span>
+                                <span class="list-row-subtitle">攔截追蹤器與分析腳本</span>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="toggle-easyprivacy" checked>
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="setting-item">
-                        <div class="setting-info">
-                            <h3>啟用彈窗攔截</h3>
-                            <p>防止惡意彈出視窗與背後彈窗</p>
+                </div>
+
+                <!-- Subscription Lists -->
+                <div class="card">
+                    <h2 class="card-title">訂閱過濾清單</h2>
+                    <p class="card-description">訂閱額外的過濾清單以增強防護能力。</p>
+
+                    <div id="subscription-list">
+                        <!-- Dynamic content -->
+                    </div>
+
+                    <div class="add-subscription-section">
+                        <h3 class="section-subtitle">新增自訂訂閱</h3>
+                        <div class="form-group">
+                            <input type="text" id="sub-name" class="input" placeholder="清單名稱">
+                            <input type="url" id="sub-url" class="input" placeholder="清單 URL (https://...)">
+                            <button class="btn btn-primary" id="btn-add-sub">新增訂閱</button>
                         </div>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-popups" checked>
-                            <span class="slider round"></span>
-                        </label>
+                    </div>
+
+                    <button class="btn btn-secondary" id="btn-update-all">
+                        <span>🔄</span> 更新所有訂閱
+                    </button>
+                </div>
+
+                <!-- Stats Summary -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-ads">0</span>
+                        <span class="stat-label">廣告攔截</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-trackers">0</span>
+                        <span class="stat-label">追蹤阻擋</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-popups">0</span>
+                        <span class="stat-label">彈窗攔截</span>
                     </div>
                 </div>
             </section>
 
-            <!-- Blocklists -->
-            <section id="blocklists" class="tab-content">
+            <!-- Tab: Domains -->
+            <section id="domains" class="tab-panel">
                 <div class="card">
-                    <h2>主動防護列表</h2>
-                    <p class="description">管理啟用的過濾規則列表。啟用更多列表可能會影響瀏覽器效能。</p>
+                    <h2 class="card-title">白名單</h2>
+                    <p class="card-description">白名單中的網站將不套用任何封鎖規則。</p>
+
+                    <div class="form-row">
+                        <input type="text" id="whitelist-input" class="input" placeholder="輸入網域 (例如: example.com)">
+                        <button class="btn btn-primary" id="btn-add-whitelist">新增</button>
+                    </div>
+
+                    <div class="domain-list" id="whitelist-display">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">黑名單</h2>
+                    <p class="card-description">黑名單中的網站將套用最嚴格的封鎖規則。</p>
+
+                    <div class="form-row">
+                        <input type="text" id="blacklist-input" class="input" placeholder="輸入網域 (例如: malware-site.com)">
+                        <button class="btn btn-primary" id="btn-add-blacklist">新增</button>
+                    </div>
+
+                    <div class="domain-list" id="blacklist-display">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Elements (Blocked Elements) -->
+            <section id="elements" class="tab-panel">
+                <div class="card">
+                    <h2 class="card-title">封鎖元素清單</h2>
+                    <p class="card-description">管理已封鎖的網頁元素。這些元素會在對應網站自動隱藏。</p>
+
+                    <div id="hidden-elements-list">
+                        <div class="empty-state">載入中...</div>
+                    </div>
+
+                    <div class="actions-row">
+                        <button class="btn btn-danger" id="btn-clear-all-elements">
+                            <span>🗑️</span> 清除所有封鎖規則
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Security -->
+            <section id="security" class="tab-panel">
+                <div class="card">
+                    <h2 class="card-title">危險網站防護</h2>
+                    <p class="card-description">可疑網站將在沙盒環境中開啟，保護您的系統安全。</p>
+
+                    <div class="list-group">
+                        <div class="list-row">
+                            <div class="list-row-content">
+                                <span class="list-row-title">啟用沙盒防護</span>
+                                <span class="list-row-subtitle">危險網站自動在隔離環境中開啟</span>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="toggle-sandbox" checked>
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-row">
+                        <div>
+                            <h3 class="card-subtitle">VirusTotal API</h3>
+                            <p class="card-description">設定 API Key 以啟用進階 URL 安全檢測</p>
+                        </div>
+                        <div class="api-status" id="vt-api-status">
+                            <span class="status-icon">○</span>
+                            <span class="status-text">未設定</span>
+                        </div>
+                    </div>
                     
-                    <div class="list-item">
-                        <div class="list-info">
-                            <h3>Shield Pro 核心列表</h3>
-                            <p>內建的廣告與惡意程式防護規則 (必要)</p>
-                        </div>
-                        <div class="status-badge active">啟用中</div>
+                    <div class="info-box">
+                        <h4>什麼是 VirusTotal？</h4>
+                        <p>VirusTotal 是一個免費的線上服務，可以分析 URL 和檔案是否含有惡意程式。設定 API Key 後，Shield Pro 會自動檢測您造訪的網站是否安全。</p>
+                        <ul>
+                            <li>🔍 自動掃描您造訪的每個網址</li>
+                            <li>🛡️ 偵測到威脅時自動啟用沙盒防護</li>
+                            <li>📊 提供詳細的安全報告</li>
+                        </ul>
+                        <p class="info-note">免費 API 每日限制 500 次查詢，一般使用足夠。</p>
                     </div>
 
-                    <div class="list-item">
-                        <div class="list-info">
-                            <h3>EasyList</h3>
-                            <p>主要的廣告過濾列表，適用於大多數國際網站</p>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-easylist" checked>
-                            <span class="slider round"></span>
-                        </label>
+                    <div class="form-row">
+                        <input type="password" id="vt-api-key" class="input" placeholder="輸入 API Key">
+                        <button class="btn btn-primary" id="btn-save-api-key">儲存</button>
+                        <button class="btn btn-secondary" id="btn-test-api-key">測試</button>
                     </div>
 
-                    <div class="list-item">
-                        <div class="list-info">
-                            <h3>EasyPrivacy</h3>
-                            <p>攔截追蹤器與分析腳本，保護個人隱私</p>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-easyprivacy" checked>
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
+                    <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" class="link">
+                        取得免費 VirusTotal API Key →
+                    </a>
                 </div>
-            </section>
 
-            <!-- Statistics -->
-            <section id="statistics" class="tab-content">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <h3>已攔截廣告</h3>
-                        <div class="number" id="stats-ads">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>已攔截追蹤器</h3>
-                        <div class="number" id="stats-trackers">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>已攔截惡意程式</h3>
-                        <div class="number" id="stats-malware">0</div>
-                    </div>
+                <div class="card">
+                    <h3 class="card-subtitle">重置資料</h3>
+                    <p class="card-description">清除所有統計資料，設定不受影響。</p>
+                    <button class="btn btn-danger" id="btn-reset-stats">重置統計資料</button>
                 </div>
             </section>
         </main>

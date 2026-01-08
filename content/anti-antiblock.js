@@ -405,62 +405,85 @@ function handleJavboysPlayer() {
             });
         } catch (e) {}
         
-        // 4. 移除播放器內部的錯誤訊息元素
+        // 4. 移除播放器內部的錯誤訊息元素（增強版 v3）
         const removePlayerErrors = () => {
             // 常見的錯誤訊息選擇器
             const errorSelectors = [
                 '.player-error', '.error-message', '.adblock-message',
                 '.cvp-error', '.video-error', '.player-message',
                 '[class*="error"]', '[class*="adblock"]', '[class*="blocker"]',
-                '[class*="blocked"]', '[class*="warning"]'
+                '[class*="blocked"]', '[class*="warning"]', '[class*="overlay"]',
+                '[class*="modal"]', '[class*="popup"]', '[class*="notice"]'
+            ];
+            
+            // 需要阻擋的關鍵文字
+            const blockTexts = [
+                'please disable adblock',
+                'please disable ad block',
+                'disable adblock to watch',
+                'disable your adblocker',
+                'turn off adblock',
+                'turn off ad blocker',
+                'adblock detected',
+                'ad blocker detected',
+                'whitelist this site',
+                'does not allow adblock',
+                'error: init',
+                'refresh page',
+                'disable extensions',
+                'please turn off',
+                'blocking software'
             ];
             
             errorSelectors.forEach(selector => {
                 try {
                     document.querySelectorAll(selector).forEach(el => {
-                        const text = (el.innerText || '').toLowerCase().trim();
+                        const text = (el.innerText || el.textContent || '').toLowerCase().trim();
                         // 避免誤刪除含有大量內容的容器
                         if (text.length > 500) return;
 
-                        if (text.includes('adblock') || 
-                            text.includes('ad block') ||
-                            text.includes('does not allow') ||
-                            text.includes('disable') ||
-                            text.includes('error: init') ||
-                            text.includes('refresh page') ||
-                            text.includes('please disable adblock to watch this video')) {
-                            
-                            // Double check if it's a visible error message
+                        // 檢查是否包含任何阻擋文字
+                        const hasBlockText = blockTexts.some(bt => text.includes(bt));
+                        
+                        if (hasBlockText) {
                             const style = window.getComputedStyle(el);
                             if (style.display !== 'none' && style.visibility !== 'hidden') {
                                 el.style.setProperty('display', 'none', 'important');
                                 el.style.setProperty('visibility', 'hidden', 'important');
-                                el.remove();
+                                el.style.setProperty('opacity', '0', 'important');
+                                el.style.setProperty('pointer-events', 'none', 'important');
+                                try { el.remove(); } catch(e) {}
                                 log('移除播放器錯誤訊息: ' + text.substring(0, 50) + '...');
                             }
                         }
                     });
-
-
                 } catch (e) {}
             });
             
-            // 移除任何包含錯誤文字的元素
-            const allElements = document.querySelectorAll('div, p, span, h1, h2, h3, h4');
+            // 移除任何包含錯誤文字的元素（更積極的搜尋）
+            const allElements = document.querySelectorAll('div, p, span, h1, h2, h3, h4, section, article');
             allElements.forEach(el => {
                 const text = (el.textContent || '').toLowerCase();
-                if ((text.includes('adblock') && text.includes('disable')) ||
-                    text.includes('does not allow adblock') ||
-                    text.includes('error: init')) {
+                const hasBlockText = blockTexts.some(bt => text.includes(bt));
+                
+                if (hasBlockText && text.length < 300) {
                     el.style.setProperty('display', 'none', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
                     try { el.remove(); } catch(e) {}
                 }
             });
+            
+            // 強制顯示 video 元素
+            document.querySelectorAll('video').forEach(video => {
+                video.style.setProperty('display', 'block', 'important');
+                video.style.setProperty('visibility', 'visible', 'important');
+                video.style.setProperty('opacity', '1', 'important');
+            });
         };
         
-        // 5. 即時執行 + 持續監控
+        // 5. 即時執行 + 持續監控（提高頻率）
         removePlayerErrors();
-        setInterval(removePlayerErrors, 200);
+        setInterval(removePlayerErrors, 150); // 更頻繁檢查
         
         // 使用 MutationObserver 即時監控
         const playerObserver = new MutationObserver(removePlayerErrors);
@@ -636,6 +659,9 @@ function protectIframes() {
 // 初始化所有防護
 // ============================================================================
 function init() {
+    // 設定標記，讓 inject-blocker.js 知道此模組已載入
+    window.__antiAdblockBypassLoaded = true;
+    
     fakeAdAPIs();
     blockAdblockDetection();
     fakeDetectionLibraries();

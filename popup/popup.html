@@ -7,40 +7,105 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo">
-                <span class="logo-icon">🛡️</span>
+    <div class="popup-container">
+        <!-- Sandbox Warning Banner -->
+        <div class="sandbox-banner" id="sandbox-banner">
+            <div class="sandbox-icon">⚠️</div>
+            <div class="sandbox-content">
+                <span class="sandbox-title">沙盒防護啟動中</span>
+                <span class="sandbox-desc" id="sandbox-desc">此網站已被識別為潛在危險</span>
+            </div>
+            <button class="sandbox-btn" id="btn-exit-sandbox">解除</button>
+        </div>
+
+        <!-- VirusTotal Status Banner -->
+        <div class="vt-banner" id="vt-banner">
+            <div class="vt-icon" id="vt-icon">🔍</div>
+            <div class="vt-content">
+                <span class="vt-title" id="vt-title">VirusTotal 掃描中...</span>
+                <span class="vt-desc" id="vt-desc">正在檢測網站安全性</span>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <header class="popup-header">
+            <div class="header-left">
+                <span class="logo">🛡️</span>
                 <h1>Shield Pro</h1>
             </div>
-            <div class="status-badge" id="protection-status">
-                <span class="status-dot active"></span>
-                <span>防護中</span>
-            </div>
+            <label class="master-switch" title="啟用/停用防護">
+                <input type="checkbox" id="master-toggle" checked>
+                <span class="switch-track"></span>
+            </label>
         </header>
 
-        <main>
+        <!-- Stats Row (Current Page Only) -->
+        <section class="stats-section">
+            <div class="stats-header">
+                <span class="stats-label">本頁面統計</span>
+            </div>
             <div class="stats-row">
                 <div class="stat-item">
                     <span class="stat-value" id="ads-blocked">0</span>
-                    <span class="stat-label">已攔截廣告</span>
+                    <span class="stat-label">廣告攔截</span>
                 </div>
                 <div class="stat-divider"></div>
                 <div class="stat-item">
                     <span class="stat-value" id="trackers-blocked">0</span>
-                    <span class="stat-label">已阻擋追蹤</span>
+                    <span class="stat-label">追蹤阻擋</span>
                 </div>
             </div>
+        </section>
 
-            <div class="player-info" id="player-status-container">
-                <span class="player-icon">🎬</span>
-                <span id="player-count-text">偵測到 0 個播放器</span>
+        <!-- Strength Control -->
+        <section class="control-section">
+            <div class="control-header">
+                <span class="control-label">封鎖強度</span>
+                <span class="control-value" id="strength-label">標準</span>
             </div>
-        </main>
+            <input type="range" id="strength-slider" min="0" max="4" value="2" class="strength-slider" title="調整封鎖強度">
+            <div class="strength-marks">
+                <span>最小</span>
+                <span>基本</span>
+                <span>標準</span>
+                <span>嚴格</span>
+                <span>激進</span>
+            </div>
+        </section>
 
-        <footer>
-            <button id="open-dashboard" class="primary-btn">
-                <span>開啟控制面板</span>
+        <!-- Quick Actions -->
+        <section class="actions-section">
+            <button class="action-btn" id="btn-pause-site">
+                <span class="action-icon">⏸</span>
+                <span class="action-text">暫停此網站</span>
+                <span class="action-status" id="pause-status"></span>
+            </button>
+            <button class="action-btn" id="btn-pick-element">
+                <span class="action-icon">👆</span>
+                <span class="action-text">選擇元素封鎖</span>
+            </button>
+            <button class="action-btn" id="btn-sandbox-mode">
+                <span class="action-icon">🔒</span>
+                <span class="action-text">沙盒模式</span>
+                <span class="action-status" id="sandbox-status"></span>
+            </button>
+        </section>
+
+        <!-- Settings -->
+        <section class="settings-section">
+            <div class="setting-row">
+                <span class="setting-label">設定變更後自動重新整理</span>
+                <label class="mini-switch" title="自動重新整理">
+                    <input type="checkbox" id="auto-reload-toggle">
+                    <span class="mini-switch-track"></span>
+                </label>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="popup-footer">
+            <button class="secondary-btn" id="open-dashboard">
+                開啟完整控制台
                 <span class="arrow">→</span>
             </button>
         </footer>

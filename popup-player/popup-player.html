@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shield Pro - 無干擾播放</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            min-height: 100vh;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .toolbar {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            flex-shrink: 0;
+        }
+        
+        .toolbar-icon {
+            font-size: 20px;
+        }
+        
+        .toolbar-title {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+        
+        .source-display {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e0e0e0;
+        }
+        
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .btn-close {
+            background: rgba(255, 80, 80, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .btn-close:hover {
+            background: rgba(255, 80, 80, 0.35);
+        }
+        
+        .player-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: #000;
+        }
+        
+        .player-container video {
+            max-width: 100%;
+            max-height: 100%;
+            background: #000;
+        }
+        
+        .player-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+        
+        .error-message {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .error-message h2 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+        }
+        
+        .error-message p {
+            opacity: 0.7;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="toolbar-icon">🎬</span>
+        <span class="toolbar-title">無干擾播放模式</span>
+        <span class="source-display" id="source-display"></span>
+        <button class="btn" id="btn-pip">子母畫面</button>
+        <button class="btn btn-close" id="btn-close">關閉</button>
+    </div>
+    
+    <div class="player-container" id="player-container">
+        <!-- 動態插入 video 或 iframe -->
+    </div>
+    
+    <script src="popup-player.js"></script>
+</body>
+</html>

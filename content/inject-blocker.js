@@ -108,6 +108,14 @@ function createFakeWindow() {
     };
 }
 
+// 統計計數器 (移到外層作為模組級變數) - 當前頁面統計
+let pageStats = {
+    adsBlocked: 0,
+    trackersBlocked: 0,
+    popupsBlocked: 0
+};
+let networkInterceptionInitialized = false;
+
 function lockWindowOpen() {
     try {
         Object.defineProperty(window, 'open', {
@@ -116,84 +124,115 @@ function lockWindowOpen() {
             configurable: false,
             enumerable: true
         });
+        // window.open 被阻擋算作彈窗攔截
+        pageStats.popupsBlocked++;
     } catch (e) {
         window.open = blockedOpen;
     }
-    let blockedCount = 0;
+}
 
-    /**
-     * 攔截網路請求 (XHR/Fetch)
-     * 注意: 這主要針對無法使用 declarativeNetRequest 覆蓋的動態請求
-     */
-    function interceptNetworkRequests() {
-        const originalOpen = window.XMLHttpRequest.prototype.open;
-        window.XMLHttpRequest.prototype.open = function(method, url) {
-            // Assuming isAdUrl is similar to isBlockedUrl for this context
-            if (isBlockedUrl(url)) { // Changed from isAdUrl to isBlockedUrl
-                console.log('Shield Pro: Blocked XHR', url);
-                blockedCount++;
-                reportStats(); // 即時回報
-                return; // 阻止請求
-            }
-            return originalOpen.apply(this, arguments);
-        };
-        // Fetch 攔截 implementation
-        const originalFetch = window.fetch;
-        window.fetch = function(input, init) {
-            let url = input;
-            if (input instanceof Request) {
-                url = input.url;
-            }
-            
-            if (isBlockedUrl(url)) {
-                console.log('Shield Pro: Blocked Fetch', url);
-                blockedCount++;
-                reportStats();
-                // Return a rejected promise or a fake response
-                return Promise.reject(new TypeError('Failed to fetch'));
-            }
-            
-            return originalFetch.apply(this, arguments);
-        };
+/**
+ * 回報統計數據給 Background (用於總計)
+ */
+function reportStats() {
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({ type: 'UPDATE_STATS', count: 1 });
     }
-    
-    // ... (isAdUrl 實作) ... // Placeholder for actual isAdUrl implementation if different from isBlockedUrl
+}
 
-    /**
-     * 與 Dashboard (Popup) 通訊
-     */
-    if (typeof chrome !== 'undefined' && chrome.runtime) { // Check if chrome.runtime is available (i.e., in an extension context)
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.type === 'GET_PAGE_STATS') {
-                sendResponse({ blockedCount: blockedCount });
+/**
+ * 攔截網路請求 (XHR/Fetch)
+ * 注意: 這主要針對無法使用 declarativeNetRequest 覆蓋的動態請求
+ */
+function interceptNetworkRequests() {
+    // 防止重複初始化
+    if (networkInterceptionInitialized) return;
+    networkInterceptionInitialized = true;
+    
+    const originalXhrOpen = window.XMLHttpRequest.prototype.open;
+    window.XMLHttpRequest.prototype.open = function(method, url) {
+        if (isBlockedUrl(url)) {
+            console.log('Shield Pro: Blocked XHR', url);
+            // 判斷是廣告還是追蹤器
+            if (isTrackerUrl(url)) {
+                pageStats.trackersBlocked++;
+            } else {
+                pageStats.adsBlocked++;
             }
-            // 未來可擴充: 接收 TOGGLE 指令動態開關功能
+            reportStats();
+            return; // 阻止請求
+        }
+        return originalXhrOpen.apply(this, arguments);
+    };
+    
+    // Fetch 攔截
+    const originalFetch = window.fetch;
+    window.fetch = function(input, init) {
+        let url = input;
+        if (input instanceof Request) {
+            url = input.url;
+        }
+        
+        if (isBlockedUrl(url)) {
+            console.log('Shield Pro: Blocked Fetch', url);
+            if (isTrackerUrl(url)) {
+                pageStats.trackersBlocked++;
+            } else {
+                pageStats.adsBlocked++;
+            }
+            reportStats();
+            return Promise.reject(new TypeError('Failed to fetch'));
+        }
+        
+        return originalFetch.apply(this, arguments);
+    };
+    
+    log('網路請求攔截已初始化');
+}
+
+/**
+ * 判斷 URL 是否為追蹤器
+ */
+function isTrackerUrl(url) {
+    const urlStr = String(url).toLowerCase();
+    const trackerPatterns = [
+        'track', 'analytics', 'pixel', 'beacon', 'metric',
+        'stats', 'collect', 'log.', 'telemetry', 'fingerprint'
+    ];
+    return trackerPatterns.some(p => urlStr.includes(p));
+}
+
+/**
+ * 設定 Chrome 訊息監聽器
+ */
+function setupMessageListener() {
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            // 回傳當前頁面統計
+            if (request.action === 'getPageStats' || request.type === 'GET_PAGE_STATS') {
+                sendResponse({
+                    adsBlocked: pageStats.adsBlocked,
+                    trackersBlocked: pageStats.trackersBlocked,
+                    popupsBlocked: pageStats.popupsBlocked
+                });
+                return true;
+            }
             if (request.type === 'TOGGLE_AD_BLOCKING') {
-                // 實作動態開關邏輯
                 console.log('收到開關指令:', request.enabled);
             }
         });
     }
-
-    /**
-     * 回報統計數據給 Background (用於總計)
-     */
-    function reportStats() {
-        if (typeof chrome !== 'undefined' && chrome.runtime) { // Check if chrome.runtime is available
-            // 為了效能，可以累積一定數量或時間再發送，這裡先即時發送
-            chrome.runtime.sendMessage({ type: 'UPDATE_STATS', count: 1 });
-        }
-    }
-    
-    // 初始化
-    interceptNetworkRequests();
-    // 初始回報
-    if (typeof chrome !== 'undefined' && chrome.runtime) { // Check if chrome.runtime is available
-        chrome.runtime.sendMessage({ type: 'UPDATE_STATS', count: 0 });
-    }
 }
 
+// 初始化
 lockWindowOpen();
+interceptNetworkRequests();
+setupMessageListener();
+
+// 初始回報
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+    chrome.runtime.sendMessage({ type: 'UPDATE_STATS', count: 0 });
+}
 
 // 持續監控並恢復
 setInterval(() => {
@@ -770,6 +809,13 @@ setInterval(protectVideoElements, 800);
 // 對抗紅隊攻擊: 網站偵測是否使用廣告攔截器
 // ============================================================================
 function setupAntiAdblockBypass() {
+    // 檢查是否已由 anti-antiblock.js 處理
+    if (window.__antiAdblockBypassLoaded) {
+        log('反廣告偵測已由 anti-antiblock.js 處理，跳過');
+        return;
+    }
+    window.__antiAdblockBypassLoaded = true;
+    
     // 1. 偽造廣告載入成功訊號
     window.adsbygoogle = window.adsbygoogle || [];
     window.adsbygoogle.loaded = true;

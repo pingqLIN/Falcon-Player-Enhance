@@ -1,5 +1,8 @@
-// Shield Pro - Background Service Worker
-// 管理 declarativeNetRequest 規則與統計資料
+// ============================================================================
+// Shield Pro - Background Service Worker v3.0
+// ============================================================================
+// 管理 declarativeNetRequest 規則、統計資料、白/黑名單與訂閱
+// ============================================================================
 
 // 初始化統計資料
 let stats = {
@@ -10,44 +13,78 @@ let stats = {
   totalBlocked: 0
 };
 
-// 擴充功能安裝時初始化
+// 封鎖強度等級對應的規則集
+const STRENGTH_RULESETS = {
+  minimal: ['ads_and_trackers'],
+  basic: ['ads_and_trackers', 'easylist'],
+  standard: ['ads_and_trackers', 'easylist', 'easyprivacy'],
+  strict: ['ads_and_trackers', 'easylist', 'easyprivacy'],
+  aggressive: ['ads_and_trackers', 'easylist', 'easyprivacy']
+};
+
+// ============================================================================
+// 安裝與啟動
+// ============================================================================
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('🛡️ Shield Pro 已安裝');
+  console.log('🛡️ Shield Pro v3.0 已安裝');
   
   // 初始化儲存
   chrome.storage.local.set({ 
     stats: stats,
+    filterStrength: 'standard',
+    whitelist: [],
+    blacklist: [],
+    sandboxEnabled: true,
     adNotification: true,
     privacyProtection: true,
     removeOverlays: true,
     bypassAntiBlock: true 
   });
   
-  // 啟用所有 declarativeNetRequest 規則集
-  chrome.declarativeNetRequest.updateEnabledRulesets({
-    enableRulesetIds: ['ads_and_trackers', 'easylist', 'easyprivacy']
-  }).then(() => {
-    console.log('✓ 攔截規則已啟用');
-  }).catch((error) => {
-    console.error('✗ 規則啟用失敗:', error);
-  });
+  // 啟用標準強度規則集
+  updateRulesets(['ads_and_trackers', 'easylist', 'easyprivacy']);
   
-  // 註冊 MAIN world 腳本 - 確保在所有頁面腳本之前執行
+  // 註冊 MAIN world 腳本
   registerMainWorldScript();
 });
 
 // 啟動時也嘗試註冊
 chrome.runtime.onStartup?.addListener(() => {
   registerMainWorldScript();
+  loadStats();
 });
+
+// 載入已存的統計資料
+async function loadStats() {
+  const result = await chrome.storage.local.get(['stats']);
+  if (result.stats) {
+    stats = result.stats;
+  }
+}
+
+// ============================================================================
+// 規則集管理
+// ============================================================================
+async function updateRulesets(enableRulesetIds) {
+  const allRulesets = ['ads_and_trackers', 'easylist', 'easyprivacy'];
+  const disableRulesetIds = allRulesets.filter(r => !enableRulesetIds.includes(r));
+  
+  try {
+    await chrome.declarativeNetRequest.updateEnabledRulesets({
+      enableRulesetIds: enableRulesetIds,
+      disableRulesetIds: disableRulesetIds
+    });
+    console.log('✓ 規則集已更新:', enableRulesetIds);
+  } catch (error) {
+    console.error('✗ 規則集更新失敗:', error);
+  }
+}
 
 // 註冊 MAIN world 攔截腳本
 async function registerMainWorldScript() {
   try {
-    // 先嘗試取消註冊舊腳本
     await chrome.scripting.unregisterContentScripts({ ids: ['main-world-blocker'] }).catch(() => {});
     
-    // 註冊新腳本到 MAIN world
     await chrome.scripting.registerContentScripts([{
       id: 'main-world-blocker',
       matches: ['<all_urls>'],
@@ -62,10 +99,109 @@ async function registerMainWorldScript() {
   }
 }
 
-// 監聽網路請求攔截事件 (需要 declarativeNetRequestFeedback 權限)
+// ============================================================================
+// 白/黑名單檢查
+// ============================================================================
+async function isWhitelisted(url) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const result = await chrome.storage.local.get(['whitelist']);
+    const whitelist = result.whitelist || [];
+    
+    return whitelist.some(domain => {
+      domain = domain.toLowerCase();
+      return hostname === domain || hostname.endsWith('.' + domain);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+async function isBlacklisted(url) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const result = await chrome.storage.local.get(['blacklist']);
+    const blacklist = result.blacklist || [];
+    
+    return blacklist.some(domain => {
+      domain = domain.toLowerCase();
+      return hostname === domain || hostname.endsWith('.' + domain);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+// ============================================================================
+// 訂閱清單更新
+// ============================================================================
+async function updateAllSubscriptions() {
+  const result = await chrome.storage.local.get(['subscriptions']);
+  const subscriptions = result.subscriptions || [];
+  const enabled = subscriptions.filter(s => s.enabled);
+  
+  console.log(`📥 更新 ${enabled.length} 個訂閱...`);
+  
+  for (const sub of enabled) {
+    if (sub.url) {
+      try {
+        const response = await fetch(sub.url);
+        if (response.ok) {
+          const text = await response.text();
+          const rules = parseAdblockRules(text);
+          
+          sub.lastUpdated = Date.now();
+          sub.rulesCount = rules.length;
+          
+          await chrome.storage.local.set({
+            [`rules_${sub.id}`]: rules
+          });
+          
+          console.log(`✓ 已更新: ${sub.name} (${rules.length} 條規則)`);
+        }
+      } catch (error) {
+        console.error(`✗ 更新失敗: ${sub.name}`, error);
+      }
+    }
+  }
+  
+  await chrome.storage.local.set({ subscriptions });
+}
+
+// 簡化版 AdBlock 規則解析
+function parseAdblockRules(text) {
+  const lines = text.split('\n');
+  const rules = [];
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('[')) continue;
+    
+    if (trimmed.startsWith('||')) {
+      const domain = trimmed.slice(2).split('^')[0].split('$')[0];
+      if (domain && domain.length > 3) {
+        rules.push({ type: 'block', pattern: domain });
+      }
+    } else if (trimmed.includes('##')) {
+      const [domains, selector] = trimmed.split('##');
+      if (selector) {
+        rules.push({
+          type: 'cosmetic',
+          domains: domains ? domains.split(',') : ['*'],
+          selector: selector
+        });
+      }
+    }
+  }
+  
+  return rules;
+}
+
+// ============================================================================
+// 統計與規則匹配
+// ============================================================================
 if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
   chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((details) => {
-    // 根據攔截的請求類型更新統計
     const rule = details.rule;
     
     if (rule.ruleId >= 1000 && rule.ruleId < 2000) {
@@ -73,21 +209,19 @@ if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
     } else if (rule.ruleId >= 2000 && rule.ruleId < 10000) {
       stats.trackersBlocked++;
     } else if (rule.ruleId >= 10000 && rule.ruleId < 100000) {
-      // EasyList range
       stats.adsBlocked++;
     } else if (rule.ruleId >= 100000) {
-      // EasyPrivacy range
       stats.trackersBlocked++;
     }
     
     stats.totalBlocked++;
-    
-    // 儲存更新後的統計
     chrome.storage.local.set({ stats: stats });
   });
 }
 
-// 監聽來自 content script 的訊息
+// ============================================================================
+// 訊息處理
+// ============================================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 統計資料請求
   if (request.action === 'getStats') {
@@ -104,12 +238,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
   
-  // 播放器偵測數量
-  if (request.action === 'updatePlayerCount') {
-    console.log(`偵測到 ${request.count} 個播放器`);
-    return;
-  }
-  
   // 彈出視窗被攔截
   if (request.action === 'popupBlocked') {
     stats.popupsBlocked++;
@@ -117,9 +245,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.set({ stats: stats });
     return;
   }
-
-  // ========== 元素隱藏相關 ==========
   
+  // 播放器偵測
+  if (request.action === 'updatePlayerCount') {
+    console.log(`偵測到 ${request.count} 個播放器`);
+    return;
+  }
+  
+  // ========== 封鎖強度控制 ==========
+  if (request.action === 'setFilterStrength') {
+    const level = request.level;
+    const rulesets = STRENGTH_RULESETS[level] || STRENGTH_RULESETS.standard;
+    updateRulesets(rulesets);
+    console.log(`🛡️ 封鎖強度設定為: ${level}`);
+    return;
+  }
+  
+  // ========== 規則集開關 ==========
+  if (request.action === 'toggleRuleset') {
+    const { rulesetId, enabled } = request;
+    if (enabled) {
+      chrome.declarativeNetRequest.updateEnabledRulesets({
+        enableRulesetIds: [rulesetId]
+      });
+    } else {
+      chrome.declarativeNetRequest.updateEnabledRulesets({
+        disableRulesetIds: [rulesetId]
+      });
+    }
+    console.log(`📋 規則集 ${rulesetId}: ${enabled ? '啟用' : '停用'}`);
+    return;
+  }
+  
+  // ========== 訂閱更新 ==========
+  if (request.action === 'updateAllSubscriptions') {
+    updateAllSubscriptions();
+    return;
+  }
+  
+  // ========== 白名單檢查 ==========
+  if (request.action === 'checkWhitelist') {
+    isWhitelisted(request.url).then(result => {
+      sendResponse({ whitelisted: result });
+    });
+    return true;
+  }
+  
+  // ========== 元素隱藏相關 ==========
   if (request.action === 'hideElement') {
     chrome.storage.local.get(['hiddenElements'], (result) => {
       const rules = result.hiddenElements || [];
@@ -169,17 +341,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
-});
-
-// 監聯 tab 更新
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') {
-    console.log('頁面載入完成:', tab.url);
+  
+  // ========== 沙盒相關 ==========
+  if (request.action === 'openInSandbox') {
+    const sandboxUrl = chrome.runtime.getURL('sandbox/sandbox.html') + 
+                       '?url=' + encodeURIComponent(request.url);
+    chrome.tabs.create({ url: sandboxUrl });
+    return;
+  }
+  
+  if (request.action === 'reportSandboxIssue') {
+    console.log('📝 沙盒問題回報:', request.url);
+    return;
   }
 });
 
-// 定期保存統計資料 (每 5 分鐘)
+// ============================================================================
+// Tab 監聽與白名單處理
+// ============================================================================
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url) {
+    const whitelisted = await isWhitelisted(tab.url);
+    
+    if (whitelisted) {
+      // 白名單網站：通知 content script 停用封鎖
+      chrome.tabs.sendMessage(tabId, { action: 'disableBlocking' }).catch(() => {});
+      console.log('⚪ 白名單網站:', tab.url);
+    }
+  }
+});
+
+// ============================================================================
+// 定期任務
+// ============================================================================
+// 每 5 分鐘保存統計資料
 setInterval(() => {
   chrome.storage.local.set({ stats: stats });
   console.log('📊 統計資料已保存:', stats);
 }, 5 * 60 * 1000);
+
+// 每 24 小時更新訂閱
+setInterval(() => {
+  updateAllSubscriptions();
+}, 24 * 60 * 60 * 1000);

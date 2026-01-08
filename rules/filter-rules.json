@@ -1436,6 +1436,19 @@
     }
   },
   {
+    "id": 1100,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/jdadbl.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
     "id": 1099,
     "priority": 10,
     "action": {

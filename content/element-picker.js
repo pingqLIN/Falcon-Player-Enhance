@@ -1,6 +1,7 @@
 // Element Picker - 互動式元素選擇器
 // 類似 uBlock Origin 的 Element Zapper 功能
 // 允許用戶透過滑鼠選取並移除網頁元素
+// 支援左鍵直接封鎖、右鍵選單封鎖
 
 (function () {
   "use strict";
@@ -10,11 +11,13 @@
   let highlightedElement = null;
   let overlay = null;
   let tooltip = null;
+  let contextMenu = null;
 
   // 樣式常數
   const HIGHLIGHT_COLOR = "rgba(255, 0, 0, 0.3)";
   const HIGHLIGHT_BORDER = "2px solid #ff0000";
   const TOOLTIP_BG = "#333";
+  const MENU_BG = "#1c1c1e";
 
   // ========== 創建 UI 元素 ==========
   function createOverlay() {
@@ -51,6 +54,47 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         `;
     document.body.appendChild(tooltip);
+  }
+
+  function createContextMenu() {
+    contextMenu = document.createElement("div");
+    contextMenu.id = "__element_picker_context_menu__";
+    contextMenu.style.cssText = `
+            position: fixed;
+            z-index: 2147483647;
+            background: ${MENU_BG};
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 160px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            display: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+    
+    const menuItem = document.createElement("div");
+    menuItem.id = "__element_picker_menu_block__";
+    menuItem.style.cssText = `
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s ease;
+        `;
+    menuItem.innerHTML = `<span style="font-size: 14px;">🚫</span> 加入封鎖`;
+    
+    menuItem.addEventListener("mouseenter", () => {
+      menuItem.style.background = "rgba(255,255,255,0.1)";
+    });
+    menuItem.addEventListener("mouseleave", () => {
+      menuItem.style.background = "transparent";
+    });
+    menuItem.addEventListener("click", onMenuBlockClick);
+    
+    contextMenu.appendChild(menuItem);
+    document.body.appendChild(contextMenu);
   }
 
   // ========== CSS 選擇器生成 ==========
@@ -126,6 +170,12 @@
   function onClick(e) {
     if (!isPickerActive) return;
 
+    // 如果點擊的是選單，不處理
+    if (e.target.id?.startsWith("__element_picker_menu")) return;
+
+    // 隱藏選單（如果開啟的話）
+    hideContextMenu();
+
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -133,6 +183,60 @@
     const target = highlightedElement;
     if (!target || target.id?.startsWith("__element_picker_")) return;
 
+    blockElement(target);
+  }
+
+  function onContextMenu(e) {
+    if (!isPickerActive) return;
+
+    const target = e.target;
+    // 忽略我們自己的元素
+    if (target.id?.startsWith("__element_picker_")) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    // 更新高亮元素
+    highlightedElement = target;
+    updateHighlight(target);
+
+    // 顯示自訂右鍵選單
+    showContextMenu(e.clientX, e.clientY);
+  }
+
+  function onMenuBlockClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    hideContextMenu();
+
+    if (highlightedElement && !highlightedElement.id?.startsWith("__element_picker_")) {
+      blockElement(highlightedElement);
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "Escape") {
+      if (contextMenu && contextMenu.style.display !== "none") {
+        hideContextMenu();
+      } else {
+        deactivatePicker();
+      }
+    }
+  }
+
+  function onDocumentClick(e) {
+    // 點擊其他地方時隱藏選單
+    if (contextMenu && contextMenu.style.display !== "none") {
+      if (!contextMenu.contains(e.target)) {
+        hideContextMenu();
+      }
+    }
+  }
+
+  // ========== 封鎖元素 ==========
+  function blockElement(target) {
     const selector = generateSelector(target);
 
     // 移除元素
@@ -146,12 +250,6 @@
 
     // 隱藏高亮
     hideHighlight();
-  }
-
-  function onKeyDown(e) {
-    if (e.key === "Escape") {
-      deactivatePicker();
-    }
   }
 
   // ========== UI 更新 ==========
@@ -184,6 +282,29 @@
     }
     if (tooltipRect.bottom > window.innerHeight) {
       tooltip.style.top = `${e.clientY - tooltipRect.height - 10}px`;
+    }
+  }
+
+  function showContextMenu(x, y) {
+    if (!contextMenu) createContextMenu();
+
+    contextMenu.style.display = "block";
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.top = `${y}px`;
+
+    // 防止超出視窗
+    const menuRect = contextMenu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth) {
+      contextMenu.style.left = `${window.innerWidth - menuRect.width - 10}px`;
+    }
+    if (menuRect.bottom > window.innerHeight) {
+      contextMenu.style.top = `${y - menuRect.height}px`;
+    }
+  }
+
+  function hideContextMenu() {
+    if (contextMenu) {
+      contextMenu.style.display = "none";
     }
   }
 
@@ -224,17 +345,20 @@
     // 創建 UI
     if (!overlay) createOverlay();
     if (!tooltip) createTooltip();
+    if (!contextMenu) createContextMenu();
 
     // 添加事件監聽
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("mouseover", onMouseOver, true);
     document.addEventListener("click", onClick, true);
+    document.addEventListener("contextmenu", onContextMenu, true);
     document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("click", onDocumentClick, false);
 
     // 改變游標
     document.body.style.cursor = "crosshair";
 
-    console.log("🎯 [Picker] 元素選擇器已啟動 - 點擊元素移除，ESC 取消");
+    console.log("🎯 [Picker] 元素選擇器已啟動 - 左鍵封鎖/右鍵選單，ESC 取消");
   }
 
   function deactivatePicker() {
@@ -246,13 +370,16 @@
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("mouseover", onMouseOver, true);
     document.removeEventListener("click", onClick, true);
+    document.removeEventListener("contextmenu", onContextMenu, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    document.removeEventListener("click", onDocumentClick, false);
 
     // 恢復游標
     document.body.style.cursor = "";
 
     // 隱藏 UI
     hideHighlight();
+    hideContextMenu();
 
     console.log("🎯 [Picker] 元素選擇器已停用");
   }
