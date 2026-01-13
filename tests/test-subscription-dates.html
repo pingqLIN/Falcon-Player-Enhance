@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Subscription Date Parsing</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #007AFF;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #007AFF;
+        }
+        pre {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 4px;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #0066CC;
+        }
+        .date-display {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .date-label {
+            font-weight: 600;
+            color: #666;
+            margin-right: 8px;
+        }
+        .date-value {
+            color: #007AFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 訂閱日期解析測試</h1>
+        <p class="description">測試訂閱過濾清單的遠端更新日期和本地同步日期功能</p>
+
+        <div class="test-section">
+            <h3>測試 1: 解析過濾清單元資料</h3>
+            <pre id="sample-filter">[Adblock Plus 2.0]
+! Title: EasyList China
+! Homepage: https://easylist.to/
+! Last modified: 15 Dec 2024 14:30 UTC
+! Expires: 1 days (update frequency)
+!
+||ads.example.com^
+||tracker.example.net^
+example.com##.ad-banner</pre>
+            <button onclick="testParsing()">執行測試</button>
+            <div id="test1-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>測試 2: 不同日期格式</h3>
+            <div>
+                <button onclick="testDateFormat('15 Dec 2024 14:30 UTC')">格式 1: 15 Dec 2024 14:30 UTC</button>
+                <button onclick="testDateFormat('Mon, 15 Dec 2024 14:30:00 GMT')">格式 2: RFC 2822</button>
+                <button onclick="testDateFormat('2024-12-15T14:30:00Z')">格式 3: ISO 8601</button>
+            </div>
+            <div id="test2-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>測試 3: 日期顯示格式</h3>
+            <p>測試相對時間顯示（如「3 小時前」、「2 天前」）</p>
+            <button onclick="testDateDisplay()">執行測試</button>
+            <div id="test3-result"></div>
+        </div>
+    </div>
+
+    <script src="../scripts/subscription-manager.js"></script>
+    <script>
+        function testParsing() {
+            const filterText = document.getElementById('sample-filter').textContent;
+            const result = SubscriptionManager.parseAdblockRules(filterText);
+            
+            const resultDiv = document.getElementById('test1-result');
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `
+                <div><strong>✓ 解析成功</strong></div>
+                <div>規則數量: ${result.rules.length}</div>
+                <div>遠端更新時間: ${result.remoteLastUpdated ? new Date(result.remoteLastUpdated).toLocaleString('zh-TW') : '未找到'}</div>
+                <div>時間戳: ${result.remoteLastUpdated || 'null'}</div>
+            `;
+        }
+
+        function testDateFormat(dateStr) {
+            const timestamp = SubscriptionManager.parseFilterListDate(dateStr);
+            const resultDiv = document.getElementById('test2-result');
+            
+            if (timestamp) {
+                const date = new Date(timestamp);
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <div><strong>✓ 解析成功</strong></div>
+                    <div>原始字串: ${dateStr}</div>
+                    <div>時間戳: ${timestamp}</div>
+                    <div>格式化顯示: ${date.toLocaleString('zh-TW')}</div>
+                    <div>ISO 格式: ${date.toISOString()}</div>
+                `;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <div><strong>✗ 解析失敗</strong></div>
+                    <div>無法解析日期: ${dateStr}</div>
+                `;
+            }
+        }
+
+        function formatDateTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return '剛剛';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)} 分鐘前`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小時前`;
+            if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
+            
+            return date.toLocaleDateString('zh-TW', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function testDateDisplay() {
+            const now = new Date();
+            const testDates = [
+                { label: '剛剛', date: new Date(now - 30000) },
+                { label: '5 分鐘前', date: new Date(now - 300000) },
+                { label: '2 小時前', date: new Date(now - 7200000) },
+                { label: '3 天前', date: new Date(now - 259200000) },
+                { label: '2 週前', date: new Date(now - 1209600000) }
+            ];
+
+            const resultDiv = document.getElementById('test3-result');
+            resultDiv.className = 'result';
+            
+            let html = '<div><strong>相對時間顯示測試</strong></div>';
+            testDates.forEach(test => {
+                const formatted = formatDateTime(test.date);
+                html += `
+                    <div class="date-display">
+                        <span class="date-label">預期:</span> ${test.label} 
+                        <span class="date-label">| 實際:</span> <span class="date-value">${formatted}</span>
+                    </div>
+                `;
+            });
+            
+            resultDiv.innerHTML = html;
+        }
+
+        // Auto-run first test on load
+        window.addEventListener('load', () => {
+            console.log('✓ Test page loaded');
+            console.log('✓ SubscriptionManager available:', typeof SubscriptionManager !== 'undefined');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>訂閱日期顯示 - 功能展示</title>
+    <link rel="stylesheet" href="../dashboard/dashboard.css">
+    <style>
+        body {
+            padding: 20px;
+        }
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .demo-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+        .demo-description {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            color: var(--text-secondary);
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+        .feature-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--system-green);
+            font-weight: bold;
+        }
+        .highlight {
+            background: rgba(0, 122, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-title">📋 訂閱過濾清單 - 日期標示功能展示</div>
+        
+        <div class="demo-description">
+            <h3 style="margin-top: 0;">✨ 新增功能</h3>
+            <ul class="feature-list">
+                <li><span class="highlight">清單遠端最後更新日期</span>：顯示過濾清單源頭的最後更新時間（從清單元資料中提取）</li>
+                <li><span class="highlight">本地端最後同步日期</span>：顯示本地擴充功能最後一次下載該清單的時間</li>
+                <li>支援相對時間顯示（例如：「3 小時前」、「2 天前」）</li>
+                <li>自動從 AdBlock Plus 格式清單中提取 "Last modified" 元資料</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">訂閱過濾清單</h2>
+            <p class="card-description">訂閱額外的過濾清單以增強防護能力。</p>
+
+            <div id="subscription-list">
+                <!-- Demo subscription item 1: With both dates -->
+                <div class="subscription-item">
+                    <div class="sub-info">
+                        <div class="sub-name">
+                            EasyList China
+                            <span class="sub-badge custom">自訂</span>
+                        </div>
+                        <div class="sub-desc">中國區網站廣告過濾</div>
+                        <div class="sub-meta">1,245 條規則</div>
+                        <div class="sub-date-info">
+                            <span class="date-label">本地同步：</span>
+                            <span class="date-value">2 小時前</span>
+                        </div>
+                        <div class="sub-date-info">
+                            <span class="date-label">遠端更新：</span>
+                            <span class="date-value">1 天前</span>
+                        </div>
+                    </div>
+                    <div class="sub-actions">
+                        <button class="sub-remove" title="刪除">✕</button>
+                        <label class="toggle">
+                            <input type="checkbox" checked>
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Demo subscription item 2: Built-in -->
+                <div class="subscription-item">
+                    <div class="sub-info">
+                        <div class="sub-name">
+                            EasyList
+                            <span class="sub-badge builtin">內建</span>
+                        </div>
+                        <div class="sub-desc">通用廣告過濾清單（內建）</div>
+                        <div class="sub-meta">3,892 條規則</div>
+                        <div class="sub-date-info">
+                            <span class="date-label">本地同步：</span>
+                            <span class="date-value">5 小時前</span>
+                        </div>
+                        <div class="sub-date-info">
+                            <span class="date-label">遠端更新：</span>
+                            <span class="date-value">12月15日 14:30</span>
+                        </div>
+                    </div>
+                    <div class="sub-actions">
+                        <label class="toggle">
+                            <input type="checkbox" checked>
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Demo subscription item 3: Recently added -->
+                <div class="subscription-item">
+                    <div class="sub-info">
+                        <div class="sub-name">
+                            Fanboy Annoyance
+                            <span class="sub-badge custom">自訂</span>
+                        </div>
+                        <div class="sub-desc">社群媒體與煩人元素過濾</div>
+                        <div class="sub-meta">892 條規則</div>
+                        <div class="sub-date-info">
+                            <span class="date-label">本地同步：</span>
+                            <span class="date-value">剛剛</span>
+                        </div>
+                        <div class="sub-date-info">
+                            <span class="date-label">遠端更新：</span>
+                            <span class="date-value">3 天前</span>
+                        </div>
+                    </div>
+                    <div class="sub-actions">
+                        <button class="sub-remove" title="刪除">✕</button>
+                        <label class="toggle">
+                            <input type="checkbox" checked>
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Demo subscription item 4: Not yet synced -->
+                <div class="subscription-item">
+                    <div class="sub-info">
+                        <div class="sub-name">
+                            Peter Lowe's List
+                        </div>
+                        <div class="sub-desc">廣告與追蹤伺服器清單</div>
+                        <div class="sub-meta">尚未同步</div>
+                    </div>
+                    <div class="sub-actions">
+                        <label class="toggle">
+                            <input type="checkbox">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="add-subscription-section">
+                <h3 class="section-subtitle">新增自訂訂閱</h3>
+                <div class="form-group">
+                    <input type="text" class="input" placeholder="清單名稱" disabled>
+                    <input type="url" class="input" placeholder="清單 URL (https://...)" disabled>
+                    <button class="btn btn-primary" disabled>新增訂閱</button>
+                </div>
+            </div>
+
+            <button class="btn btn-secondary">
+                <span>🔄</span> 更新所有訂閱
+            </button>
+        </div>
+
+        <div style="margin-top: 30px; padding: 20px; background: var(--bg-secondary); border-radius: var(--border-radius);">
+            <h3 style="margin-top: 0;">📝 實作說明</h3>
+            <p style="color: var(--text-secondary); line-height: 1.6;">
+                1. <strong>subscription-manager.js</strong>：新增 <code>parseFilterListDate()</code> 函數解析日期，
+                修改 <code>parseAdblockRules()</code> 回傳包含 <code>remoteLastUpdated</code> 的物件<br>
+                2. <strong>dashboard.js</strong>：更新訂閱清單顯示邏輯，分別顯示本地同步和遠端更新時間<br>
+                3. <strong>dashboard.css</strong>：新增 <code>.sub-date-info</code> 樣式，優化日期資訊的視覺呈現<br>
+                4. <strong>background.js</strong>：更新訂閱時同步儲存兩個日期欄位
+            </p>
+        </div>
+    </div>
+</body>
+</html>

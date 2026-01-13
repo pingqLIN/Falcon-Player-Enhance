@@ -148,16 +148,19 @@ async function updateAllSubscriptions() {
         const response = await fetch(sub.url);
         if (response.ok) {
           const text = await response.text();
-          const rules = parseAdblockRules(text);
+          const parseResult = parseAdblockRules(text);
           
+          sub.lastSynced = Date.now(); // 本地端最後同步日期
+          sub.remoteLastUpdated = parseResult.remoteLastUpdated; // 清單遠端最後更新日期
+          sub.rulesCount = parseResult.rules.length;
+          // Keep lastUpdated for backward compatibility
           sub.lastUpdated = Date.now();
-          sub.rulesCount = rules.length;
           
           await chrome.storage.local.set({
-            [`rules_${sub.id}`]: rules
+            [`rules_${sub.id}`]: parseResult.rules
           });
           
-          console.log(`✓ 已更新: ${sub.name} (${rules.length} 條規則)`);
+          console.log(`✓ 已更新: ${sub.name} (${parseResult.rules.length} 條規則)`);
         }
       } catch (error) {
         console.error(`✗ 更新失敗: ${sub.name}`, error);
@@ -172,9 +175,24 @@ async function updateAllSubscriptions() {
 function parseAdblockRules(text) {
   const lines = text.split('\n');
   const rules = [];
+  let remoteLastUpdated = null;
   
   for (const line of lines) {
     const trimmed = line.trim();
+    
+    // 提取元資料：Last modified 日期
+    if (trimmed.startsWith('! Last modified:') || trimmed.startsWith('! Last Modified:')) {
+      const dateStr = trimmed.replace(/^! Last [mM]odified:\s*/, '').trim();
+      try {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          remoteLastUpdated = date.getTime();
+        }
+      } catch (e) {
+        console.warn('Failed to parse filter list date:', dateStr);
+      }
+    }
+    
     if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('[')) continue;
     
     if (trimmed.startsWith('||')) {
@@ -194,7 +212,10 @@ function parseAdblockRules(text) {
     }
   }
   
-  return rules;
+  return {
+    rules: rules,
+    remoteLastUpdated: remoteLastUpdated
+  };
 }
 
 // ============================================================================
