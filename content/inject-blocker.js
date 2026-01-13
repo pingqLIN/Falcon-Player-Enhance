@@ -115,9 +115,12 @@ function isInternalElement(element) {
                 return true;
             }
             
-            // 檢查父元素
+            // 檢查父元素 (最多向上 10 層)
             let parent = element.parentElement;
-            while (parent) {
+            let depth = 0;
+            const maxDepth = 10;
+            
+            while (parent && depth < maxDepth) {
                 const parentClass = parent.className?.toString() || '';
                 const parentData = parent.dataset?.shieldInternal;
                 
@@ -129,6 +132,7 @@ function isInternalElement(element) {
                 }
                 
                 parent = parent.parentElement;
+                depth++;
             }
         }
     } catch (e) {}

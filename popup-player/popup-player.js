@@ -137,28 +137,26 @@
     cleanupAndClose();
   });
 
-  // 視窗關閉時清理資源
-  function cleanupAndClose() {
-    console.log('🎬 清理視窗資源 (Instance:', windowInstanceId, ')');
-    
-    // 停止所有播放
+  // 清理播放器資源
+  function cleanupPlayer() {
     const video = playerContainer.querySelector('video');
     if (video) {
       video.pause();
       video.src = '';
     }
-    
-    // 關閉視窗
+  }
+
+  // 視窗關閉時清理資源
+  function cleanupAndClose() {
+    console.log('🎬 清理視窗資源 (Instance:', windowInstanceId, ')');
+    cleanupPlayer();
     window.close();
   }
 
   // 監聽 beforeunload 進行清理
   window.addEventListener('beforeunload', () => {
     console.log('🎬 視窗即將關閉，清理資源 (Instance:', windowInstanceId, ')');
-    const video = playerContainer.querySelector('video');
-    if (video) {
-      video.pause();
-    }
+    cleanupPlayer();
   });
 
   // 鍵盤快捷鍵

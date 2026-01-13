@@ -177,7 +177,7 @@
         }
 
         // 生成唯一視窗識別碼
-        const windowId = 'popup-player-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const windowId = 'popup-player-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
 
         // 透過 chrome.runtime.sendMessage 請求 background script 開啟視窗
         try {
