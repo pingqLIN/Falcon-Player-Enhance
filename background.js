@@ -231,6 +231,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  // ========== 彈窗播放器請求 (新增) ==========
+  if (request.action === 'openPopupPlayer') {
+    const { windowId, videoSrc, iframeSrc, poster, title } = request;
+    
+    // 建構 popup-player URL
+    const params = new URLSearchParams();
+    if (videoSrc) params.set('videoSrc', videoSrc);
+    if (iframeSrc) params.set('iframeSrc', iframeSrc);
+    if (poster) params.set('poster', poster);
+    if (title) params.set('title', title);
+    if (windowId) params.set('windowId', windowId);
+    
+    const popupUrl = chrome.runtime.getURL('popup-player/popup-player.html') + '?' + params.toString();
+    
+    // 使用 chrome.windows.create 開啟新視窗 (支援多視窗)
+    chrome.windows.create({
+      url: popupUrl,
+      type: 'popup',
+      width: 1280,
+      height: 720,
+      focused: true
+    }, (window) => {
+      if (chrome.runtime.lastError) {
+        console.error('❌ 無法開啟彈窗視窗:', chrome.runtime.lastError.message);
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        console.log('✅ 彈窗視窗已開啟 (Window ID:', window.id, ', Player ID:', windowId, ')');
+        sendResponse({ success: true, windowId: window.id, playerId: windowId });
+      }
+    });
+    
+    return true; // 保持 message channel 開啟以供 async 回應
+  }
+  
   // Content Script 更新統計
   if (request.type === 'UPDATE_STATS') {
     stats.totalBlocked += request.count || 0;

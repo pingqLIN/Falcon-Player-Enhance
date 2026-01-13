@@ -39,6 +39,7 @@
         // 建立按鈕容器
         const btn = document.createElement('button');
         btn.className = 'shield-popup-player-btn';
+        btn.setAttribute('data-shield-internal', 'true'); // 標記為內部元素
         btn.innerHTML = '🎬';
         btn.title = '在新視窗無干擾播放';
         
@@ -68,6 +69,7 @@
         // 建立影片位置提示
         const tooltip = document.createElement('div');
         tooltip.className = 'shield-video-tooltip';
+        tooltip.setAttribute('data-shield-internal', 'true'); // 標記為內部元素
         Object.assign(tooltip.style, {
             position: 'absolute',
             top: '50px',
@@ -174,10 +176,41 @@
             return;
         }
 
-        // 透過 postMessage 通知 background script 開啟新視窗
-        // 因為 content script 可能無法直接使用 chrome.runtime.getURL
+        // 生成唯一視窗識別碼
+        const windowId = 'popup-player-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+        // 透過 chrome.runtime.sendMessage 請求 background script 開啟視窗
         try {
-            // 嘗試直接開啟（如果在 isolated world）
+            chrome.runtime.sendMessage({
+                action: 'openPopupPlayer',
+                windowId: windowId,
+                videoSrc: videoSrc,
+                iframeSrc: iframeSrc,
+                poster: poster,
+                title: document.title
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('⚠️ Message passing 失敗，嘗試直接開啟:', chrome.runtime.lastError.message);
+                    fallbackOpenPopup(videoSrc, iframeSrc, poster);
+                } else if (response && response.success) {
+                    console.log('🎬 彈窗播放器已開啟 (視窗 ID:', windowId, ')');
+                } else {
+                    console.warn('⚠️ Background 無回應，嘗試直接開啟');
+                    fallbackOpenPopup(videoSrc, iframeSrc, poster);
+                }
+            });
+        } catch (e) {
+            console.warn('⚠️ 無法傳送訊息，嘗試直接開啟:', e);
+            fallbackOpenPopup(videoSrc, iframeSrc, poster);
+        }
+    }
+
+    /**
+     * Fallback: 直接使用 window.open 開啟
+     * 當 message passing 失敗時使用
+     */
+    function fallbackOpenPopup(videoSrc, iframeSrc, poster) {
+        try {
             const extensionUrl = chrome.runtime?.getURL?.('popup-player/popup-player.html');
             if (extensionUrl) {
                 const params = new URLSearchParams();
@@ -187,17 +220,19 @@
                 
                 const popupUrl = `${extensionUrl}?${params.toString()}`;
                 window.open(popupUrl, '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no');
-                console.log('🎬 開啟彈窗播放器:', popupUrl);
+                console.log('🎬 Fallback: 開啟彈窗播放器:', popupUrl);
                 return;
             }
         } catch (e) {
-            console.log('⚠️ 無法直接存取 chrome API，嘗試 message passing');
+            console.log('⚠️ Fallback 也失敗了');
         }
 
-        // Fallback: 直接在新視窗開啟影片來源
+        // 最後手段：直接開啟影片來源
         const targetUrl = videoSrc || iframeSrc;
-        window.open(targetUrl, '_blank', 'width=1280,height=720');
-        console.log('🎬 直接開啟影片:', targetUrl);
+        if (targetUrl) {
+            window.open(targetUrl, '_blank', 'width=1280,height=720');
+            console.log('🎬 直接開啟影片:', targetUrl);
+        }
     }
 
     /**

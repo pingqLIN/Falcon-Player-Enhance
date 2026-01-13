@@ -79,6 +79,12 @@ const ATTACK_PATTERNS = {
 function isBlockedUrl(url) {
     if (!url) return false;
     const urlStr = String(url).toLowerCase();
+    
+    // 允許 chrome-extension:// URLs (擴充功能內部)
+    if (urlStr.startsWith('chrome-extension://')) {
+        return false;
+    }
+    
     return ATTACK_PATTERNS.maliciousDomains.some(pattern => 
         urlStr.includes(pattern.toLowerCase())
     ) || ATTACK_PATTERNS.socialSharePatterns.some(pattern =>
@@ -87,11 +93,62 @@ function isBlockedUrl(url) {
 }
 
 // ============================================================================
+// 🔵 INTERNAL ELEMENT WHITELIST
+// 檢測是否為擴充功能內部元素 - 白名單機制
+// ============================================================================
+function isInternalElement(element) {
+    if (!element || !element.nodeType) return false;
+    
+    try {
+        // 檢查元素本身
+        if (element.nodeType === 1) { // Element node
+            const className = element.className?.toString() || '';
+            const dataAttr = element.dataset?.shieldInternal;
+            
+            // 檢查 class 是否以 shield- 開頭
+            if (className.split(/\s+/).some(cls => cls.startsWith('shield-'))) {
+                return true;
+            }
+            
+            // 檢查 data-shield-internal 屬性
+            if (dataAttr === 'true') {
+                return true;
+            }
+            
+            // 檢查父元素
+            let parent = element.parentElement;
+            while (parent) {
+                const parentClass = parent.className?.toString() || '';
+                const parentData = parent.dataset?.shieldInternal;
+                
+                if (parentClass.split(/\s+/).some(cls => cls.startsWith('shield-'))) {
+                    return true;
+                }
+                if (parentData === 'true') {
+                    return true;
+                }
+                
+                parent = parent.parentElement;
+            }
+        }
+    } catch (e) {}
+    
+    return false;
+}
+
+// ============================================================================
 // 🔵 DEFENSE #1: window.open 完全鎖死
 // 對抗紅隊攻擊: 延遲彈窗、事件劫持彈窗
 // ============================================================================
 const originalOpen = window.open;
 const blockedOpen = function(url, target, features) {
+    // 允許 chrome-extension:// URLs (擴充功能內部彈窗)
+    const urlStr = url ? String(url) : '';
+    if (urlStr.startsWith('chrome-extension://')) {
+        log('允許內部擴充功能彈窗:', urlStr.substring(0, 80));
+        return originalOpen.call(window, url, target, features);
+    }
+    
     warn('已阻擋 window.open:', url ? String(url).substring(0, 80) : '(empty)');
     return createFakeWindow();
 };
@@ -491,6 +548,11 @@ setupMetaRefreshBlocker();
 function isClickjackingLayer(element) {
     if (!element || element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return false;
     
+    // 白名單：擴充功能內部元素
+    if (isInternalElement(element)) {
+        return false;
+    }
+    
     const style = window.getComputedStyle(element);
     const tagName = element.tagName?.toLowerCase() || '';
     
@@ -555,6 +617,11 @@ function removeClickjackingLayer(element) {
     document.addEventListener(eventType, function(e) {
         const target = e.target;
         if (!target) return;
+        
+        // 白名單：允許內部元素的點擊
+        if (isInternalElement(target)) {
+            return;
+        }
         
         if (isClickjackingLayer(target)) {
             warn('已阻擋隱形覆蓋層', eventType);
@@ -895,6 +962,11 @@ const originalAddEventListener = EventTarget.prototype.addEventListener;
 const suspiciousEventHandlers = new WeakMap();
 
 EventTarget.prototype.addEventListener = function(type, listener, options) {
+    // 白名單：允許內部元素的事件監聽
+    if (this.nodeType === 1 && isInternalElement(this)) {
+        return originalAddEventListener.call(this, type, listener, options);
+    }
+    
     // 監控 click 事件
     if (type === 'click' && typeof listener === 'function') {
         const listenerStr = listener.toString().toLowerCase();

@@ -13,6 +13,9 @@
   const btnPip = document.getElementById('btn-pip');
   const btnClose = document.getElementById('btn-close');
 
+  // 視窗實例識別碼
+  let windowInstanceId = null;
+
   // 從 URL 參數取得影片資訊
   function getVideoParams() {
     const params = new URLSearchParams(window.location.search);
@@ -20,7 +23,8 @@
       videoSrc: params.get('videoSrc'),
       iframeSrc: params.get('iframeSrc'),
       poster: params.get('poster'),
-      title: params.get('title')
+      title: params.get('title'),
+      windowId: params.get('windowId')
     };
   }
 
@@ -70,6 +74,10 @@
   // 初始化
   function init() {
     const params = getVideoParams();
+    
+    // 儲存視窗實例識別碼
+    windowInstanceId = params.windowId;
+    console.log('🎬 Popup Player Instance ID:', windowInstanceId);
     
     // 顯示來源
     const displaySrc = params.videoSrc || params.iframeSrc || '';
@@ -126,7 +134,31 @@
 
   // 關閉視窗
   btnClose.addEventListener('click', () => {
+    cleanupAndClose();
+  });
+
+  // 視窗關閉時清理資源
+  function cleanupAndClose() {
+    console.log('🎬 清理視窗資源 (Instance:', windowInstanceId, ')');
+    
+    // 停止所有播放
+    const video = playerContainer.querySelector('video');
+    if (video) {
+      video.pause();
+      video.src = '';
+    }
+    
+    // 關閉視窗
     window.close();
+  }
+
+  // 監聽 beforeunload 進行清理
+  window.addEventListener('beforeunload', () => {
+    console.log('🎬 視窗即將關閉，清理資源 (Instance:', windowInstanceId, ')');
+    const video = playerContainer.querySelector('video');
+    if (video) {
+      video.pause();
+    }
   });
 
   // 鍵盤快捷鍵

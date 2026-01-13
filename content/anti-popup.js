@@ -45,6 +45,16 @@
     // ========== 2. 攔截 EventTarget.prototype.addEventListener ==========
     const origAddEvent = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (type, fn, ...rest) {
+        // 白名單：允許內部元素 (以 shield- 開頭的 class)
+        if (this.nodeType === 1) { // Element node
+            const className = this.className?.toString() || '';
+            const dataAttr = this.dataset?.shieldInternal;
+            
+            if (className.split(/\s+/).some(cls => cls.startsWith('shield-')) || dataAttr === 'true') {
+                return origAddEvent.call(this, type, fn, ...rest);
+            }
+        }
+        
         // 攔截在 body/document 或大型覆蓋層上的 click 事件
         if (type === 'click' || type === 'mousedown') {
             if (this === document || this === document.body || this === window) {
