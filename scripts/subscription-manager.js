@@ -114,20 +114,23 @@ const SubscriptionManager = {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
       const text = await response.text();
-      const rules = this.parseAdblockRules(text);
+      const parseResult = this.parseAdblockRules(text);
       
       // 儲存解析後的規則
       await chrome.storage.local.set({
-        [`rules_${id}`]: rules,
+        [`rules_${id}`]: parseResult.rules,
         [`lastUpdated_${id}`]: Date.now()
       });
       
       // 更新訂閱資訊
+      sub.lastSynced = Date.now(); // 本地端最後同步日期
+      sub.remoteLastUpdated = parseResult.remoteLastUpdated; // 清單遠端最後更新日期
+      sub.rulesCount = parseResult.rules.length;
+      // Keep lastUpdated for backward compatibility
       sub.lastUpdated = Date.now();
-      sub.rulesCount = rules.length;
       await chrome.storage.local.set({ subscriptions });
       
-      console.log(`✓ Subscription updated: ${sub.name} (${rules.length} rules)`);
+      console.log(`✓ Subscription updated: ${sub.name} (${parseResult.rules.length} rules)`);
       return true;
       
     } catch (error) {
@@ -152,9 +155,19 @@ const SubscriptionManager = {
   parseAdblockRules(text) {
     const lines = text.split('\n');
     const rules = [];
+    let remoteLastUpdated = null;
     
     for (const line of lines) {
       const trimmed = line.trim();
+      
+      // 提取元資料：Last modified 日期
+      if (trimmed.startsWith('! Last modified:') || trimmed.startsWith('! Last Modified:')) {
+        const dateStr = trimmed.replace(/^! Last [mM]odified:\s*/, '').trim();
+        const parsedDate = this.parseFilterListDate(dateStr);
+        if (parsedDate) {
+          remoteLastUpdated = parsedDate;
+        }
+      }
       
       // 跳過註解和元資料
       if (!trimmed || 
@@ -187,7 +200,27 @@ const SubscriptionManager = {
       }
     }
     
-    return rules;
+    return {
+      rules: rules,
+      remoteLastUpdated: remoteLastUpdated
+    };
+  },
+
+  // 解析過濾清單中的日期格式
+  parseFilterListDate(dateStr) {
+    try {
+      // 常見格式：
+      // "15 Dec 2024 14:30 UTC"
+      // "2024-12-15 14:30"
+      // "Mon, 15 Dec 2024 14:30:00 GMT"
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        return date.getTime();
+      }
+    } catch (e) {
+      console.warn('Failed to parse filter list date:', dateStr);
+    }
+    return null;
   },
 
   // 取得已快取的規則

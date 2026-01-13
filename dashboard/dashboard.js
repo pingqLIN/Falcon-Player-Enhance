@@ -88,10 +88,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = document.createElement('div');
             item.className = 'subscription-item';
             
-            let updateTimeHtml = '';
-            if (sub.lastUpdated) {
-                const date = new Date(sub.lastUpdated);
-                updateTimeHtml = `<div class="sub-updated">上次更新：${formatDateTime(date)}</div>`;
+            let dateInfoHtml = '';
+            if (sub.lastSynced || sub.lastUpdated) {
+                const syncDate = new Date(sub.lastSynced || sub.lastUpdated);
+                dateInfoHtml += `<div class="sub-date-info">
+                    <span class="date-label">本地同步：</span>
+                    <span class="date-value">${formatDateTime(syncDate)}</span>
+                </div>`;
+            }
+            
+            if (sub.remoteLastUpdated) {
+                const remoteDate = new Date(sub.remoteLastUpdated);
+                dateInfoHtml += `<div class="sub-date-info">
+                    <span class="date-label">遠端更新：</span>
+                    <span class="date-value">${formatDateTime(remoteDate)}</span>
+                </div>`;
             }
 
             item.innerHTML = `
@@ -99,11 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="sub-name">
                         ${escapeHtml(sub.name)}
                         ${sub.builtin ? '<span class="sub-badge builtin">內建</span>' : ''}
+                        ${sub.custom ? '<span class="sub-badge custom">自訂</span>' : ''}
                     </div>
                     <div class="sub-desc">${escapeHtml(sub.desc || sub.description || '')}</div>
                     ${sub.rulesCount ? `<div class="sub-meta">${sub.rulesCount} 條規則</div>` : ''}
-                    ${updateTimeHtml}
-                </div>
+                    ${dateInfoHtml}
                 </div>
                 <div class="sub-actions">
                     ${sub.custom ? `<button class="sub-remove" data-id="${sub.id}" title="刪除">✕</button>` : ''}
@@ -175,27 +186,27 @@ document.addEventListener('DOMContentLoaded', () => {
             url: url,
             enabled: true,
             custom: true,
-            lastUpdated: Date.now()
+            lastSynced: null,
+            remoteLastUpdated: null
         });
 
         await chrome.storage.local.set({ subscriptions });
         nameInput.value = '';
         urlInput.value = '';
         loadSubscriptions();
+        
+        // Trigger update for the newly added subscription
+        chrome.runtime.sendMessage({ action: 'updateAllSubscriptions' });
     });
 
     // Update all subscriptions
     document.getElementById('btn-update-all').addEventListener('click', async () => {
         chrome.runtime.sendMessage({ action: 'updateAllSubscriptions' });
         
-        const result = await chrome.storage.local.get(['subscriptions']);
-        const subscriptions = result.subscriptions || [];
-        const now = Date.now();
-        
-        subscriptions.forEach(sub => sub.lastUpdated = now);
-        
-        await chrome.storage.local.set({ subscriptions });
-        loadSubscriptions();
+        // Reload the display after a delay to show updated dates
+        setTimeout(() => {
+            loadSubscriptions();
+        }, 2000);
         
         alert('已開始更新所有訂閱，請稍候...');
     });
