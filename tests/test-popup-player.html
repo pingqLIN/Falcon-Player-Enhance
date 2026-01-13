@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>彈窗播放器測試 - Shield Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 2.5rem;
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .test-section h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .player-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+        }
+
+        .test-description {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .expected-result {
+            background: rgba(0, 255, 136, 0.2);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #00ff88;
+        }
+
+        .expected-result strong {
+            color: #00ff88;
+        }
+
+        .test-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+
+        .status-icon {
+            font-size: 20px;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .instructions ol {
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+
+        .grid-players {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 彈窗播放器功能測試</h1>
+
+        <!-- Test 1: Single Video Player with Popup Button -->
+        <div class="test-section">
+            <h2>🎬 測試 1: 單一播放器彈窗功能</h2>
+            <div class="test-description">
+                此測試包含一個 HTML5 video 播放器。當懸浮在播放器上時，應該出現 🎬 按鈕。
+                點擊按鈕應該開啟新的彈窗視窗播放影片。
+            </div>
+            <div class="player-wrapper" id="player1">
+                <video controls>
+                    <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                        type="video/mp4">
+                    您的瀏覽器不支援 HTML5 video。
+                </video>
+            </div>
+            <div class="expected-result">
+                <strong>預期結果:</strong>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>懸浮時在播放器右上角顯示 🎬 按鈕</li>
+                    <li>點擊按鈕開啟新的彈窗視窗</li>
+                    <li>彈窗視窗正確播放影片</li>
+                    <li>彈窗不被廣告阻擋機制攔截</li>
+                </ul>
+            </div>
+            <div class="test-status" id="status1">
+                <div class="status-item">
+                    <span class="status-icon">⏳</span>
+                    <span>等待播放器偵測...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test 2: Multiple Players with Independent Popups -->
+        <div class="test-section">
+            <h2>🎬🎬 測試 2: 多播放器獨立彈窗</h2>
+            <div class="test-description">
+                此測試包含三個不同的播放器。每個播放器的 🎬 按鈕應該能獨立開啟彈窗，
+                多個彈窗視窗應該能同時存在且互不干擾。
+            </div>
+            <div class="grid-players">
+                <div class="player-wrapper" id="player2">
+                    <video controls>
+                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                            type="video/mp4">
+                    </video>
+                </div>
+                <div class="player-wrapper" id="player3">
+                    <video controls>
+                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+                            type="video/mp4">
+                    </video>
+                </div>
+                <div class="player-wrapper" id="player4">
+                    <video controls>
+                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+                            type="video/mp4">
+                    </video>
+                </div>
+            </div>
+            <div class="expected-result">
+                <strong>預期結果:</strong>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>每個播放器都能獨立開啟彈窗</li>
+                    <li>可同時開啟多個彈窗視窗</li>
+                    <li>關閉某個彈窗不影響其他彈窗</li>
+                    <li>每個彈窗有獨立的 window ID</li>
+                </ul>
+            </div>
+            <div class="test-status" id="status2">
+                <div class="status-item">
+                    <span class="status-icon">⏳</span>
+                    <span>等待播放器偵測...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test 3: Ad Blocking Not Affected -->
+        <div class="test-section">
+            <h2>🛡️ 測試 3: 廣告阻擋功能驗證</h2>
+            <div class="test-description">
+                驗證修改後的白名單機制不會影響正常的廣告阻擋功能。
+                以下元素應該被阻擋：
+            </div>
+            <div style="margin: 20px 0;">
+                <button id="test-blocked-popup" style="padding: 10px 20px; cursor: pointer; background: #ff6b6b; color: white; border: none; border-radius: 6px; font-size: 14px;">
+                    🚫 測試惡意彈窗（應被阻擋）
+                </button>
+                <div id="ad-test-result" style="margin-top: 15px; padding: 10px; border-radius: 6px;"></div>
+            </div>
+            <div class="expected-result">
+                <strong>預期結果:</strong>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>點擊「測試惡意彈窗」按鈕不應開啟新視窗</li>
+                    <li>主控台應顯示彈窗被阻擋的訊息</li>
+                    <li>擴充功能的彈窗阻擋統計應增加</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h2 style="margin-bottom: 15px;">📋 測試步驟</h2>
+            <ol>
+                <li>確保 Shield Pro 擴充功能已載入（chrome://extensions/）</li>
+                <li>重新載入此頁面</li>
+                <li>等待 3-5 秒讓播放器偵測完成</li>
+                <li>將滑鼠懸浮在播放器上，應該看到 🎬 按鈕</li>
+                <li>點擊 🎬 按鈕，應該開啟新的彈窗視窗</li>
+                <li>重複步驟 4-5 在不同播放器上，驗證可同時開啟多個彈窗</li>
+                <li>點擊「測試惡意彈窗」按鈕，驗證廣告阻擋仍正常運作</li>
+                <li>檢查主控台輸出，查看詳細日誌</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        console.log('🎬 彈窗播放器測試頁面已載入');
+
+        // 監控播放器偵測狀態
+        let checkCount = 0;
+        const maxChecks = 10;
+        
+        const checkInterval = setInterval(() => {
+            checkCount++;
+            
+            // 檢查播放器是否被標記
+            const enhancedPlayers = document.querySelectorAll('.player-enhanced-active');
+            const popupButtons = document.querySelectorAll('.shield-popup-player-btn');
+            
+            console.log(`檢查 #${checkCount}: 已增強的播放器 = ${enhancedPlayers.length}, 彈窗按鈕 = ${popupButtons.length}`);
+            
+            // 更新狀態
+            if (enhancedPlayers.length > 0 || popupButtons.length > 0) {
+                updateStatus('status1', enhancedPlayers.length >= 1 && popupButtons.length >= 1);
+                updateStatus('status2', enhancedPlayers.length >= 3 && popupButtons.length >= 3);
+                
+                if (popupButtons.length >= 4) {
+                    clearInterval(checkInterval);
+                    console.log('✅ 所有測試播放器已準備就緒');
+                }
+            }
+            
+            if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                console.warn('⚠️ 播放器偵測超時');
+            }
+        }, 1000);
+
+        function updateStatus(statusId, isReady) {
+            const statusDiv = document.getElementById(statusId);
+            if (isReady) {
+                statusDiv.innerHTML = `
+                    <div class="status-item">
+                        <span class="status-icon">✅</span>
+                        <span>播放器已就緒，請懸浮滑鼠查看 🎬 按鈕</span>
+                    </div>
+                `;
+                statusDiv.style.background = 'rgba(0, 255, 136, 0.2)';
+            }
+        }
+
+        // 測試惡意彈窗按鈕
+        document.getElementById('test-blocked-popup').addEventListener('click', function() {
+            const resultDiv = document.getElementById('ad-test-result');
+            
+            try {
+                // 嘗試開啟惡意彈窗（應被阻擋）
+                const popup = window.open('https://example.com', '_blank');
+                
+                if (popup === null || popup === undefined || popup.closed) {
+                    resultDiv.innerHTML = '✅ <strong>測試通過:</strong> 彈窗已被成功阻擋';
+                    resultDiv.style.background = 'rgba(0, 255, 136, 0.2)';
+                    console.log('✅ 惡意彈窗測試: 已阻擋');
+                } else {
+                    resultDiv.innerHTML = '❌ <strong>測試失敗:</strong> 彈窗未被阻擋（請檢查擴充功能）';
+                    resultDiv.style.background = 'rgba(255, 107, 107, 0.2)';
+                    console.error('❌ 惡意彈窗測試: 未阻擋');
+                    // 如果真的開了，就關掉
+                    setTimeout(() => popup.close(), 100);
+                }
+            } catch (e) {
+                resultDiv.innerHTML = '✅ <strong>測試通過:</strong> 彈窗被阻擋 (異常捕獲)';
+                resultDiv.style.background = 'rgba(0, 255, 136, 0.2)';
+                console.log('✅ 惡意彈窗測試: 已阻擋 (異常)', e.message);
+            }
+        });
+
+        // 記錄所有播放器
+        setTimeout(() => {
+            const videos = document.querySelectorAll('video');
+            console.log('📊 頁面中的 video 元素:', videos.length);
+            videos.forEach((v, i) => {
+                console.log(`  Video #${i + 1}:`, v.src || v.querySelector('source')?.src);
+            });
+        }, 500);
+    </script>
+</body>
+</html>
