@@ -201,12 +201,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update all subscriptions
     document.getElementById('btn-update-all').addEventListener('click', async () => {
+        // Request update in background
         chrome.runtime.sendMessage({ action: 'updateAllSubscriptions' });
         
-        // Reload the display after a delay to show updated dates
+        // Listen for storage changes to update UI
+        const handleUpdate = (changes, namespace) => {
+            if (namespace === 'local' && changes.subscriptions) {
+                loadSubscriptions();
+                chrome.storage.onChanged.removeListener(handleUpdate);
+            }
+        };
+        
+        chrome.storage.onChanged.addListener(handleUpdate);
+        
+        // Fallback: reload after reasonable time if no update detected
         setTimeout(() => {
+            chrome.storage.onChanged.removeListener(handleUpdate);
             loadSubscriptions();
-        }, 2000);
+        }, 5000);
         
         alert('已開始更新所有訂閱，請稍候...');
     });

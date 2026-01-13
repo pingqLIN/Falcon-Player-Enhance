@@ -117,17 +117,18 @@ const SubscriptionManager = {
       const parseResult = this.parseAdblockRules(text);
       
       // 儲存解析後的規則
+      const now = Date.now();
       await chrome.storage.local.set({
         [`rules_${id}`]: parseResult.rules,
-        [`lastUpdated_${id}`]: Date.now()
+        [`lastUpdated_${id}`]: now
       });
       
       // 更新訂閱資訊
-      sub.lastSynced = Date.now(); // 本地端最後同步日期
+      sub.lastSynced = now; // 本地端最後同步日期
       sub.remoteLastUpdated = parseResult.remoteLastUpdated; // 清單遠端最後更新日期
       sub.rulesCount = parseResult.rules.length;
       // Keep lastUpdated for backward compatibility
-      sub.lastUpdated = Date.now();
+      sub.lastUpdated = now;
       await chrome.storage.local.set({ subscriptions });
       
       console.log(`✓ Subscription updated: ${sub.name} (${parseResult.rules.length} rules)`);
@@ -209,16 +210,39 @@ const SubscriptionManager = {
   // 解析過濾清單中的日期格式
   parseFilterListDate(dateStr) {
     try {
-      // 常見格式：
-      // "15 Dec 2024 14:30 UTC"
-      // "2024-12-15 14:30"
-      // "Mon, 15 Dec 2024 14:30:00 GMT"
+      // Try native Date parsing first (handles ISO 8601, RFC 2822, etc.)
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
         return date.getTime();
       }
+      
+      // Fallback: try to parse common AdBlock Plus format manually
+      // Format: "15 Dec 2024 14:30 UTC" or "15 Dec 2024 14:30:00 GMT"
+      const regex = /(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*(UTC|GMT)?/;
+      const match = dateStr.match(regex);
+      
+      if (match) {
+        const months = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        
+        const day = parseInt(match[1], 10);
+        const month = months[match[2]];
+        const year = parseInt(match[3], 10);
+        const hour = parseInt(match[4], 10);
+        const minute = parseInt(match[5], 10);
+        const second = match[6] ? parseInt(match[6], 10) : 0;
+        
+        if (month !== undefined) {
+          const parsedDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.getTime();
+          }
+        }
+      }
     } catch (e) {
-      console.warn('Failed to parse filter list date:', dateStr);
+      console.warn('Failed to parse filter list date:', dateStr, e);
     }
     return null;
   },

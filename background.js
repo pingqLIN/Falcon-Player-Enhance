@@ -150,11 +150,12 @@ async function updateAllSubscriptions() {
           const text = await response.text();
           const parseResult = parseAdblockRules(text);
           
-          sub.lastSynced = Date.now(); // 本地端最後同步日期
+          const now = Date.now();
+          sub.lastSynced = now; // 本地端最後同步日期
           sub.remoteLastUpdated = parseResult.remoteLastUpdated; // 清單遠端最後更新日期
           sub.rulesCount = parseResult.rules.length;
           // Keep lastUpdated for backward compatibility
-          sub.lastUpdated = Date.now();
+          sub.lastUpdated = now;
           
           await chrome.storage.local.set({
             [`rules_${sub.id}`]: parseResult.rules
