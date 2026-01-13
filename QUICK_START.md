@@ -1,0 +1,149 @@
+# Quick Start Guide - Testing the Popup Player Fix
+
+## What Was Fixed
+
+The 🎬 popup player button was being blocked by the extension's own ad-blocking defenses. This has been fixed with a whitelist mechanism that allows the extension's internal UI elements while maintaining full ad-blocking protection.
+
+## Quick Test Steps
+
+### 1. Load the Extension
+```
+1. Open Chrome
+2. Go to chrome://extensions/
+3. Enable "Developer mode" (top right)
+4. Click "Load unpacked"
+5. Select the extension directory
+```
+
+### 2. Run Verification
+```bash
+cd /path/to/extension
+./verify_fix.sh
+```
+
+All checks should show ✅
+
+### 3. Test the Popup Player
+
+#### Open Test Page
+1. Navigate to `tests/test-popup-player.html` in Chrome
+2. Wait 3-5 seconds for players to load
+3. You should see "✅ 播放器已就緒" status
+
+#### Test Single Popup
+1. Hover mouse over the first video player
+2. A 🎬 button should appear in the top-right corner
+3. Click the 🎬 button
+4. A new popup window should open with the video playing
+
+#### Test Multiple Popups
+1. Hover over different video players
+2. Click 🎬 on multiple players
+3. Multiple popup windows should open simultaneously
+4. Each should play independently
+5. Close one window - others should continue playing
+
+#### Test Ad-Blocking Still Works
+1. Click the "🚫 測試惡意彈窗" button
+2. No popup should open
+3. Should see "✅ 測試通過: 彈窗已被成功阻擋"
+
+### 4. Check Console Logs
+
+Open DevTools (F12) and check for:
+- ✅ `🎬 Popup Player Instance ID: popup-player-...`
+- ✅ `✅ 彈窗視窗已開啟 (Window ID: ...)`
+- ✅ `🛡️ 允許內部擴充功能彈窗: chrome-extension://...`
+- ✅ `🛡️ 已阻擋 window.open: https://example.com` (for malicious test)
+
+## Expected Behavior
+
+### ✅ WORKING
+- 🎬 button appears on hover
+- Clicking button opens popup window
+- Multiple popups can open simultaneously
+- Each popup operates independently
+- Malicious popups are still blocked
+- Closing one popup doesn't affect others
+
+### ❌ NOT WORKING (Problems to Report)
+- Button doesn't appear
+- Clicking button does nothing
+- Console shows errors
+- Popup gets blocked
+- Malicious test popup opens
+
+## Common Issues & Solutions
+
+### Button Doesn't Appear
+- **Check**: Are players detected? Look for `.player-enhanced-active` class
+- **Wait**: Player detection takes 3-5 seconds
+- **Console**: Check for errors in console
+
+### Popup Gets Blocked
+- **Check**: Console should show "允許內部擴充功能彈窗"
+- **Verify**: Button should have `data-shield-internal="true"`
+- **Reload**: Try reloading the page
+
+### Multiple Popups Don't Work
+- **Check**: Each popup should have unique window ID in console
+- **Verify**: Look for different `popup-player-{timestamp}-{random}` IDs
+
+## File Structure
+
+```
+├── content/
+│   ├── inject-blocker.js      ← Whitelist mechanism added
+│   ├── anti-popup.js           ← Internal element check added
+│   └── player-enhancer.js      ← Message passing implemented
+├── background.js               ← Window creation handler added
+├── popup-player/
+│   ├── popup-player.html       ← Popup UI
+│   └── popup-player.js         ← Instance management added
+├── tests/
+│   └── test-popup-player.html  ← Test page (start here!)
+├── IMPLEMENTATION_SUMMARY.md   ← Detailed documentation
+├── ARCHITECTURE.md             ← Flow diagrams
+└── verify_fix.sh               ← Verification script
+```
+
+## Key Changes Summary
+
+1. **Whitelist System**: Elements with `.shield-*` class or `data-shield-internal="true"` bypass defenses
+2. **Message Passing**: Button uses `chrome.runtime.sendMessage` instead of direct `window.open`
+3. **Background Handler**: `chrome.windows.create()` opens popup windows
+4. **Unique IDs**: Each popup has unique identifier for independent operation
+5. **Security Maintained**: All ad-blocking defenses still active for external content
+
+## Success Criteria Checklist
+
+Test each item and mark [x] when verified:
+
+- [ ] 🎬 button visible on hover
+- [ ] Clicking button opens popup window
+- [ ] Popup plays video correctly
+- [ ] Can open multiple popups simultaneously
+- [ ] Each popup independent (can close without affecting others)
+- [ ] Malicious popup test blocked (✅ message shown)
+- [ ] No console errors
+- [ ] All players detected (console shows count)
+
+## Need Help?
+
+1. Run `./verify_fix.sh` to check all components
+2. Check `IMPLEMENTATION_SUMMARY.md` for detailed info
+3. See `ARCHITECTURE.md` for flow diagrams
+4. Review console logs for specific errors
+
+## Rollback (If Needed)
+
+```bash
+git checkout main
+# Original version without popup player fix
+```
+
+---
+
+**Status**: ✅ Implementation complete, ready for testing
+**Security**: ✅ CodeQL verified, 0 alerts
+**Documentation**: ✅ Complete with diagrams
