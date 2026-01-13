@@ -12,14 +12,35 @@
   let overlay = null;
   let tooltip = null;
   let contextMenu = null;
+  let dimOverlay = null; // 全螢幕暗化層
+  let confirmDialog = null; // 確認對話框
 
   // 樣式常數
   const HIGHLIGHT_COLOR = "rgba(255, 0, 0, 0.3)";
   const HIGHLIGHT_BORDER = "2px solid #ff0000";
   const TOOLTIP_BG = "#333";
   const MENU_BG = "#1c1c1e";
+  const DIM_OVERLAY_COLOR = "rgba(0, 0, 0, 0.7)"; // 暗化層顏色
 
   // ========== 創建 UI 元素 ==========
+  function createDimOverlay() {
+    dimOverlay = document.createElement("div");
+    dimOverlay.id = "__element_picker_dim_overlay__";
+    dimOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: ${DIM_OVERLAY_COLOR};
+            z-index: 2147483645;
+            pointer-events: none;
+            display: none;
+            transition: opacity 0.3s ease;
+        `;
+    document.body.appendChild(dimOverlay);
+  }
+
   function createOverlay() {
     overlay = document.createElement("div");
     overlay.id = "__element_picker_overlay__";
@@ -27,7 +48,8 @@
             position: fixed;
             pointer-events: none;
             z-index: 2147483646;
-            background: ${HIGHLIGHT_COLOR};
+            background: transparent;
+            box-shadow: 0 0 0 9999px ${DIM_OVERLAY_COLOR};
             border: ${HIGHLIGHT_BORDER};
             transition: all 0.1s ease;
             display: none;
@@ -95,6 +117,79 @@
     
     contextMenu.appendChild(menuItem);
     document.body.appendChild(contextMenu);
+  }
+
+  function createConfirmDialog() {
+    confirmDialog = document.createElement("div");
+    confirmDialog.id = "__element_picker_confirm__";
+    confirmDialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2147483648;
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            min-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            display: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+    
+    confirmDialog.innerHTML = `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 18px; font-weight: 600; color: #333; margin-bottom: 8px;">
+          🚫 確認封鎖元件
+        </div>
+        <div style="font-size: 14px; color: #666; line-height: 1.5;">
+          確定要封鎖此元件嗎？頁面將會重新載入。
+        </div>
+        <div id="__element_picker_confirm_selector__" style="font-size: 12px; color: #999; margin-top: 8px; font-family: monospace; word-break: break-all;"></div>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="__element_picker_cancel__" style="
+          padding: 8px 16px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          background: #fff;
+          color: #666;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        ">取消</button>
+        <button id="__element_picker_confirm_btn__" style="
+          padding: 8px 16px;
+          border: none;
+          border-radius: 6px;
+          background: #ff3b30;
+          color: #fff;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        ">確認封鎖</button>
+      </div>
+    `;
+    
+    const cancelBtn = confirmDialog.querySelector("#__element_picker_cancel__");
+    const confirmBtn = confirmDialog.querySelector("#__element_picker_confirm_btn__");
+    
+    cancelBtn.addEventListener("mouseenter", () => {
+      cancelBtn.style.background = "#f5f5f5";
+    });
+    cancelBtn.addEventListener("mouseleave", () => {
+      cancelBtn.style.background = "#fff";
+    });
+    
+    confirmBtn.addEventListener("mouseenter", () => {
+      confirmBtn.style.background = "#ff2d21";
+    });
+    confirmBtn.addEventListener("mouseleave", () => {
+      confirmBtn.style.background = "#ff3b30";
+    });
+    
+    document.body.appendChild(confirmDialog);
   }
 
   // ========== CSS 選擇器生成 ==========
@@ -172,6 +267,9 @@
 
     // 如果點擊的是選單，不處理
     if (e.target.id?.startsWith("__element_picker_menu")) return;
+    
+    // 如果點擊的是確認對話框內的元素，不處理
+    if (e.target.closest("#__element_picker_confirm__")) return;
 
     // 隱藏選單（如果開啟的話）
     hideContextMenu();
@@ -183,7 +281,8 @@
     const target = highlightedElement;
     if (!target || target.id?.startsWith("__element_picker_")) return;
 
-    blockElement(target);
+    // 顯示確認對話框
+    showConfirmDialog(target);
   }
 
   function onContextMenu(e) {
@@ -212,13 +311,15 @@
     hideContextMenu();
 
     if (highlightedElement && !highlightedElement.id?.startsWith("__element_picker_")) {
-      blockElement(highlightedElement);
+      showConfirmDialog(highlightedElement);
     }
   }
 
   function onKeyDown(e) {
     if (e.key === "Escape") {
-      if (contextMenu && contextMenu.style.display !== "none") {
+      if (confirmDialog && confirmDialog.style.display !== "none") {
+        hideConfirmDialog();
+      } else if (contextMenu && contextMenu.style.display !== "none") {
         hideContextMenu();
       } else {
         deactivatePicker();
@@ -239,17 +340,21 @@
   function blockElement(target) {
     const selector = generateSelector(target);
 
-    // 移除元素
-    target.remove();
     console.log("🎯 [Picker] 已移除元素:", selector);
 
     // 儲存規則
     if (selector) {
-      saveHiddenElement(selector);
+      saveHiddenElement(selector, () => {
+        // 儲存成功後重新載入頁面
+        console.log("🔄 [Picker] 重新載入頁面...");
+        window.location.reload();
+      });
+    } else {
+      // 如果沒有選擇器，直接移除元素但不重新載入
+      target.remove();
+      hideConfirmDialog();
+      deactivatePicker();
     }
-
-    // 隱藏高亮
-    hideHighlight();
   }
 
   // ========== UI 更新 ==========
@@ -308,6 +413,60 @@
     }
   }
 
+  function showConfirmDialog(target) {
+    if (!confirmDialog) createConfirmDialog();
+    
+    const selector = generateSelector(target);
+    const selectorElement = confirmDialog.querySelector("#__element_picker_confirm_selector__");
+    if (selectorElement) {
+      selectorElement.textContent = selector || "(無法生成選擇器)";
+    }
+    
+    // 顯示對話框
+    confirmDialog.style.display = "block";
+    
+    // 綁定按鈕事件
+    const cancelBtn = confirmDialog.querySelector("#__element_picker_cancel__");
+    const confirmBtn = confirmDialog.querySelector("#__element_picker_confirm_btn__");
+    
+    // 移除舊的事件監聽器
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    
+    // 添加新的事件監聽器
+    newCancelBtn.addEventListener("click", () => {
+      hideConfirmDialog();
+    });
+    
+    newConfirmBtn.addEventListener("click", () => {
+      hideConfirmDialog();
+      blockElement(target);
+    });
+    
+    // 重新綁定 hover 效果
+    newCancelBtn.addEventListener("mouseenter", () => {
+      newCancelBtn.style.background = "#f5f5f5";
+    });
+    newCancelBtn.addEventListener("mouseleave", () => {
+      newCancelBtn.style.background = "#fff";
+    });
+    
+    newConfirmBtn.addEventListener("mouseenter", () => {
+      newConfirmBtn.style.background = "#ff2d21";
+    });
+    newConfirmBtn.addEventListener("mouseleave", () => {
+      newConfirmBtn.style.background = "#ff3b30";
+    });
+  }
+
+  function hideConfirmDialog() {
+    if (confirmDialog) {
+      confirmDialog.style.display = "none";
+    }
+  }
+
   function hideHighlight() {
     if (overlay) overlay.style.display = "none";
     if (tooltip) tooltip.style.display = "none";
@@ -315,12 +474,14 @@
   }
 
   // ========== 規則儲存 ==========
-  function saveHiddenElement(selector) {
+  function saveHiddenElement(selector, callback) {
     try {
       chrome.runtime.sendMessage({
         action: "hideElement",
         selector: selector,
         hostname: window.location.hostname,
+      }, (response) => {
+        if (callback) callback();
       });
     } catch (e) {
       // 備用：存到 localStorage
@@ -333,6 +494,7 @@
         timestamp: Date.now(),
       });
       localStorage.setItem("__hidden_elements__", JSON.stringify(rules));
+      if (callback) callback();
     }
   }
 
@@ -343,9 +505,19 @@
     isPickerActive = true;
 
     // 創建 UI
+    if (!dimOverlay) createDimOverlay();
     if (!overlay) createOverlay();
     if (!tooltip) createTooltip();
     if (!contextMenu) createContextMenu();
+    if (!confirmDialog) createConfirmDialog();
+
+    // 顯示暗化層
+    if (dimOverlay) {
+      dimOverlay.style.display = "block";
+      // 觸發重排以啟動動畫
+      dimOverlay.offsetHeight;
+      dimOverlay.style.opacity = "1";
+    }
 
     // 添加事件監聽
     document.addEventListener("mousemove", onMouseMove, true);
@@ -380,13 +552,22 @@
     // 隱藏 UI
     hideHighlight();
     hideContextMenu();
+    hideConfirmDialog();
+    
+    // 隱藏暗化層
+    if (dimOverlay) {
+      dimOverlay.style.opacity = "0";
+      setTimeout(() => {
+        if (dimOverlay) dimOverlay.style.display = "none";
+      }, 300);
+    }
 
     console.log("🎯 [Picker] 元素選擇器已停用");
   }
 
   // ========== 訊息監聽 ==========
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "activatePicker") {
+    if (request.action === "activatePicker" || request.action === "activateElementPicker") {
       activatePicker();
       sendResponse({ success: true });
     } else if (request.action === "deactivatePicker") {

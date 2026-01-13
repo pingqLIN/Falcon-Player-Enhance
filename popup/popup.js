@@ -10,6 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPauseSite = document.getElementById('btn-pause-site');
     const pauseStatus = document.getElementById('pause-status');
     const btnPickElement = document.getElementById('btn-pick-element');
+    const btnRestoreElements = document.getElementById('btn-restore-elements');
+    const restoreStatus = document.getElementById('restore-status');
+    const blockedElementsSection = document.getElementById('blocked-elements-section');
+    const blockedList = document.getElementById('blocked-list');
+    const btnCloseBlocked = document.getElementById('btn-close-blocked');
+    const btnRestoreAll = document.getElementById('btn-restore-all');
     const btnSandboxMode = document.getElementById('btn-sandbox-mode');
     const sandboxStatus = document.getElementById('sandbox-status');
     const autoReloadToggle = document.getElementById('auto-reload-toggle');
@@ -45,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await checkPauseStatus();
         await checkSandboxStatus();
         await checkVirusTotalStatus();
+        await updateRestoreStatus();
     }
 
     // ========== Load Settings ==========
@@ -176,6 +183,68 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ========== Update Restore Status ==========
+    async function updateRestoreStatus() {
+        if (!currentDomain) return;
+
+        const result = await chrome.storage.local.get(['hiddenElements']);
+        const hiddenElements = result.hiddenElements || [];
+        const domainElements = hiddenElements.filter(rule => 
+            rule.hostname === currentDomain || currentDomain.includes(rule.hostname)
+        );
+
+        if (domainElements.length > 0) {
+            restoreStatus.textContent = `(${domainElements.length})`;
+            restoreStatus.style.display = 'inline';
+        } else {
+            restoreStatus.textContent = '';
+            restoreStatus.style.display = 'none';
+        }
+    }
+
+    // ========== Load Blocked Elements List ==========
+    async function loadBlockedElementsList() {
+        if (!currentDomain) return;
+
+        const result = await chrome.storage.local.get(['hiddenElements']);
+        const hiddenElements = result.hiddenElements || [];
+        const domainElements = hiddenElements.filter(rule => 
+            rule.hostname === currentDomain || currentDomain.includes(rule.hostname)
+        );
+
+        blockedList.innerHTML = '';
+
+        if (domainElements.length === 0) {
+            blockedList.innerHTML = '<div class="blocked-empty">此網站沒有被封鎖的元件</div>';
+            btnRestoreAll.disabled = true;
+            btnRestoreAll.style.opacity = '0.5';
+            return;
+        }
+
+        btnRestoreAll.disabled = false;
+        btnRestoreAll.style.opacity = '1';
+
+        domainElements.forEach((rule, index) => {
+            const item = document.createElement('div');
+            item.className = 'blocked-item';
+            item.innerHTML = `
+                <div class="blocked-selector">${rule.selector}</div>
+                <button class="btn-restore" data-index="${index}">恢復</button>
+            `;
+            blockedList.appendChild(item);
+        });
+
+        // 綁定恢復按鈕事件
+        blockedList.querySelectorAll('.btn-restore').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const selector = e.target.previousElementSibling.textContent;
+                await restoreElement(selector);
+                await loadBlockedElementsList();
+                await updateRestoreStatus();
+            });
+        });
+    }
+
     // ========== Event Handlers ==========
     masterToggle.addEventListener('change', async () => {
         const enabled = masterToggle.checked;
@@ -226,6 +295,57 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to activate element picker:', error);
         }
     });
+
+    btnRestoreElements.addEventListener('click', async () => {
+        if (blockedElementsSection.style.display === 'none') {
+            await loadBlockedElementsList();
+            blockedElementsSection.style.display = 'block';
+        } else {
+            blockedElementsSection.style.display = 'none';
+        }
+    });
+
+    btnCloseBlocked.addEventListener('click', () => {
+        blockedElementsSection.style.display = 'none';
+    });
+
+    btnRestoreAll.addEventListener('click', async () => {
+        if (!currentDomain) return;
+        
+        const result = await chrome.storage.local.get(['hiddenElements']);
+        let hiddenElements = result.hiddenElements || [];
+        
+        // 移除當前域名的所有規則
+        hiddenElements = hiddenElements.filter(rule => 
+            rule.hostname !== currentDomain && !currentDomain.includes(rule.hostname)
+        );
+        
+        await chrome.storage.local.set({ hiddenElements });
+        
+        // 重新載入列表
+        await loadBlockedElementsList();
+        await updateRestoreStatus();
+        
+        // 重新載入頁面以顯示恢復的元件
+        reloadCurrentTab();
+    });
+
+    async function restoreElement(selector) {
+        const result = await chrome.storage.local.get(['hiddenElements']);
+        let hiddenElements = result.hiddenElements || [];
+        
+        // 移除特定選擇器的規則
+        hiddenElements = hiddenElements.filter(rule => rule.selector !== selector);
+        
+        await chrome.storage.local.set({ hiddenElements });
+        
+        // 通知 content script 刷新規則
+        if (currentTabId) {
+            chrome.tabs.sendMessage(currentTabId, { action: 'refreshCosmeticRules' }).catch(() => {});
+            // 重新載入頁面以顯示恢復的元件
+            reloadCurrentTab();
+        }
+    }
 
     btnSandboxMode.addEventListener('click', async () => {
         if (!currentDomain) return;

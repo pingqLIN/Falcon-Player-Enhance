@@ -84,11 +84,30 @@
                 <span class="action-icon">👆</span>
                 <span class="action-text">選擇元素封鎖</span>
             </button>
+            <button class="action-btn" id="btn-restore-elements">
+                <span class="action-icon">🔄</span>
+                <span class="action-text">恢復被封鎖元件</span>
+                <span class="action-status" id="restore-status"></span>
+            </button>
             <button class="action-btn" id="btn-sandbox-mode">
                 <span class="action-icon">🔒</span>
                 <span class="action-text">沙盒模式</span>
                 <span class="action-status" id="sandbox-status"></span>
             </button>
+        </section>
+
+        <!-- Blocked Elements Management -->
+        <section class="blocked-elements-section" id="blocked-elements-section" style="display: none;">
+            <div class="blocked-header">
+                <span class="blocked-title">被封鎖的元件</span>
+                <button class="btn-close" id="btn-close-blocked">✕</button>
+            </div>
+            <div class="blocked-list" id="blocked-list">
+                <!-- Will be populated dynamically -->
+            </div>
+            <div class="blocked-actions">
+                <button class="secondary-btn small" id="btn-restore-all">恢復全部</button>
+            </div>
         </section>
 
         <!-- Settings -->

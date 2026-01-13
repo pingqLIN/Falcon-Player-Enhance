@@ -497,6 +497,123 @@ body {
     transform: translateX(3px);
 }
 
+.secondary-btn.small {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* Blocked Elements Section */
+.blocked-elements-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 12px 0;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.blocked-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.blocked-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.btn-close:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.blocked-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.blocked-item {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.blocked-item:last-child {
+    margin-bottom: 0;
+}
+
+.blocked-selector {
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 11px;
+    color: #666;
+    word-break: break-all;
+    flex: 1;
+    margin-right: 8px;
+}
+
+.btn-restore {
+    background: #4CAF50;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-restore:hover {
+    background: #45a049;
+}
+
+.blocked-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.blocked-empty {
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    padding: 20px;
+}
+
 /* Disabled State */
 .popup-container.disabled .stats-section,
 .popup-container.disabled .control-section,
