@@ -11,11 +11,15 @@
     "test:lmstudio": "node tests/ai-eval/run-lmstudio-evaluation.js --mock",
     "test:lmstudio:live": "node tests/ai-eval/run-lmstudio-evaluation.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
     "test:openai:live": "node tests/ai-eval/run-openai-direct-evaluation.js --model gpt-5.4-mini",
+    "test:chrome-builtin:live": "node tests/ai-eval/run-chrome-builtin-evaluation.js --model gemini-nano",
     "test:gemini:live": "node tests/ai-eval/run-gemini-direct-evaluation.js --model gemini-2.5-flash",
     "test:gateway:live": "node tests/ai-eval/check-gateway-policy.js --endpoint http://127.0.0.1:8787/v1",
     "test:ai:compare": "node tests/ai-eval/compare-provider-reports.js",
     "build:lmstudio-rules": "node tests/ai-eval/generate-lmstudio-rules.js --mock",
     "build:lmstudio-rules:live": "node tests/ai-eval/generate-lmstudio-rules.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
     "gateway:openai": "node scripts/openai-policy-gateway.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
   }
 }

@@ -7,12 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
     const AI_PROVIDER_ENDPOINTS = {
+        chrome_builtin: 'chrome://built-in-ai/prompt-api',
         openai: 'https://api.openai.com/v1/responses',
         gemini: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
         lmstudio: 'http://127.0.0.1:1234/v1/chat/completions',
         gateway: 'http://127.0.0.1:8787/v1'
     };
     const AI_PROVIDER_TIMEOUTS = {
+        chrome_builtin: 25000,
         openai: 20000,
         gemini: 20000,
         lmstudio: 4000,
@@ -47,8 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiStatusTitle = document.getElementById('ai-status-title');
     const aiStatusSub = document.getElementById('ai-status-sub');
     const aiConfigurePanel = document.getElementById('ai-configure-panel');
+    const aiKeyRow = document.getElementById('ai-key-row');
     const aiKeyDisplay = document.getElementById('ai-key-display');
     const aiKeyEditRow = document.getElementById('ai-key-edit-row');
+    const aiModelRow = document.getElementById('ai-model-row');
+    const aiEndpointRow = document.getElementById('ai-endpoint-row');
     const btnUpdateApiKey = document.getElementById('btn-update-api-key');
     const btnConfirmApiKey = document.getElementById('btn-confirm-api-key');
     const providerCards = Array.from(document.querySelectorAll('.provider-card'));
@@ -132,11 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusAiMode) {
             const mode = settings.mode || 'off';
             const provider = settings.provider || '';
-            statusAiMode.textContent = `AI: ${mode}${provider && mode !== 'off' ? ' · ' + provider : ''}`;
+            statusAiMode.textContent = mode === 'off'
+                ? t('dashboardStatusAiModeOff')
+                : t('dashboardStatusAiModeWithProvider', [mode, provider]);
         }
         if (statusEnhancedCount) {
             const customCount = Array.isArray(result.customSites) ? result.customSites.length : 0;
-            statusEnhancedCount.textContent = `${customCount} enhanced site${customCount !== 1 ? 's' : ''}`;
+            statusEnhancedCount.textContent = customCount === 1
+                ? t('dashboardStatusEnhancedCountOne', [String(customCount)])
+                : t('dashboardStatusEnhancedCountOther', [String(customCount)]);
         }
     }
 
@@ -168,19 +177,53 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\b\w/g, (char) => char.toUpperCase());
     }
 
+    function toPascalCaseToken(token) {
+        return String(token || '')
+            .split(/[^a-zA-Z0-9]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('');
+    }
+
+    function localizePolicyAction(action) {
+        const fallback = formatPolicyGateAction(action);
+        const key = `policyAction${toPascalCaseToken(action)}`;
+        const translated = t(key);
+        return translated === key ? fallback : translated;
+    }
+
+    function localizePolicySignal(type) {
+        const fallback = formatPolicyGateAction(type);
+        const key = `policySignal${toPascalCaseToken(type)}`;
+        const translated = t(key);
+        return translated === key ? fallback : translated;
+    }
+
     function formatPolicyGateReason(reason) {
-        return String(reason || 'runtime_default').replace(/_/g, ' ');
+        const value = String(reason || 'runtime_default');
+        const key = `policyReason${toPascalCaseToken(value)}`;
+        const translated = t(key);
+        if (translated !== key) return translated;
+        return value.replace(/_/g, ' ');
+    }
+
+    function formatPolicyGateMode(mode) {
+        const value = String(mode || 'advisory-only');
+        const key = `policyMode${toPascalCaseToken(value)}`;
+        const translated = t(key);
+        if (translated !== key) return translated;
+        return value;
     }
 
     function formatEvidenceSignal(signal) {
         if (!signal) return '';
         const count = Number(signal.count || 0);
         if (count > 0) {
-            return `${formatPolicyGateAction(signal.type)} ×${count}`;
+            return `${localizePolicySignal(signal.type)} ×${count}`;
         }
         const delta = Number(signal.delta || 0);
         const sign = delta > 0 ? '+' : '';
-        return `${formatPolicyGateAction(signal.type)} ${sign}${delta.toFixed(2)}`;
+        return `${localizePolicySignal(signal.type)} ${sign}${delta.toFixed(2)}`;
     }
 
     function renderPolicyHostList(hosts) {
@@ -189,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const list = Array.isArray(hosts) ? hosts : [];
         if (list.length === 0) {
-            policyHostList.innerHTML = '<div class="empty-state">No high-risk hosts yet</div>';
+            policyHostList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardPolicyNoHighRiskHosts'))}</div>`;
             return;
         }
 
@@ -205,11 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? host.evidence.recentSignals
                 : [];
             const chips = actions.length > 0
-                ? actions.map((action) => `<span class="policy-action-chip">${escapeHtml(formatPolicyGateAction(action))}</span>`).join('')
-                : '<span class="policy-action-chip">No reversible actions</span>';
+                ? actions.map((action) => `<span class="policy-action-chip">${escapeHtml(localizePolicyAction(action))}</span>`).join('')
+                : `<span class="policy-action-chip">${escapeHtml(t('dashboardPolicyNoReversibleActions'))}</span>`;
             const evidenceChips = evidenceSignals.length > 0
                 ? evidenceSignals.map((signal) => `<span class="policy-action-chip">${escapeHtml(formatEvidenceSignal(signal))}</span>`).join('')
-                : '<span class="policy-action-chip">No recent signals</span>';
+                : `<span class="policy-action-chip">${escapeHtml(t('dashboardPolicyNoRecentSignals'))}</span>`;
 
             item.innerHTML = `
                 <div class="policy-host-main">
@@ -218,15 +261,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="policy-host-meta">
                     <span class="policy-chip">${escapeHtml(String(host.riskTier || 'low').toUpperCase())} · ${Number(host.riskScore || 0).toFixed(2)}</span>
-                    <span class="policy-chip">${escapeHtml(String(host.policyGateMode || 'advisory-only'))}</span>
-                    ${host.fallbackActive ? '<span class="policy-chip fallback">Fallback active</span>' : ''}
+                    <span class="policy-chip">${escapeHtml(formatPolicyGateMode(host.policyGateMode || 'advisory-only'))}</span>
+                    ${host.fallbackActive ? `<span class="policy-chip fallback">${escapeHtml(t('dashboardPolicyFallbackActive'))}</span>` : ''}
                 </div>
                 <div class="policy-host-meta">
-                    <span>Reason: ${escapeHtml(formatPolicyGateReason(host.policyGateReason))}</span>
+                    <span>${escapeHtml(t('dashboardPolicyReasonLabel'))}: ${escapeHtml(formatPolicyGateReason(host.policyGateReason))}</span>
                 </div>
                 <div class="policy-actions-row">${chips}</div>
                 <div class="policy-host-meta">
-                    <span>Evidence</span>
+                    <span>${escapeHtml(t('dashboardPolicyEvidenceLabel'))}</span>
                 </div>
                 <div class="policy-actions-row">${evidenceChips}</div>
             `;
@@ -248,10 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProviderLabel(provider) {
-        if (provider === 'openai') return 'OpenAI direct';
-        if (provider === 'gemini') return 'Gemini 2.5 Flash';
-        if (provider === 'gateway') return 'Gateway service';
-        return 'LM Studio';
+        if (provider === 'chrome_builtin') return t('dashboardAiProviderChromeBuiltinLabel');
+        if (provider === 'openai') return t('dashboardAiProviderOpenaiLabel');
+        if (provider === 'gemini') return t('dashboardAiProviderGeminiLabel');
+        if (provider === 'gateway') return t('dashboardAiProviderGatewayLabel');
+        return t('dashboardAiProviderLmstudioLabel');
     }
 
     function getProviderDefaultEndpoint(provider) {
@@ -263,9 +307,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProviderDefaultModel(provider) {
+        if (provider === 'chrome_builtin') return 'gemini-nano';
         if (provider === 'openai') return 'gpt-5.4-mini';
         if (provider === 'gemini') return 'gemini-2.5-flash';
         return '';
+    }
+
+    function providerUsesCredential(provider) {
+        return ['openai', 'gemini', 'gateway'].includes(provider);
+    }
+
+    function providerUsesEndpoint(provider) {
+        return provider !== 'chrome_builtin';
+    }
+
+    function updateProviderFieldVisibility(provider) {
+        const usesCredential = providerUsesCredential(provider);
+        const usesEndpoint = providerUsesEndpoint(provider);
+
+        if (aiKeyRow) {
+            aiKeyRow.style.display = usesCredential ? '' : 'none';
+        }
+        if (aiKeyEditRow && !usesCredential) {
+            aiKeyEditRow.style.display = 'none';
+        }
+        if (btnUpdateApiKey) {
+            btnUpdateApiKey.style.display = usesCredential ? '' : 'none';
+        }
+        if (aiModelRow) {
+            aiModelRow.style.display = '';
+        }
+        if (lmstudioModel) {
+            lmstudioModel.disabled = provider === 'chrome_builtin';
+        }
+        if (aiEndpointRow) {
+            aiEndpointRow.style.display = usesEndpoint ? '' : 'none';
+        }
+        if (lmstudioEndpoint) {
+            lmstudioEndpoint.disabled = !usesEndpoint;
+        }
     }
 
     function setSelectedProviderCard(provider) {
@@ -288,16 +368,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderApiKeyState(hasCredential, hasStagedCredential = false) {
         if (aiKeyDisplay) {
             aiKeyDisplay.value = hasStagedCredential
-                ? '•••••••• staged'
+                ? t('dashboardAiCredentialStaged')
                 : hasCredential
-                ? '•••••••• stored'
-                : 'Not stored';
+                ? t('dashboardAiCredentialStored')
+                : t('dashboardAiCredentialEmpty');
         }
         if (aiKeyEditRow) {
             aiKeyEditRow.style.display = 'none';
         }
         if (btnUpdateApiKey) {
-            btnUpdateApiKey.textContent = hasCredential ? 'Update' : 'Add';
+            btnUpdateApiKey.textContent = hasCredential ? t('dashboardAiUpdateKeyLabel') : t('dashboardAiAddKeyLabel');
         }
     }
 
@@ -320,15 +400,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!enabled) {
-            aiStatusTitle.textContent = 'AI disabled';
-            aiStatusSub.textContent = `${providerLabel} · mode=${mode}`;
+            aiStatusTitle.textContent = t('dashboardAiStatusDisabled');
+            aiStatusSub.textContent = t('dashboardAiStatusSubProviderMode', [providerLabel, mode]);
             return;
         }
 
         aiStatusTitle.textContent = providerLabel;
         aiStatusSub.textContent = error
-            ? `${model} · ${error}`
-            : `${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
+            ? t('dashboardAiStatusSubModelError', [model, error])
+            : lastHealthOk
+            ? t('dashboardAiStatusSubProviderModeHealthy', [model, mode])
+            : t('dashboardAiStatusSubProviderMode', [model, mode]);
     }
 
     function syncProviderDefaults(nextProvider) {
@@ -344,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const currentModel = lmstudioModel.value.trim();
-        const knownDefaults = ['gpt-5.4-mini', 'gemini-2.5-flash', ''];
+        const knownDefaults = ['gemini-nano', 'gpt-5.4-mini', 'gemini-2.5-flash', ''];
         if (!currentModel || knownDefaults.includes(currentModel)) {
             lmstudioModel.value = getProviderDefaultModel(nextProvider);
         }
@@ -355,6 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectProvider(nextProvider) {
         syncProviderDefaults(nextProvider);
         setSelectedProviderCard(nextProvider);
+        updateProviderFieldVisibility(nextProvider);
         renderApiKeyState(hasStoredCredential, Boolean(aiProviderToken?.value.trim()));
         if (aiConfigurePanel) {
             aiConfigurePanel.style.display = 'block';
@@ -372,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lmstudioCandidateList.innerHTML = '';
 
         if (!Array.isArray(candidateList) || candidateList.length === 0) {
-            lmstudioCandidateList.innerHTML = '<div class="empty-state">No generated rule candidates yet.</div>';
+            lmstudioCandidateList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardAiNoCandidates'))}</div>`;
             return;
         }
 
@@ -387,11 +470,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="policy-host-meta">
                     <span class="policy-chip">${escapeHtml(providerLabel)}</span>
-                    <span class="policy-chip">Selectors · ${Number(candidate.selectorCount || 0)}</span>
-                    <span class="policy-chip">Domains · ${Number(candidate.domainCount || 0)}</span>
+                    <span class="policy-chip">${escapeHtml(t('dashboardAiCandidateSelectors', [String(Number(candidate.selectorCount || 0))]))}</span>
+                    <span class="policy-chip">${escapeHtml(t('dashboardAiCandidateDomains', [String(Number(candidate.domainCount || 0))]))}</span>
                 </div>
                 <div class="policy-host-meta">
-                    <span>${escapeHtml(candidate.summary || 'No summary')}</span>
+                    <span>${escapeHtml(candidate.summary || t('dashboardAiCandidateNoSummary'))}</span>
                 </div>
             `;
             lmstudioCandidateList.appendChild(item);
@@ -403,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const snapshot = response?.success ? response.snapshot : null;
         if (!snapshot) {
             if (policyHostList) {
-                policyHostList.innerHTML = '<div class="empty-state">Unable to load runtime policy gate</div>';
+                policyHostList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardPolicyLoadFailed'))}</div>`;
             }
             return;
         }
@@ -427,12 +510,15 @@ document.addEventListener('DOMContentLoaded', () => {
             : [];
         if (lmstudioCandidateSummary) {
             if (candidateList.length === 0) {
-                lmstudioCandidateSummary.textContent = 'No generated rule candidates yet.';
+                lmstudioCandidateSummary.textContent = t('dashboardAiCandidatesSummaryEmpty');
             } else {
                 const top = candidateList[0];
-                lmstudioCandidateSummary.textContent =
-                    `Generated ${candidateList.length} host candidate set(s). Latest: ${top.hostname} ` +
-                    `(selectors=${top.selectorCount || 0}, domains=${top.domainCount || 0})`;
+                lmstudioCandidateSummary.textContent = t('dashboardAiCandidatesSummaryLatest', [
+                    String(candidateList.length),
+                    String(top.hostname || 'unknown-host'),
+                    String(top.selectorCount || 0),
+                    String(top.domainCount || 0)
+                ]);
             }
         }
         renderLmStudioCandidates(candidateList);
@@ -455,10 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiProviderToken) {
             aiProviderToken.value = '';
             aiProviderToken.placeholder = hasStoredApiKey
-                ? 'Stored session credential configured. Enter a new key to replace it.'
-                : 'OpenAI API key, Gemini API key, or gateway bearer token';
+                ? t('dashboardAiStoredCredentialPlaceholder')
+                : t('dashboardAiTokenPlaceholder');
         }
         renderApiKeyState(hasStoredApiKey, false);
+        updateProviderFieldVisibility(provider);
         if (lmstudioEnabled) lmstudioEnabled.checked = settings?.enabled === true;
         if (lmstudioEndpoint) lmstudioEndpoint.value = settings?.endpoint || getProviderDefaultEndpoint(provider);
         if (lmstudioModel) {
@@ -495,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
             model: lmstudioModel?.value || (
                 getProviderDefaultModel(provider)
             ),
-            apiKey: aiProviderToken?.value || '',
+            apiKey: providerUsesCredential(provider) ? (aiProviderToken?.value || '') : '',
             mode: lmstudioMode?.value || 'hybrid',
             timeoutMs: Number(lmstudioTimeout?.value || getProviderDefaultTimeout(provider)),
             cooldownMs: Number(lmstudioCooldown?.value || 25000),
@@ -506,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAiProviderSettings() {
         const response = await runtimeMessage({ action: 'getAiProviderSettings' });
         if (!response?.success) {
-            setLmStudioStatus('Unable to load AI provider settings.', true);
+            setLmStudioStatus(t('dashboardAiSettingsLoadFailed'), true);
             return;
         }
         hydrateProviderForm(response.settings, response.state);
@@ -520,30 +607,33 @@ document.addEventListener('DOMContentLoaded', () => {
             settings
         });
         if (!response?.success) {
-            setLmStudioStatus(response?.error || `Failed to save ${providerLabel} settings.`, true);
+            setLmStudioStatus(response?.error || t('dashboardAiSettingsSaveFailed', [providerLabel]), true);
             return;
         }
         hydrateProviderForm(response.settings, response.state);
         loadStatusBar();
-        setLmStudioStatus(`${providerLabel} provider settings saved.`);
+        setLmStudioStatus(t('dashboardAiSettingsSaved', [providerLabel]));
     }
 
     async function runAiProviderHealthCheck() {
         const settings = collectProviderSettings();
         const providerLabel = getProviderLabel(settings.provider);
-        setLmStudioStatus(`Checking ${providerLabel}...`);
+        setLmStudioStatus(t('dashboardAiHealthChecking', [providerLabel]));
         const response = await runtimeMessage({
             action: 'runAiProviderHealthCheck',
             settings
         });
         if (!response?.success) {
-            setLmStudioStatus(response?.error || `${providerLabel} health check failed.`, true);
+            setLmStudioStatus(response?.error || t('dashboardAiHealthFailed', [providerLabel]), true);
             return;
         }
         const modelCount = Number(response.modelCount || 0);
-        const resolvedModel = response.resolvedModel ? ` active=${response.resolvedModel}` : '';
-        const serviceInfo = response.service ? ` service=${response.service}` : '';
-        setLmStudioStatus(`${providerLabel} ready. models=${modelCount}${resolvedModel}${serviceInfo}`);
+        setLmStudioStatus(t('dashboardAiHealthReady', [
+            providerLabel,
+            String(modelCount),
+            response.resolvedModel || '-',
+            response.service || '-'
+        ]));
         await loadAiProviderSettings();
     }
 

@@ -41,6 +41,18 @@ npm run build:lmstudio-rules:live
 npm run test:openai:live
 ```
 
+### Chrome Built-in AI 真機測試
+預設模型標示為 `gemini-nano`，使用 Chrome Prompt API。
+```bash
+npm run test:chrome-builtin:live
+```
+
+注意事項：
+- 這條路徑依賴 Chrome 內建 AI 能力，而不是外部 API key。
+- 目前專案透過 offscreen document 呼叫 Prompt API，避免把 Prompt API 綁死在 service worker。
+- 若本機 Chrome 尚未具備可用的 built-in model，測試會回 `availability: unavailable` 或 `service is not running`。
+- 測試腳本會先嘗試 extension integration smoke，失敗後再退回 localhost + Chrome flags 檢查 API 是否可見。
+
 ### Gemini 真機測試
 預設模型為 `gemini-2.5-flash`，使用官方 `generateContent` 端點。
 ```bash
@@ -59,6 +71,12 @@ npm run test:ai:compare
   - 經過 prompt + 本地正規化後，已可穩定輸出擴充可執行的 action token
   - live eval 已通過
   - 延遲與輸出穩定度都優於目前測過的 `gpt-5.4-nano`、`gpt-5-nano`、`gemini-2.5-flash`
+
+### 2026-03-20 同條件比較摘要
+- `gpt-5.4-mini`: `2/2 PASS`，目前最佳
+- `Chrome Built-in AI (gemini-nano)`: 已完成擴充整合，但本機 Chrome 回報 `service is not running`，無法完成 live inference
+- `gemini-2.5-flash`: `0/2 PASS`，主要卡在 action token 與 selector 輸出穩定度
+- `google/gemma-3-4b` via LM Studio: `0/2 PASS`，輸出較偏自然語言建議
 
 ### 真機模式
 若本機已啟動 LM Studio server 並載入模型，可直接執行:
