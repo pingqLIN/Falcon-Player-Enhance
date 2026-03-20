@@ -1,0 +1,22 @@
+{
+  "targets": [
+    {
+      "name": "Safe baseline player",
+      "url": "https://vimeo.com/148751763",
+      "tags": ["baseline", "public-video"],
+      "requiresManualReview": false
+    },
+    {
+      "name": "Generic video search result sample",
+      "url": "https://www.dailymotion.com/video/x84sh87",
+      "tags": ["baseline", "public-video"],
+      "requiresManualReview": false
+    },
+    {
+      "name": "User reviewed target placeholder",
+      "url": "https://example.com/user-reviewed-target",
+      "tags": ["candidate", "replace-me"],
+      "requiresManualReview": true
+    }
+  ]
+}

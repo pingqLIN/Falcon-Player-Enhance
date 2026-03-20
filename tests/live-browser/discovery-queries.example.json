@@ -1,0 +1,22 @@
+{
+  "queries": [
+    {
+      "name": "overlay-ads-video-player",
+      "query": "\"video player\" overlay ads site:reddit.com OR site:quora.com OR site:github.com",
+      "sourceType": "search-api",
+      "manualReviewRequired": true
+    },
+    {
+      "name": "clickjacking-video-overlay",
+      "query": "\"clickjacking\" \"video player\" overlay",
+      "sourceType": "search-api",
+      "manualReviewRequired": true
+    },
+    {
+      "name": "category-top-sites-template",
+      "query": "\"top video sites\" OR \"top streaming sites\" OR \"top adult video sites\"",
+      "sourceType": "search-api",
+      "manualReviewRequired": true
+    }
+  ]
+}

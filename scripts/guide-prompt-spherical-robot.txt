@@ -1,0 +1,50 @@
+You are a professional illustration designer creating three operation guide illustrations for a browser extension called "Shield Pro" — a video ad-blocker and player enhancer.
+
+Design a CUTE SPHERICAL ROBOT character with these traits:
+- Perfectly round/spherical main body (like a ball or orb, NOT humanoid)
+- Dark visor/faceplate with glowing cyan LED-pixel eyes
+- Small antenna on top with orange/amber ball tip
+- Two small tube-like arms with orange thruster tips
+- Two small thruster pods at the bottom with flame effects
+- Color palette: white/light-gray body, #00E5FF cyan accents, #FF8C00 orange accents, #1A2233 dark visor
+- Thin cyan decorative lines on the body sphere
+- Cute and friendly personality expressed through eye shapes
+
+Generate THREE separate illustrations (each 200×200px, transparent background):
+
+=== ILLUSTRATION 1: "CLICK" ===
+The spherical robot is floating with one arm pointing forward to the right.
+A mouse cursor icon appears near its pointing hand.
+Cyan ripple rings emanate from the cursor click point.
+The robot's eyes look toward the right (toward the click target).
+A badge "1" appears in the top-left corner.
+Mood: encouraging, guiding, "click here!"
+
+=== ILLUSTRATION 2: "DETECT" ===
+The spherical robot has both arms spread wide in a scanning pose.
+Cyan scanning beams project from its eyes outward to both sides (like a radar sweep).
+Its eyes are narrowed/focused (concentrated detection look).
+The antenna ball pulses with an expanded glow ring.
+Small red "AD" and "×" target markers appear in the scan beams.
+A small shield-with-checkmark icon appears subtly on its body.
+A badge "2" appears in the top-left corner.
+Mood: alert, protective, scanning
+
+=== ILLUSTRATION 3: "PLAY" ===
+The spherical robot has both arms raised in celebration.
+Its eyes are happy curved smiles (◡◡ shape) with subtle blush marks.
+Colorful sparkles and star shapes float around it.
+A green checkmark badge appears nearby.
+A play button icon appears subtly on its body.
+The thruster flames are brighter/larger (excitement).
+A badge "3" appears in the top-left corner.
+Mood: joyful, celebratory, mission accomplished!
+
+STYLE REQUIREMENTS:
+- Clean vector illustration style
+- Soft gradients and shadows
+- Each illustration should work well at small sizes (48-80px display)
+- Consistent character design across all three
+- Use SVG format with unique prefixed IDs to avoid conflicts
+- Keep the design simple enough to be recognizable at small sizes
+- Transparent background

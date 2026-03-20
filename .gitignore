@@ -1,0 +1,48 @@
+node_modules/
+.DS_Store
+*.log
+.vscode/
+temp/
+dist/
+build/
+.env
+.claude/
+tests/e2e-ai-replay/reports/
+tests/ai-eval/reports/
+tests/live-browser/reports/
+tests/nano-guard/reports/
+tests/bookmarks_*.html
+tests/bookmarks_*.html.bak
+rules/*.backup
+
+# Development documentation (internal, not for distribution)
+.ARCHITECTURE.md
+.DEVELOPMENT_PLAN.md
+.IMPLEMENTATION_SUMMARY.md
+.AI_ENHANCEMENT_ARCHITECTURE.md
+.AI_ENHANCEMENT_AUDIT_REPORT.md
+.AI_MODEL_GATEWAY_API_CONTRACT.md
+.AI_MODEL_INTEGRATION_NEXT_PHASE_PLAN.md
+.AI_POLICY_SCHEMA_V1.json
+.verify_fix.sh
+_metadata/
+
+# Playwright MCP browser profiles
+.playwright-mcp/
+
+# Temporary scan files
+.tmp_*.js
+
+# Downloaded images (not part of project)
+download*.jpg
+download*.png
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Temporary test data
+tests/live-browser/_tmp-*.json
+
+# Backup files
+*.backup

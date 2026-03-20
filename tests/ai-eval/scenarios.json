@@ -1,0 +1,53 @@
+{
+  "metadata": {
+    "version": 1,
+    "description": "AI policy engine synthetic scenarios"
+  },
+  "scenarios": [
+    {
+      "name": "benign_streaming_normal_traffic",
+      "expectation": {
+        "maxTier": "medium"
+      },
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 0.2, "confidence": 1, "dtSec": 0 },
+        { "type": "overlay_removed", "severity": 0.5, "confidence": 0.7, "dtSec": 20 },
+        { "type": "overlay_removed", "severity": 0.6, "confidence": 0.7, "dtSec": 30 },
+        { "type": "false_positive_signal", "severity": 1, "confidence": 0.8, "dtSec": 45 }
+      ]
+    },
+    {
+      "name": "stubborn_popup_trap",
+      "expectation": {
+        "minTier": "high",
+        "reachWithinEvents": 7
+      },
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 0.2, "confidence": 1, "dtSec": 0 },
+        { "type": "blocked_popup", "severity": 1.2, "confidence": 0.9, "dtSec": 5 },
+        { "type": "blocked_popup", "severity": 1.1, "confidence": 0.9, "dtSec": 8 },
+        { "type": "suspicious_dom_churn", "severity": 1.2, "confidence": 0.8, "dtSec": 12 },
+        { "type": "clickjacking_detected", "severity": 1.3, "confidence": 0.9, "dtSec": 16 },
+        { "type": "blocked_malicious_navigation", "severity": 1.3, "confidence": 0.95, "dtSec": 20 },
+        { "type": "blocked_popup", "severity": 1.2, "confidence": 0.88, "dtSec": 26 }
+      ]
+    },
+    {
+      "name": "critical_multi_vector_abuse",
+      "expectation": {
+        "minTier": "critical",
+        "reachWithinEvents": 8
+      },
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 0.2, "confidence": 1, "dtSec": 0 },
+        { "type": "blocked_popup", "severity": 1.3, "confidence": 0.9, "dtSec": 3 },
+        { "type": "blocked_malicious_navigation", "severity": 1.5, "confidence": 0.95, "dtSec": 6 },
+        { "type": "clickjacking_detected", "severity": 1.4, "confidence": 0.9, "dtSec": 10 },
+        { "type": "overlay_removed", "severity": 1.2, "confidence": 0.8, "dtSec": 12 },
+        { "type": "suspicious_dom_churn", "severity": 1.5, "confidence": 0.85, "dtSec": 15 },
+        { "type": "blocked_popup", "severity": 1.4, "confidence": 0.9, "dtSec": 18 },
+        { "type": "blocked_malicious_navigation", "severity": 1.5, "confidence": 0.95, "dtSec": 21 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "description": "LM Studio advisory and rule-candidate scenarios for Falcon-Player-Enhance"
+  },
+  "scenarios": [
+    {
+      "name": "overlay_lure_with_redirect_cta",
+      "hostname": "trap-video.test",
+      "context": {
+        "url": "https://trap-video.test/watch/abc123"
+      },
+      "heuristicPolicy": {
+        "riskTier": "medium",
+        "riskScore": 11.4,
+        "popupStrictMode": true,
+        "guardExternalNavigation": false,
+        "overlayScanMs": 1800,
+        "sensitivityBoost": 1
+      },
+      "recentEvents": [
+        { "type": "overlay_removed", "severity": 1.1, "confidence": 0.84, "source": "overlay-remover" },
+        { "type": "blocked_popup", "severity": 1.0, "confidence": 0.91, "source": "anti-popup" }
+      ],
+      "expectation": {
+        "minConfidence": 0.5,
+        "requiredActions": ["tighten_popup_guard", "tune_overlay_scan"]
+      },
+      "mockResponse": {
+        "summary": "CTA overlay is still steering the user away from the player surface.",
+        "confidence": 0.82,
+        "riskScoreDelta": 4.8,
+        "popupStrictMode": true,
+        "guardExternalNavigation": true,
+        "overlayScanMs": 950,
+        "sensitivityBoost": 2,
+        "extraBlockedDomains": ["clickadu", "trafficjunky"],
+        "candidateSelectors": [".watch-now-overlay", ".cta-layer", "a[href*='redirect']"],
+        "candidateDomains": ["clickadu", "trafficjunky"],
+        "recommendedActions": ["tighten_popup_guard", "tune_overlay_scan", "guard_external_navigation"]
+      }
+    },
+    {
+      "name": "small_muted_loop_fake_video_cluster",
+      "hostname": "clustered-ads.test",
+      "context": {
+        "url": "https://clustered-ads.test/embed/player"
+      },
+      "heuristicPolicy": {
+        "riskTier": "low",
+        "riskScore": 5.9,
+        "popupStrictMode": false,
+        "guardExternalNavigation": false,
+        "overlayScanMs": 3000,
+        "sensitivityBoost": 0
+      },
+      "recentEvents": [
+        { "type": "suspicious_dom_churn", "severity": 1.0, "confidence": 0.78, "source": "ai-runtime" },
+        { "type": "overlay_removed", "severity": 0.9, "confidence": 0.81, "source": "overlay-remover" }
+      ],
+      "expectation": {
+        "minConfidence": 0.45,
+        "requiredActions": ["tune_overlay_scan"]
+      },
+      "mockResponse": {
+        "summary": "Muted looping ad tiles near the player are likely fake-video distractions.",
+        "confidence": 0.74,
+        "riskScoreDelta": 2.9,
+        "popupStrictMode": false,
+        "guardExternalNavigation": false,
+        "overlayScanMs": 1400,
+        "sensitivityBoost": 2,
+        "extraBlockedDomains": ["adsterra"],
+        "candidateSelectors": ["video[autoplay][muted][loop]:not([controls])", ".promo-video-grid video"],
+        "candidateDomains": ["adsterra"],
+        "recommendedActions": ["tune_overlay_scan"]
+      }
+    }
+  ]
+}

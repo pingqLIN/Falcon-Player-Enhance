@@ -1,0 +1,73 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "4.4.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "zh_TW",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "32": "assets/icons/icon32.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "sidePanel",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "32": "assets/icons/icon32.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html?pinned=1"
+  },
+  "options_ui": {
+    "page": "dashboard/dashboard.html",
+    "open_in_tab": true
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "player_rules",
+        "enabled": true,
+        "path": "rules/filter-rules.json"
+      }
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "rules/noop.js",
+        "sandbox/sandbox.html",
+        "sandbox/sandbox.js",
+        "popup-player/popup-player.html",
+        "popup-player/popup-player.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "sandbox": {
+    "pages": [
+      "sandbox/sandbox.html"
+    ]
+  }
+}

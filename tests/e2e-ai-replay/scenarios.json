@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "description": "E2E replay scenarios for adaptive policy transitions and host fallback"
+  },
+  "scenarios": [
+    {
+      "name": "adaptive_upgrade_then_manual_override",
+      "hostname": "host-a.test",
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 1, "confidence": 1, "dtSec": 0 },
+        { "type": "blocked_popup", "severity": 1.2, "confidence": 0.9, "dtSec": 4 },
+        { "type": "overlay_removed", "severity": 1.1, "confidence": 0.9, "dtSec": 7 },
+        { "type": "blocked_malicious_navigation", "severity": 1.2, "confidence": 0.95, "dtSec": 12 },
+        { "type": "user_override", "severity": 1, "confidence": 1, "dtSec": 30 }
+      ],
+      "expectation": {
+        "minTier": "high",
+        "effectiveFinalTier": "low",
+        "requireFallback": true,
+        "transitions": ["low", "medium", "high", "low"]
+      }
+    },
+    {
+      "name": "benign_site_with_false_positive_signal",
+      "hostname": "host-b.test",
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 0.6, "confidence": 1, "dtSec": 0 },
+        { "type": "false_positive_signal", "severity": 1, "confidence": 0.9, "dtSec": 10 }
+      ],
+      "expectation": {
+        "maxTier": "low",
+        "effectiveFinalTier": "low",
+        "requireFallback": true,
+        "transitions": ["low"]
+      }
+    },
+    {
+      "name": "multi_vector_abuse_without_override",
+      "hostname": "host-c.test",
+      "events": [
+        { "type": "runtime_bootstrap", "severity": 1, "confidence": 1, "dtSec": 0 },
+        { "type": "blocked_popup", "severity": 1.2, "confidence": 0.95, "dtSec": 3 },
+        { "type": "clickjacking_detected", "severity": 1.3, "confidence": 0.9, "dtSec": 6 },
+        { "type": "blocked_malicious_navigation", "severity": 1.4, "confidence": 0.95, "dtSec": 8 },
+        { "type": "overlay_removed", "severity": 1.2, "confidence": 0.9, "dtSec": 10 },
+        { "type": "blocked_popup", "severity": 1.3, "confidence": 0.95, "dtSec": 12 }
+      ],
+      "expectation": {
+        "minTier": "critical",
+        "effectiveFinalTier": "critical",
+        "requireFallback": false,
+        "reachWithinEvents": 4,
+        "transitions": ["low", "high", "critical"]
+      }
+    }
+  ]
+}

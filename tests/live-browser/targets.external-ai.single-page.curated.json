@@ -1,0 +1,138 @@
+{
+  "generatedFrom": "External AI single-page curation approved for repo import on 2026-03-20",
+  "targets": [
+    {
+      "name": "Single-page video obstruction sample 01 (xHamster)",
+      "url": "https://xhamster.com/videos/secretary-fucks-bosss-son-to-get-a-raise-xhburpD",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "public-video",
+        "interference:popup-trigger",
+        "interference:redirect-cta",
+        "interference:external-navigation-lure",
+        "domain:xhamster.com"
+      ],
+      "requiresManualReview": true,
+      "source": {
+        "type": "external-ai-curation",
+        "reviewedAt": "2026-03-20",
+        "notes": [
+          "Single video detail page selected for player-adjacent ad interference testing.",
+          "Use related or recommended cards to probe popup and redirect behavior."
+        ]
+      },
+      "reproSteps": [
+        "Open the page and wait for the primary player and related content to settle.",
+        "Capture the player region, related cards, and any player-adjacent CTA modules.",
+        "Click a related or recommended card and observe popup, redirect, or click interception behavior."
+      ]
+    },
+    {
+      "name": "Single-page video obstruction sample 02 (XVIDEOS)",
+      "url": "https://www.xvideos.com/video.oulhtif7da0/hard_and_deep_blonde_beauty_gets_what_she_asked_for",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "public-video",
+        "interference:redirect-cta",
+        "interference:external-navigation-lure",
+        "interference:overlay-like-ad-control",
+        "domain:xvideos.com"
+      ],
+      "requiresManualReview": true,
+      "source": {
+        "type": "external-ai-curation",
+        "reviewedAt": "2026-03-20",
+        "notes": [
+          "Single video detail page with premium and remove-ads UI near the playback region.",
+          "Useful for separating player chrome from adjacent ad or upsell controls."
+        ]
+      },
+      "reproSteps": [
+        "Open the page and wait for the title block, player, and below-player controls to render.",
+        "Record player-adjacent CTA modules before any click interaction.",
+        "Probe premium, remove-ads, or external CTA elements and observe navigation side effects."
+      ]
+    },
+    {
+      "name": "Single-page content obstruction sample 03 (Javboys OAV754)",
+      "url": "https://javboys.com/oav754-%e3%82%b5%e3%82%ab%e3%83%a6%e3%83%8b%e3%83%9b%e3%83%86%e3%83%ab%e7%9b%a3%e7%a6%81%e5%be%8c%e3%82%8d%e6%89%8b%e6%8b%98%e6%9d%9f%e3%81%b6%e3%81%a3%e8%be%bc%e3%81%bf%e3%82%b1%e3%83%84%e7%a9%b4/",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "public-content",
+        "interference:overlay",
+        "interference:external-navigation-lure",
+        "interference:fake-video-cluster",
+        "domain:javboys.com"
+      ],
+      "requiresManualReview": true,
+      "source": {
+        "type": "external-ai-curation",
+        "reviewedAt": "2026-03-20",
+        "notes": [
+          "Single content page selected for mixed overlay and related-cluster testing.",
+          "Search overlay and dynamic interference may require desktop viewport, adblock disabled, and 1-3 reloads."
+        ]
+      },
+      "reproSteps": [
+        "Open the page with a desktop viewport and allow dynamic UI to settle.",
+        "Trigger any search or overlay affordance and inspect whether it covers the main content region.",
+        "Compare the main content block against related post clusters to detect false positives."
+      ]
+    },
+    {
+      "name": "Single-page content obstruction sample 04 (Javboys FC2-PPV-2728492)",
+      "url": "https://javboys.com/fc2-pvv-2728492-%e3%82%ac%e3%83%83%e3%83%81%e3%83%aa%e5%90%9b%e3%82%92%e7%94%9f%e6%8e%98%e3%82%8a/",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "public-content",
+        "interference:overlay",
+        "interference:fake-video-cluster",
+        "domain:javboys.com"
+      ],
+      "requiresManualReview": true,
+      "source": {
+        "type": "external-ai-curation",
+        "reviewedAt": "2026-03-20",
+        "notes": [
+          "Cleaner regression candidate for overlay and related-cluster separation.",
+          "Useful as a lower-noise companion target for the other Javboys page."
+        ]
+      },
+      "reproSteps": [
+        "Open the page and wait for the content block and related content area to render.",
+        "Trigger any search overlay affordance if available.",
+        "Check whether overlay and related-card regions are distinguished from the main content area."
+      ]
+    },
+    {
+      "name": "Single-page video obstruction sample 05 (EPORNER)",
+      "url": "https://www.eporner.com/video-LIi9vSHgCeY/big-boobs-wife-gets-her-pussy-drilled-on-public-trail/",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "public-video",
+        "interference:redirect-cta",
+        "interference:external-navigation-lure",
+        "domain:eporner.com"
+      ],
+      "requiresManualReview": true,
+      "source": {
+        "type": "external-ai-curation",
+        "reviewedAt": "2026-03-20",
+        "notes": [
+          "Single video detail page with player-adjacent CTA modules and scene switching.",
+          "Good for checking whether non-player CTA modules leak into player-region heuristics."
+        ]
+      },
+      "reproSteps": [
+        "Open the page and wait for the player, scene switcher, and top CTA modules to render.",
+        "Capture the player region before interacting with any CTA or scene control.",
+        "Probe scene thumbnails and nearby CTA modules for redirect or focus-stealing behavior."
+      ]
+    }
+  ]
+}

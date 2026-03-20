@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-03-19T07:16:58.125Z",
+  "provider": "lmstudio-mock",
+  "source": "/mnt/q/Projects/ad-blocker-player-enhancer/tests/ai-eval/scenarios.lmstudio.json",
+  "candidates": [
+    {
+      "name": "overlay_lure_with_redirect_cta",
+      "hostname": "trap-video.test",
+      "summary": "CTA overlay is still steering the user away from the player surface.",
+      "selectorRules": [
+        {
+          "selector": ".watch-now-overlay",
+          "reason": "lmstudio_candidate"
+        },
+        {
+          "selector": ".cta-layer",
+          "reason": "lmstudio_candidate"
+        },
+        {
+          "selector": "a[href*='redirect']",
+          "reason": "lmstudio_candidate"
+        }
+      ],
+      "domainRules": [
+        {
+          "pattern": "clickadu",
+          "reason": "lmstudio_candidate"
+        },
+        {
+          "pattern": "trafficjunky",
+          "reason": "lmstudio_candidate"
+        }
+      ],
+      "actionPlan": [
+        "tighten_popup_guard",
+        "tune_overlay_scan",
+        "guard_external_navigation"
+      ]
+    },
+    {
+      "name": "small_muted_loop_fake_video_cluster",
+      "hostname": "clustered-ads.test",
+      "summary": "Muted looping ad tiles near the player are likely fake-video distractions.",
+      "selectorRules": [
+        {
+          "selector": "video[autoplay][muted][loop]:not([controls])",
+          "reason": "lmstudio_candidate"
+        },
+        {
+          "selector": ".promo-video-grid video",
+          "reason": "lmstudio_candidate"
+        }
+      ],
+      "domainRules": [
+        {
+          "pattern": "adsterra",
+          "reason": "lmstudio_candidate"
+        }
+      ],
+      "actionPlan": [
+        "tune_overlay_scan"
+      ]
+    }
+  ]
+}

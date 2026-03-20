@@ -1,0 +1,27 @@
+Design a distinctive, premium SVG app icon for a browser extension named "Shield Pro"
+
+Hard requirements
+- Output raw SVG only
+- No markdown fences
+- Canvas must be exactly 128x128 with a viewBox
+- Keep it clean and bold at small sizes
+- No raster images, no external assets, no external fonts
+
+Brand intent
+- Security + video/player protection
+- Modern, technical, trustworthy
+- High contrast and recognizable in extension toolbar
+
+Visual direction
+- Rounded square or circular app-icon silhouette
+- Central shield motif
+- Subtle play/media symbol integration
+- Confident color palette with strong foreground/background separation
+- Use simple geometric forms and controlled glow/shadow, avoid clutter
+
+Constraints
+- Prefer fewer paths and easy-to-maintain structure
+- Ensure accessibility contrast
+- Keep important shape detail readable at 16x16 and 32x32
+
+Return exactly one complete <svg>...</svg> document

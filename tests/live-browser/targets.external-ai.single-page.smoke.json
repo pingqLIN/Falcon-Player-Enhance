@@ -1,0 +1,49 @@
+{
+  "generatedFrom": "Q:\\Projects\\ad-blocker-player-enhancer\\tests\\live-browser\\targets.external-ai.single-page.curated.json",
+  "selectionPolicy": "Three validated lower-noise regression seeds chosen after the first live-browser smoke pass on 2026-03-20",
+  "targets": [
+    {
+      "name": "Smoke seed 01 (xHamster single-page video)",
+      "url": "https://xhamster.com/videos/secretary-fucks-bosss-son-to-get-a-raise-xhburpD",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "smoke",
+        "public-video",
+        "interference:popup-trigger",
+        "interference:redirect-cta",
+        "interference:external-navigation-lure",
+        "domain:xhamster.com"
+      ],
+      "requiresManualReview": true
+    },
+    {
+      "name": "Smoke seed 02 (EPORNER single-page video)",
+      "url": "https://www.eporner.com/video-LIi9vSHgCeY/big-boobs-wife-gets-her-pussy-drilled-on-public-trail/",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "smoke",
+        "public-video",
+        "interference:redirect-cta",
+        "interference:external-navigation-lure",
+        "domain:eporner.com"
+      ],
+      "requiresManualReview": true
+    },
+    {
+      "name": "Smoke seed 03 (Javboys FC2 single-page content)",
+      "url": "https://javboys.com/fc2-pvv-2728492-%e3%82%ac%e3%83%83%e3%83%81%e3%83%aa%e5%90%9b%e3%82%92%e7%94%9f%e6%8e%98%e3%82%8a/",
+      "tags": [
+        "external-ai-curation",
+        "single-page",
+        "smoke",
+        "public-content",
+        "interference:overlay",
+        "interference:fake-video-cluster",
+        "domain:javboys.com"
+      ],
+      "requiresManualReview": true
+    }
+  ]
+}

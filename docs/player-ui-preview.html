@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Falcon-Player-Enhance — 統一 UI/UX 設計預覽 v6.0</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   SHARED DESIGN TOKENS — Falcon v5.0 Unified System
+   三個層次：
+   1. canvas (頁面示意背景，不屬於元件)
+   2. popup-tokens (popup 延用 Three-Gray)
+   3. player-tokens (播放器專用深色 cinema tokens)
+══════════════════════════════════════════════════════════════ */
+
+/* 共用字型與 radius scale */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+
+  /* Radius scale — 兩個 UI 共用同一比例 */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  16px;
+  --r-xl:  22px;
+  --r-full: 9999px;
+
+  /* Motion — 同一 easing 曲線 */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --dur-short:   160ms;
+  --dur-mid:     240ms;
+}
+
+/* ── Canvas (示意框架，非元件) ─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EBEBEB;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+  color: #333;
+}
+.page-title {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #888; margin-bottom: 28px;
+  display: flex; align-items: center; gap: 12px;
+}
+.page-title::after { content: ""; flex: 1; height: 1px; background: #D0D0D0; }
+.preview-row {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.col-label {
+  font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 10px; text-align: center;
+}
+.device-shell-popup {
+  width: 300px;
+  margin: 0 auto;
+  border-radius: var(--r-lg);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+  background: var(--p-bg-primary);
+}
+.device-shell-player {
+  border-radius: var(--r-xl);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.55);
+  overflow: hidden;
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
+}
+.design-note {
+  margin-top: 10px; font-size: 11px; color: #999; line-height: 1.5;
+  text-align: center; font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   POPUP — Three-Gray tokens (light mode default)
+══════════════════════════════════════════════════════════════ */
+.popup-shell {
+  --p-bg-primary:  #F5F5F5;
+  --p-bg-card:     #FFFFFF;
+  --p-text:        #333;
+  --p-text-sub:    #767676;
+  --p-sep:         #E0E0E0;
+  --p-toggle-off:  #CCC;
+  --p-toggle-on:   #333;
+  --p-green:       #34C759;
+  --p-amber:       #FF9500;
+  --p-red:         #FF3B30;
+
+  background: var(--p-bg-primary);
+  color: var(--p-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  width: 300px;
+}
+
+/* Header */
+.p-header {
+  background: var(--p-bg-card);
+  border-bottom: 1px solid var(--p-sep);
+  padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.p-brand { display: flex; align-items: center; gap: 8px; }
+.p-brand-icon { font-size: 18px; }
+.p-brand-name { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+.p-brand-tag  { font-size: 10px; color: var(--p-text-sub); margin-top: 1px; }
+.p-header-actions { display: flex; align-items: center; gap: 8px; }
+.p-icon-btn {
+  background: none; border: none; cursor: pointer;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  display: grid; place-items: center; font-size: 14px;
+  color: var(--p-text-sub); transition: background var(--dur-short);
+}
+.p-icon-btn:hover { background: var(--p-sep); }
+
+/* Toggle switch */
+.p-toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+.p-toggle input { opacity: 0; width: 0; height: 0; }
+.p-slider {
+  position: absolute; inset: 0; border-radius: var(--r-full);
+  background: var(--p-toggle-off); transition: background var(--dur-short);
+  cursor: pointer;
+}
+.p-slider::before {
+  content: ""; position: absolute; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; top: 3px; left: 3px;
+  transition: transform var(--dur-short) var(--ease-out);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.22);
+}
+.p-toggle input:checked + .p-slider { background: var(--p-toggle-on); }
+.p-toggle input:checked + .p-slider::before { transform: translateX(16px); }
+
+/* Status bar (new) */
+.p-status-bar {
+  background: var(--p-bg-card);
+  border-bottom: 1px solid var(--p-sep);
+  padding: 8px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--p-text-sub);
+}
+.p-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.p-dot-green  { background: var(--p-green); }
+.p-dot-amber  { background: var(--p-amber); }
+.p-dot-gray   { background: var(--p-sep); }
+.p-sep-char { color: var(--p-sep); }
+
+/* Flow indicator */
+.p-flow {
+  padding: 14px;
+  background: var(--p-bg-primary);
+  border-bottom: 1px solid var(--p-sep);
+}
+.p-flow-pipe {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin-bottom: 8px;
+}
+.p-flow-node {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px; width: 72px;
+}
+.p-flow-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--p-sep); color: var(--p-text-sub);
+  font-size: 10px; font-weight: 700;
+  display: grid; place-items: center;
+  transition: background var(--dur-mid), color var(--dur-mid);
+}
+.p-flow-node.done .p-flow-num   { background: var(--p-toggle-on); color: var(--p-bg-primary); }
+.p-flow-node.active .p-flow-num { background: var(--p-green); color: #fff; }
+.p-flow-icon { font-size: 22px; }
+.p-flow-label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; color: var(--p-text-sub); }
+.p-flow-sub   { font-size: 9px; color: var(--p-text-sub); }
+.p-flow-wire {
+  flex: 1; height: 2px; background: var(--p-sep);
+  position: relative; margin: 0 2px; margin-bottom: 18px;
+  overflow: hidden;
+}
+.p-flow-wire.lit::after {
+  content: ""; position: absolute; inset: 0;
+  background: var(--p-green); animation: wirePulse 1.4s linear infinite;
+}
+@keyframes wirePulse {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.p-flow-status {
+  text-align: center; font-size: 11px; color: var(--p-text-sub); padding-top: 4px;
+}
+.p-flow-status.locked { color: var(--p-green); font-weight: 600; }
+
+/* Player chip */
+.p-chips-area { padding: 10px 14px; border-bottom: 1px solid var(--p-sep); }
+.p-chips-label { font-size: 10px; font-weight: 600; color: var(--p-text-sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+.p-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.p-chip {
+  padding: 5px 10px; border-radius: var(--r-full);
+  border: 1px solid var(--p-sep); background: var(--p-bg-card);
+  font-size: 11px; cursor: pointer;
+  transition: border-color var(--dur-short), background var(--dur-short);
+  display: flex; align-items: center; gap: 5px; color: var(--p-text);
+}
+.p-chip.active { border-color: var(--p-text); background: var(--p-text); color: var(--p-bg-primary); }
+.p-chip.active .p-chip-dot { background: var(--p-green); }
+.p-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--p-sep); flex-shrink: 0; }
+.p-chip-label { font-size: 10px; font-weight: 500; }
+.p-chip-empty { font-size: 11px; color: var(--p-text-sub); font-style: italic; padding: 4px 2px; }
+
+/* Playback controls */
+.p-controls {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--p-sep);
+  display: flex; align-items: center; gap: 6px; justify-content: center;
+}
+.p-ctrl {
+  width: 34px; height: 34px; border-radius: var(--r-md);
+  border: 1px solid var(--p-sep); background: var(--p-bg-card);
+  cursor: pointer; display: grid; place-items: center;
+  font-size: 13px; color: var(--p-text);
+  transition: background var(--dur-short), border-color var(--dur-short), transform var(--dur-short);
+}
+.p-ctrl:hover  { background: var(--p-sep); }
+.p-ctrl:active { transform: scale(0.93); }
+.p-ctrl.primary {
+  width: 38px; height: 38px; border-radius: var(--r-md);
+  background: var(--p-text); color: var(--p-bg-card); border-color: var(--p-text);
+  font-size: 15px;
+}
+.p-ctrl-sm { width: 28px; height: 28px; font-size: 11px; font-weight: 700; border-radius: var(--r-sm); }
+
+/* Stats */
+.p-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-bottom: 1px solid var(--p-sep); }
+.p-stat {
+  padding: 10px 8px; text-align: center;
+  border-right: 1px solid var(--p-sep);
+}
+.p-stat:last-child { border-right: none; }
+.p-stat-val { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; display: block; }
+.p-stat-lbl { font-size: 9px; color: var(--p-text-sub); display: block; margin-top: 2px; }
+
+/* Blocking level */
+.p-level-row {
+  padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--p-sep);
+  font-size: 12px;
+}
+.p-level-select {
+  background: var(--p-bg-card); border: 1px solid var(--p-sep);
+  border-radius: var(--r-sm); padding: 4px 8px;
+  font-size: 12px; font-family: var(--font-sans); color: var(--p-text); cursor: pointer;
+}
+.p-level-hint { font-size: 10px; color: var(--p-text-sub); padding: 4px 14px 8px; border-bottom: 1px solid var(--p-sep); }
+
+/* AI monitor panel */
+.p-ai-panel { background: var(--p-bg-card); border-bottom: 1px solid var(--p-sep); }
+.p-ai-header {
+  padding: 8px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--p-sep);
+}
+.p-ai-title { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.p-ai-body { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.p-ai-kv { display: flex; flex-direction: column; gap: 2px; }
+.p-ai-k { font-size: 10px; color: var(--p-text-sub); }
+.p-ai-v { font-size: 12px; font-weight: 600; }
+.p-badge {
+  display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 6px;
+  border-radius: var(--r-xs); letter-spacing: 0.04em;
+  background: var(--p-sep); color: var(--p-text);
+}
+.p-badge-green { background: rgba(52,199,89,0.15); color: #1A8F3C; }
+
+/* Footer */
+.p-footer {
+  background: var(--p-bg-card);
+  border-top: 1px solid var(--p-sep);
+  padding: 8px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.p-shortcuts-hint { display: flex; gap: 8px; flex-wrap: wrap; }
+.p-shortcut-item { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--p-text-sub); }
+.p-kbd {
+  background: var(--p-bg-primary); border: 1px solid var(--p-sep);
+  border-radius: 3px; padding: 1px 4px; font-size: 10px; font-family: var(--font-mono);
+}
+.p-footer-btn {
+  background: none; border: none; cursor: pointer; font-size: 15px;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  display: grid; place-items: center;
+  transition: background var(--dur-short);
+}
+.p-footer-btn:hover { background: var(--p-sep); }
+
+/* ══════════════════════════════════════════════════════════════
+   PLAYER — Cinema dark tokens (共用 radius/motion/font)
+══════════════════════════════════════════════════════════════ */
+.player-shell {
+  /* Palette: warm amber 主色 + 深色 background */
+  --pl-bg:         #111113;
+  --pl-surface:    #1A1A1E;
+  --pl-panel:      rgba(28,28,32,0.94);
+  --pl-panel-hi:   rgba(36,36,42,0.97);
+  --pl-line:       rgba(255,255,255,0.09);
+  --pl-line-hi:    rgba(255,255,255,0.16);
+  --pl-text:       #F0F0F2;
+  --pl-text-muted: #9898A8;
+  --pl-amber:      #F0BC56;
+  --pl-amber-hi:   #F8CE70;
+  --pl-green:      #3EC878;
+  --pl-red:        #FF5C5C;
+  --pl-blue:       #5B8BFF;
+  --pl-shadow:     0 28px 70px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.35);
+
+  background: linear-gradient(160deg, #1C1A14 0%, var(--pl-bg) 55%, #0E0E18 100%);
+  color: var(--pl-text);
+  font-family: var(--font-sans);
+  display: flex; flex-direction: column;
+  min-height: 540px;
+  padding: clamp(12px, 1.8vw, 20px);
+  gap: clamp(10px, 1.4vw, 16px);
+}
+
+/* Topbar */
+.pl-topbar {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--pl-line);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  backdrop-filter: blur(12px);
+}
+.pl-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pl-brand-mark {
+  width: 40px; height: 40px; border-radius: var(--r-md);
+  display: grid; place-items: center; font-size: 18px;
+  background: linear-gradient(145deg, rgba(240,188,86,0.28), rgba(240,188,86,0.08));
+  border: 1px solid rgba(240,188,86,0.3);
+  flex-shrink: 0;
+}
+.pl-eyebrow { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pl-text-muted); }
+.pl-title-row { display: flex; align-items: center; gap: 8px; }
+.pl-title { font-size: clamp(15px, 2vw, 20px); font-weight: 700; letter-spacing: 0.01em; }
+.pl-mode-chip {
+  padding: 4px 9px; border-radius: var(--r-full);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--pl-text-muted); white-space: nowrap;
+}
+.pl-mode-chip.amber {
+  border-color: rgba(240,188,86,0.35);
+  background: rgba(240,188,86,0.12);
+  color: var(--pl-amber);
+}
+.pl-topbar-actions { display: flex; align-items: center; gap: 8px; }
+.pl-btn {
+  appearance: none; border: 1px solid transparent;
+  border-radius: var(--r-full); padding: 8px 14px;
+  color: var(--pl-text); background: rgba(255,255,255,0.06);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; cursor: pointer;
+  transition: transform var(--dur-short) var(--ease-out),
+              background var(--dur-short),
+              border-color var(--dur-short);
+  font-family: var(--font-sans);
+}
+.pl-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.12); }
+.pl-btn-amber {
+  color: #1C1200;
+  background: linear-gradient(145deg, var(--pl-amber), #D4A040);
+  border-color: rgba(255,220,140,0.5);
+}
+.pl-btn-amber:hover { background: linear-gradient(145deg, var(--pl-amber-hi), #E0B050); }
+.pl-btn-ghost { background: none; }
+
+/* Workspace */
+.pl-workspace {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 300px;
+  gap: clamp(10px, 1.4vw, 16px);
+}
+
+/* Stage card */
+.pl-stage {
+  border: 1px solid var(--pl-line);
+  border-radius: var(--r-xl);
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01));
+  box-shadow: var(--pl-shadow);
+  display: flex; flex-direction: column;
+  padding: 14px; gap: 12px;
+  min-height: 0;
+}
+.pl-stage-meta {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.pl-stage-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pl-pill {
+  padding: 5px 10px; border-radius: var(--r-full);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.07);
+  font-size: 11px; color: var(--pl-text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.pl-pill.active { color: var(--pl-green); border-color: rgba(62,200,120,0.3); background: rgba(62,200,120,0.1); }
+.pl-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pl-time { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--pl-text-muted); font-family: var(--font-mono); }
+
+/* Stage frame */
+.pl-frame {
+  flex: 1; min-height: 220px;
+  border-radius: calc(var(--r-xl) - 6px);
+  background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.04), transparent 28%),
+              linear-gradient(180deg, rgba(10,10,15,0.6), rgba(0,0,0,0.96));
+  border: 1px solid rgba(255,255,255,0.04);
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+.pl-frame-inner {
+  flex: 1; display: grid; place-items: center;
+  background: #000;
+}
+.pl-frame-placeholder {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  color: var(--pl-text-muted); font-size: 13px;
+}
+.pl-play-icon-lg {
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 2px solid rgba(240,188,86,0.35);
+  background: rgba(240,188,86,0.1);
+  display: grid; place-items: center; font-size: 22px;
+}
+
+/* Stage overlay controls */
+.pl-stage-overlay {
+  position: absolute; left: 14px; right: 14px; bottom: 14px;
+  display: flex; justify-content: space-between; align-items: flex-end;
+}
+.pl-progress-area { flex: 1; margin-right: 12px; }
+.pl-progress-label { font-size: 10px; color: var(--pl-text-muted); margin-bottom: 6px; font-family: var(--font-mono); }
+.pl-progress-bar {
+  height: 4px; border-radius: var(--r-full);
+  background: rgba(255,255,255,0.12); overflow: visible; position: relative;
+}
+.pl-progress-fill {
+  height: 100%; border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--pl-amber), var(--pl-amber-hi));
+  width: 38%;
+}
+.pl-progress-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--pl-amber); border: 2px solid #1C1200;
+  position: absolute; top: 50%; right: 0; transform: translate(50%,-50%);
+  box-shadow: 0 0 0 3px rgba(240,188,86,0.3);
+}
+
+/* Control rail */
+.pl-rail {
+  border: 1px solid var(--pl-line);
+  border-radius: var(--r-xl);
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01));
+  box-shadow: var(--pl-shadow);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.pl-rail-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--pl-line);
+}
+.pl-rail-section:last-child { border-bottom: none; flex: 1; }
+.pl-rail-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--pl-text-muted); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.pl-rail-label::after { content: ""; flex: 1; height: 1px; background: var(--pl-line); }
+
+/* Transport controls */
+.pl-transport { display: flex; align-items: center; gap: 6px; justify-content: center; }
+.pl-ctrl {
+  width: 36px; height: 36px; border-radius: var(--r-md);
+  border: 1px solid var(--pl-line); background: rgba(255,255,255,0.04);
+  cursor: pointer; display: grid; place-items: center;
+  font-size: 14px; color: var(--pl-text);
+  font-family: var(--font-sans);
+  transition: background var(--dur-short), transform var(--dur-short) var(--ease-out);
+}
+.pl-ctrl:hover  { background: rgba(255,255,255,0.09); border-color: var(--pl-line-hi); }
+.pl-ctrl:active { transform: scale(0.91); }
+.pl-ctrl.primary {
+  width: 44px; height: 44px; border-radius: var(--r-lg);
+  background: linear-gradient(145deg, var(--pl-amber), #D4A040);
+  border-color: rgba(255,220,140,0.4); color: #1C1200; font-size: 18px;
+}
+.pl-ctrl-sm { width: 30px; height: 30px; font-size: 10px; font-weight: 700; border-radius: var(--r-sm); }
+
+/* Volume & speed */
+.pl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pl-row:last-child { margin-bottom: 0; }
+.pl-row-label { font-size: 11px; color: var(--pl-text-muted); width: 48px; flex-shrink: 0; }
+.pl-slider-track {
+  flex: 1; height: 4px; border-radius: var(--r-full);
+  background: rgba(255,255,255,0.1); position: relative; cursor: pointer;
+}
+.pl-slider-fill {
+  height: 100%; border-radius: var(--r-full);
+  background: var(--pl-amber);
+}
+.pl-slider-val { font-size: 11px; color: var(--pl-text-muted); width: 30px; text-align: right; font-family: var(--font-mono); }
+.pl-speed-btns { display: flex; gap: 4px; }
+.pl-speed-btn {
+  padding: 4px 8px; border-radius: var(--r-sm);
+  border: 1px solid var(--pl-line); background: rgba(255,255,255,0.04);
+  font-size: 11px; font-weight: 600; color: var(--pl-text-muted);
+  cursor: pointer; font-family: var(--font-sans);
+  transition: background var(--dur-short), color var(--dur-short);
+}
+.pl-speed-btn.active { background: rgba(240,188,86,0.15); border-color: rgba(240,188,86,0.3); color: var(--pl-amber); }
+
+/* AI insight section */
+.pl-ai-insight { display: flex; flex-direction: column; gap: 8px; }
+.pl-ai-top { display: flex; align-items: center; gap: 8px; }
+.pl-ai-tier {
+  padding: 4px 10px; border-radius: var(--r-full); font-size: 10px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.pl-ai-tier.low { background: rgba(62,200,120,0.15); color: var(--pl-green); border: 1px solid rgba(62,200,120,0.25); }
+.pl-ai-score { font-size: 12px; color: var(--pl-text-muted); }
+.pl-ai-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pl-ai-kv { display: flex; flex-direction: column; gap: 1px; }
+.pl-ai-k { font-size: 9px; color: var(--pl-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.pl-ai-v { font-size: 12px; font-weight: 600; }
+.pl-ai-gate {
+  border: 1px solid var(--pl-line); border-radius: var(--r-md);
+  padding: 10px 12px; background: rgba(0,0,0,0.2);
+}
+.pl-ai-gate-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; }
+.pl-ai-gate-row:last-child { margin-bottom: 0; }
+.pl-ai-gate-k { color: var(--pl-text-muted); }
+.pl-ai-gate-v { font-weight: 600; }
+.pl-ai-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.pl-ai-action-btn {
+  padding: 5px 10px; border-radius: var(--r-sm); font-size: 10px; font-weight: 600;
+  border: 1px solid var(--pl-line); background: rgba(255,255,255,0.05);
+  color: var(--pl-text-muted); cursor: pointer; font-family: var(--font-sans);
+  transition: background var(--dur-short), color var(--dur-short);
+}
+.pl-ai-action-btn:hover { background: rgba(255,255,255,0.09); color: var(--pl-text); }
+.pl-ai-action-btn.danger { border-color: rgba(255,92,92,0.3); color: var(--pl-red); background: rgba(255,92,92,0.06); }
+.pl-ai-action-btn.danger:hover { background: rgba(255,92,92,0.12); }
+
+/* Bottom bar */
+.pl-bottombar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--pl-line);
+  border-radius: var(--r-lg);
+  background: rgba(255,255,255,0.02);
+  font-size: 11px; gap: 10px; flex-wrap: wrap;
+}
+.pl-bottom-shortcuts { display: flex; gap: 10px; }
+.pl-shortcut { display: flex; align-items: center; gap: 4px; color: var(--pl-text-muted); font-size: 10px; }
+.pl-kbd {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--pl-line);
+  border-radius: 3px; padding: 1px 5px; font-size: 10px; font-family: var(--font-mono);
+}
+.pl-bottom-actions { display: flex; gap: 6px; }
+
+/* ══ Annotation dots ════════════════════════════════════════ */
+.anno-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 36px; }
+.anno-card {
+  background: #fff; border-radius: var(--r-md);
+  border: 1px solid #E8E8E8;
+  padding: 18px 20px;
+}
+.anno-title { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 12px; letter-spacing: -0.1px; }
+.anno-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; font-size: 12px; line-height: 1.45; color: #555; }
+.anno-dot { width: 20px; height: 20px; border-radius: 50%; background: #333; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px; }
+.anno-dot-amber { background: #D09030; }
+.anno-dot-green { background: #1D8A3C; }
+.anno-dot-blue  { background: #2B5CB8; }
+.token-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.token-table th { font-weight: 600; color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 4px 8px; }
+.token-table td { padding: 5px 8px; border-top: 1px solid #F0F0F0; vertical-align: middle; }
+.token-swatch { width: 16px; height: 16px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,0.1); }
+
+/* ══ Preview banner ═════════════════════════════════════════ */
+.preview-banner {
+  position: fixed; bottom: 14px; right: 14px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  font-size: 10px; padding: 5px 11px; border-radius: var(--r-full);
+  pointer-events: none; z-index: 999; letter-spacing: 0.3px;
+  backdrop-filter: blur(6px);
+}
+
+/* ══ v6: Collapsible rail sections ══════════════════════════ */
+details.pl-rail-section { border-bottom: 1px solid var(--pl-line); }
+details.pl-rail-section:last-child { border-bottom: none; flex: none; }
+details.pl-rail-section > summary {
+  list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 16px;
+  cursor: pointer; user-select: none;
+  transition: background var(--dur-short);
+}
+details.pl-rail-section > summary::-webkit-details-marker,
+details.pl-rail-section > summary::marker { display: none; }
+details.pl-rail-section[open] > summary {
+  border-bottom: 1px solid var(--pl-line);
+  padding-bottom: 10px;
+}
+details.pl-rail-section > summary:hover { background: rgba(255,255,255,0.03); }
+.pl-summary-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.pl-summary-arrow {
+  font-size: 10px; color: var(--pl-text-muted); opacity: 0.5;
+  transition: transform 0.22s ease, opacity 0.15s; margin-left: auto;
+}
+details[open] > summary .pl-summary-arrow { transform: rotate(180deg); opacity: 0.85; }
+.pl-section-note { font-size: 10px; color: var(--pl-text-muted); opacity: 0.65; }
+.pl-section-body { padding: 11px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ══ v6: Compact transport row ══════════════════════════════ */
+.pl-transport-compact { display: flex; gap: 5px; }
+.pl-ctrl-compact {
+  flex: 1; min-width: 0; appearance: none;
+  border: 1px solid var(--pl-line); border-radius: 11px;
+  background: rgba(255,255,255,0.04); color: var(--pl-text);
+  cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px; padding: 8px 3px; min-height: 46px;
+  font-family: var(--font-sans);
+  transition: background var(--dur-short), transform var(--dur-short) var(--ease-out);
+}
+.pl-ctrl-compact:hover { background: rgba(255,255,255,0.09); border-color: var(--pl-line-hi); }
+.pl-ctrl-compact.active {
+  border-color: rgba(240,188,86,0.32);
+  background: rgba(240,188,86,0.15);
+}
+.pl-ctrl-compact strong { font-size: 12px; font-weight: 700; }
+.pl-ctrl-compact span { font-size: 9px; color: var(--pl-text-muted); letter-spacing: 0.04em; opacity: 0.8; }
+
+/* ══ v6: Compact vol / speed rows ═══════════════════════════ */
+.pl-vol-row { display: grid; grid-template-columns: 34px 1fr 36px; align-items: center; gap: 8px; }
+.pl-vol-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--pl-text-muted); }
+.pl-vol-val { font-size: 10px; color: var(--pl-text-muted); text-align: right; font-family: var(--font-mono); }
+.pl-speed-fit { display: flex; gap: 6px; align-items: center; }
+.pl-speed-select {
+  flex: 1; appearance: none; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--pl-line); border-radius: 10px;
+  color: var(--pl-text); padding: 7px 9px;
+  font-size: 11px; font-family: var(--font-sans);
+}
+.pl-fit-btn {
+  appearance: none; border: 1px solid var(--pl-line); border-radius: 10px;
+  background: rgba(255,255,255,0.04); color: var(--pl-text-muted);
+  font-size: 10px; font-weight: 700; padding: 7px 10px;
+  cursor: pointer; white-space: nowrap; font-family: var(--font-sans);
+  transition: background var(--dur-short);
+}
+
+/* ══ v6: Image slider groups ════════════════════════════════ */
+.pl-slider-group {
+  display: flex; flex-direction: column; gap: 9px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(255,255,255,0.07);
+}
+.pl-slider-group:last-of-type { border-bottom: none; padding-bottom: 0; }
+.pl-slider-group-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,255,255,0.22);
+}
+.pl-slider-item { display: flex; flex-direction: column; gap: 5px; }
+.pl-slider-header { display: flex; justify-content: space-between; align-items: center; }
+.pl-slider-header strong {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--pl-text);
+}
+.pl-slider-header span { font-size: 10px; color: var(--pl-amber); font-family: var(--font-mono); }
+.pl-axis-labels {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--pl-text-muted); opacity: 0.5;
+  letter-spacing: 0.03em; margin: -2px 0 1px;
+}
+.pl-range {
+  width: 100%; appearance: none; height: 5px; border-radius: 999px;
+  background: rgba(255,255,255,0.12); outline: none;
+}
+.pl-range::-webkit-slider-thumb {
+  appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--pl-amber); border: 2px solid rgba(28,18,0,0.85);
+  cursor: pointer; box-shadow: 0 0 0 3px rgba(240,188,86,0.18);
+}
+
+/* ══ v6: Reset + Shield controls ════════════════════════════ */
+.pl-reset-btn {
+  appearance: none; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px; padding: 7px 14px; align-self: flex-start;
+  background: rgba(255,255,255,0.05); color: var(--pl-text-muted);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; cursor: pointer; font-family: var(--font-sans);
+  transition: background var(--dur-short);
+}
+.pl-reset-btn:hover { background: rgba(255,255,255,0.1); color: var(--pl-text); }
+.pl-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.pl-action-ctrl {
+  appearance: none; border: 1px solid var(--pl-line); border-radius: 11px;
+  padding: 9px 8px; background: rgba(255,255,255,0.04); color: var(--pl-text);
+  cursor: pointer; display: flex; flex-direction: column;
+  align-items: flex-start; gap: 3px; font-family: var(--font-sans);
+  transition: background var(--dur-short);
+}
+.pl-action-ctrl.active {
+  border-color: rgba(240,188,86,0.32);
+  background: rgba(240,188,86,0.15);
+}
+.pl-action-ctrl strong { font-size: 11px; font-weight: 700; }
+.pl-action-ctrl span { font-size: 9px; color: var(--pl-text-muted); }
+.pl-hint-box {
+  padding: 9px 11px; border-radius: 11px; font-size: 10px; line-height: 1.55;
+  color: var(--pl-text-muted); background: rgba(0,0,0,0.2);
+  border: 1px dashed rgba(255,255,255,0.08);
+}
+</style>
+</head>
+<body>
+
+<div class="page-title">Falcon-Player-Enhance v6.0 — 統一 UI/UX 設計預覽 (Popup + 無干擾播放器)</div>
+
+<div class="preview-row">
+
+  <!-- ══ LEFT: Extension Popup ══════════════════════════════ -->
+  <div>
+    <div class="col-label">📌 Extension Popup（300px）</div>
+    <div class="device-shell-popup">
+      <div class="popup-shell">
+
+        <!-- Header -->
+        <div class="p-header">
+          <div class="p-brand">
+            <span class="p-brand-icon">🦅</span>
+            <div>
+              <div class="p-brand-name">Falcon Player</div>
+              <div class="p-brand-tag">Clean video · No interference</div>
+            </div>
+          </div>
+          <div class="p-header-actions">
+            <button class="p-icon-btn" title="Pin">📌</button>
+            <button class="p-icon-btn" title="Theme">☀</button>
+            <label class="p-toggle" aria-label="Enable protection">
+              <input type="checkbox" checked>
+              <span class="p-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Status bar (NEW) -->
+        <div class="p-status-bar">
+          <span class="p-dot p-dot-green"></span>
+          <strong style="color:#333;font-size:11px">Active</strong>
+          <span class="p-sep-char">|</span>
+          <span>xhamster.com</span>
+          <span class="p-sep-char">|</span>
+          <span>AI: advisory</span>
+        </div>
+
+        <!-- Flow indicator -->
+        <div class="p-flow">
+          <div class="p-flow-pipe">
+            <div class="p-flow-node done">
+              <span class="p-flow-num">1</span>
+              <span class="p-flow-icon">🖱️</span>
+              <span class="p-flow-label">CLICK</span>
+              <span class="p-flow-sub">點選播放器</span>
+            </div>
+            <div class="p-flow-wire lit"></div>
+            <div class="p-flow-node done">
+              <span class="p-flow-num">2</span>
+              <span class="p-flow-icon">🔍</span>
+              <span class="p-flow-label">DETECT</span>
+              <span class="p-flow-sub">偵測與清除</span>
+            </div>
+            <div class="p-flow-wire lit"></div>
+            <div class="p-flow-node active">
+              <span class="p-flow-num">3</span>
+              <span class="p-flow-icon">▶️</span>
+              <span class="p-flow-label">PLAY!</span>
+              <span class="p-flow-sub">安全播放</span>
+            </div>
+          </div>
+          <div class="p-flow-status locked">● 已鎖定播放器</div>
+        </div>
+
+        <!-- Player chips (NEW design) -->
+        <div class="p-chips-area">
+          <div class="p-chips-label">
+            <span>偵測到的播放器</span>
+            <button style="background:none;border:1px solid var(--p-sep);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--p-text-sub)">DETECT</button>
+          </div>
+          <div class="p-chips">
+            <div class="p-chip active">
+              <span class="p-chip-dot"></span>
+              <span class="p-chip-label">video#main · 1920×1080</span>
+            </div>
+            <div class="p-chip">
+              <span class="p-chip-dot" style="background:var(--p-sep)"></span>
+              <span class="p-chip-label">video#ad · 640×360</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Playback controls (NEW style) -->
+        <div class="p-controls">
+          <button class="p-ctrl p-ctrl-sm">A</button>
+          <button class="p-ctrl" title="Seek -5s">◁◁</button>
+          <button class="p-ctrl primary" title="Play">▶</button>
+          <button class="p-ctrl" title="Seek +5s">▷▷</button>
+          <button class="p-ctrl p-ctrl-sm">B</button>
+          <button class="p-ctrl" title="Mute">🔇</button>
+          <button class="p-ctrl" title="Loop">🔁</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="p-stats" role="status">
+          <div class="p-stat">
+            <span class="p-stat-val">847</span>
+            <span class="p-stat-lbl">Overlays</span>
+          </div>
+          <div class="p-stat">
+            <span class="p-stat-val">312</span>
+            <span class="p-stat-lbl">Popups</span>
+          </div>
+          <div class="p-stat">
+            <span class="p-stat-val">28</span>
+            <span class="p-stat-lbl">Fake vids</span>
+          </div>
+          <div class="p-stat">
+            <span class="p-stat-val" style="color:#34C759">19</span>
+            <span class="p-stat-lbl">AI evals</span>
+          </div>
+        </div>
+
+        <!-- Blocking level -->
+        <div class="p-level-row">
+          <span>Blocking level</span>
+          <select class="p-level-select">
+            <option>0 - OFF</option>
+            <option>1 - Basic</option>
+            <option selected>2 - Standard</option>
+            <option>3 - Enhanced</option>
+          </select>
+        </div>
+        <div class="p-level-hint">L2 Standard: block popups and malicious redirects</div>
+
+        <!-- AI monitor panel -->
+        <div class="p-ai-panel">
+          <div class="p-ai-header">
+            <div class="p-ai-title">
+              <span class="p-dot p-dot-green"></span>
+              AI always-on monitor
+            </div>
+            <label class="p-toggle" aria-label="AI monitor">
+              <input type="checkbox" checked>
+              <span class="p-slider"></span>
+            </label>
+          </div>
+          <div class="p-ai-body">
+            <div class="p-ai-kv">
+              <span class="p-ai-k">Risk tier</span>
+              <span class="p-ai-v"><span class="p-badge p-badge-green">LOW</span></span>
+            </div>
+            <div class="p-ai-kv">
+              <span class="p-ai-k">Risk score</span>
+              <span class="p-ai-v">0.12</span>
+            </div>
+            <div class="p-ai-kv">
+              <span class="p-ai-k">Provider</span>
+              <span class="p-ai-v">OpenAI</span>
+            </div>
+            <div class="p-ai-kv">
+              <span class="p-ai-k">Mode</span>
+              <span class="p-ai-v">advisory</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-footer">
+          <div class="p-shortcuts-hint">
+            <div class="p-shortcut"><span class="p-kbd">Space</span><span>Play</span></div>
+            <div class="p-shortcut"><span class="p-kbd">←/→</span><span>±5s</span></div>
+            <div class="p-shortcut"><span class="p-kbd">↑/↓</span><span>Vol</span></div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="p-footer-btn" title="Block element">🚫</button>
+            <button class="p-footer-btn" title="Add site">➕</button>
+            <button class="p-footer-btn" title="Settings">⚙</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="design-note">Three-Gray token system · 300px 固定寬 · 支援深色模式</div>
+  </div>
+
+  <!-- ══ RIGHT: Distraction-free Player ════════════════════ -->
+  <div>
+    <div class="col-label">🎬 無干擾播放器（全視窗）</div>
+    <div class="device-shell-player">
+      <div class="player-shell">
+
+        <!-- Topbar -->
+        <div class="pl-topbar">
+          <div class="pl-brand">
+            <div class="pl-brand-mark">🦅</div>
+            <div>
+              <div class="pl-eyebrow">Falcon Player</div>
+              <div class="pl-title-row">
+                <span class="pl-title">無干擾播放器</span>
+                <span class="pl-mode-chip amber">Advisory</span>
+              </div>
+            </div>
+          </div>
+          <div class="pl-topbar-actions">
+            <button class="pl-btn pl-btn-ghost">Auto-fit OFF</button>
+            <button class="pl-btn pl-btn-amber">⚡ Enhance</button>
+            <button class="pl-btn">⚙ Settings</button>
+          </div>
+        </div>
+
+        <!-- Workspace -->
+        <div class="pl-workspace">
+
+          <!-- Stage -->
+          <div class="pl-stage">
+            <div class="pl-stage-meta">
+              <div class="pl-stage-status">
+                <div class="pl-pill active">
+                  <span class="pl-pill-dot"></span>
+                  video#main
+                </div>
+                <div class="pl-pill">1920 × 1080</div>
+                <div class="pl-pill">xhamster.com</div>
+              </div>
+              <div class="pl-time">00:12:34 / 00:38:20</div>
+            </div>
+
+            <!-- Video frame -->
+            <div class="pl-frame">
+              <div class="pl-frame-inner">
+                <div class="pl-frame-placeholder">
+                  <div class="pl-play-icon-lg">▶</div>
+                  <span>影片已載入 · 點選播放</span>
+                </div>
+              </div>
+              <!-- Progress overlay -->
+              <div class="pl-stage-overlay">
+                <div class="pl-progress-area">
+                  <div class="pl-progress-label">00:12:34 ━━━━ 00:38:20</div>
+                  <div class="pl-progress-bar">
+                    <div class="pl-progress-fill"></div>
+                    <div class="pl-progress-thumb"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Control rail — v6 collapsible design -->
+          <div class="pl-rail">
+
+            <!-- ① 播放控制 -->
+            <details class="pl-rail-section" open>
+              <summary>
+                <div class="pl-summary-left">
+                  <span class="pl-rail-label" style="margin:0">播放控制</span>
+                  <span class="pl-section-note">Transport · Timeline · Audio</span>
+                </div>
+                <span class="pl-summary-arrow">▾</span>
+              </summary>
+              <div class="pl-section-body">
+                <div class="pl-transport-compact">
+                  <button class="pl-ctrl-compact"><strong>-10s</strong><span>後退</span></button>
+                  <button class="pl-ctrl-compact"><strong>🔊</strong><span>靜音</span></button>
+                  <button class="pl-ctrl-compact active"><strong>▶</strong><span>播放</span></button>
+                  <button class="pl-ctrl-compact"><strong>↻</strong><span>循環</span></button>
+                  <button class="pl-ctrl-compact"><strong>+10s</strong><span>快進</span></button>
+                  <button class="pl-ctrl-compact"><strong>⤢</strong><span>全螢幕</span></button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <input type="range" class="pl-range" value="32" min="0" max="100">
+                  <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--pl-text-muted)">
+                    <span style="font-family:var(--font-mono)">00:12:34</span>
+                    <span style="opacity:0.6">拖曳定位</span>
+                    <span style="font-family:var(--font-mono)">00:38:20</span>
+                  </div>
+                </div>
+                <div class="pl-vol-row">
+                  <span class="pl-vol-label">Vol</span>
+                  <input type="range" class="pl-range" value="72" min="0" max="100">
+                  <span class="pl-vol-val">72%</span>
+                </div>
+                <div class="pl-speed-fit">
+                  <select class="pl-speed-select">
+                    <option>0.5×</option><option>0.75×</option>
+                    <option selected>1.0×</option><option>1.25×</option>
+                    <option>1.5×</option><option>2.0×</option>
+                  </select>
+                  <button class="pl-fit-btn">Auto Fit</button>
+                </div>
+              </div>
+            </details>
+
+            <!-- ② 畫面調整 -->
+            <details class="pl-rail-section" open>
+              <summary>
+                <div class="pl-summary-left">
+                  <span class="pl-rail-label" style="margin:0">畫面調整</span>
+                  <span class="pl-section-note">亮度 · 對比 · 色調 · 色溫</span>
+                </div>
+                <span class="pl-summary-arrow">▾</span>
+              </summary>
+              <div class="pl-section-body">
+                <div class="pl-slider-group">
+                  <span class="pl-slider-group-label">光影 Luminance</span>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>Brightness</strong><span>100%</span></div>
+                    <input type="range" class="pl-range" value="50" min="0" max="100">
+                  </div>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>Contrast</strong><span>100%</span></div>
+                    <input type="range" class="pl-range" value="50" min="0" max="100">
+                  </div>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>Sharpness</strong><span>0%</span></div>
+                    <input type="range" class="pl-range" value="0" min="0" max="100">
+                  </div>
+                </div>
+                <div class="pl-slider-group">
+                  <span class="pl-slider-group-label">色彩 Color</span>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>Saturation</strong><span>100%</span></div>
+                    <input type="range" class="pl-range" value="50" min="0" max="100">
+                  </div>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>色調 Tint</strong><span>0°</span></div>
+                    <div class="pl-axis-labels"><span>洋紅 M</span><span>綠 G</span></div>
+                    <input type="range" class="pl-range" value="50" min="0" max="100">
+                  </div>
+                  <div class="pl-slider-item">
+                    <div class="pl-slider-header"><strong>色溫 Temp</strong><span>中性</span></div>
+                    <div class="pl-axis-labels"><span>冷 Cool</span><span>暖 Warm</span></div>
+                    <input type="range" class="pl-range" value="50" min="0" max="100">
+                  </div>
+                </div>
+                <button class="pl-reset-btn">Reset Image</button>
+              </div>
+            </details>
+
+            <!-- ③ 防護設定 (collapsed) -->
+            <details class="pl-rail-section">
+              <summary>
+                <div class="pl-summary-left">
+                  <span class="pl-rail-label" style="margin:0">防護設定</span>
+                  <span class="pl-section-note">Link Shield · 嵌入保護</span>
+                </div>
+                <span class="pl-summary-arrow">▾</span>
+              </summary>
+              <div class="pl-section-body">
+                <div class="pl-action-grid">
+                  <button class="pl-action-ctrl active">
+                    <strong>Shield On</strong><span>封鎖嵌入連結</span>
+                  </button>
+                  <button class="pl-action-ctrl">
+                    <strong>Reset</strong><span>舞台重置</span>
+                  </button>
+                </div>
+                <div class="pl-hint-box">
+                  在 iframe 模式下，防護層覆蓋嵌入頁面，防止意外廣告點擊與外部跳轉。
+                </div>
+              </div>
+            </details>
+
+          </div>
+        </div>
+
+        <!-- Bottom bar (keyboard hints only) -->
+        <div class="pl-bottombar">
+          <div class="pl-bottom-shortcuts">
+            <div class="pl-shortcut"><span class="pl-kbd">Space</span><span>Play/Pause</span></div>
+            <div class="pl-shortcut"><span class="pl-kbd">←/→</span><span>±10s</span></div>
+            <div class="pl-shortcut"><span class="pl-kbd">↑/↓</span><span>音量</span></div>
+            <div class="pl-shortcut"><span class="pl-kbd">F</span><span>全螢幕</span></div>
+            <div class="pl-shortcut"><span class="pl-kbd">M</span><span>靜音</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="design-note">Cinema dark · oklch 主色橋接為 amber (#F0BC56) · v6: 3 折疊分區 · 無 AI panel · 色調/色溫</div>
+  </div>
+</div>
+
+<!-- ══ Annotation / Design rationale ════════════════════════ -->
+<div style="margin-top:40px">
+  <div class="page-title">設計說明 — 一致性決策</div>
+  <div class="anno-grid">
+
+    <div class="anno-card">
+      <div class="anno-title">🔗 共用 Token（兩個 UI 都遵守）</div>
+      <div class="anno-item">
+        <span class="anno-dot">R</span>
+        <div><strong>Radius scale 統一</strong>：xs=4 · sm=6 · md=10 · lg=16 · xl=22 · full=9999px。Popup 與 Player 的按鈕、卡片、面板都使用同一比例，不再各自為政。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot anno-dot-blue">F</span>
+        <div><strong>Font stack 統一</strong>：-apple-system, SF Pro Text, Helvetica Neue, Arial。Player 舊版用了 "Avenir Next"，改為對齊 popup 與 dashboard。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot anno-dot-green">M</span>
+        <div><strong>Motion 統一</strong>：ease-out cubic-bezier(0.16,1,0.3,1)，dur-short=160ms，dur-mid=240ms。兩個 UI 的 transition 感受一致。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot anno-dot-amber">A</span>
+        <div><strong>Accent 橋接</strong>：Dashboard 用單色黑白；Player 用 amber #F0BC56 作為主動色。Popup 中的 AI assessments stat 也用 #34C759 green 呼應。</div>
+      </div>
+    </div>
+
+    <div class="anno-card">
+      <div class="anno-title">🆕 Popup 主要改動</div>
+      <div class="anno-item">
+        <span class="anno-dot">1</span>
+        <div><strong>Status bar 新增</strong>（Header 下方）：Active / 當前域名 / AI mode — 讓使用者一眼知道現在保護狀態，無需往下滾動。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">2</span>
+        <div><strong>Player chip 重設計</strong>：chip 加 status dot，active chip 反色（黑底白字），更清楚表示「鎖定中」vs「待選」。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">3</span>
+        <div><strong>Stats 第 4 欄</strong>：新增「AI evals」統計，與 dashboard overview 對齊（4 個 stat card）。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">4</span>
+        <div><strong>AI monitor panel 精簡</strong>：移除長篇 evidence 文字，改為 2×2 key-value grid（tier / score / provider / mode），gate detail 按需展開。</div>
+      </div>
+    </div>
+
+    <div class="anno-card">
+      <div class="anno-title">🎬 Player v6 主要改動</div>
+      <div class="anno-item">
+        <span class="anno-dot">1</span>
+        <div><strong>3 折疊分區取代 5 固定 section</strong>：播放控制（含 Timeline + Volume + Speed）/ 畫面調整 / 防護設定。防護設定預設收合，省空間。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">2</span>
+        <div><strong>Transport 改為 6 按鈕橫排</strong>：-10s · 靜音 · ▶播放 · Loop · +10s · 全螢幕，從 3×2 大卡片改為緊湊行列，視覺更接近 preview 舊版風格。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">3</span>
+        <div><strong>畫面調整新增色調 Tint + 色溫 Temp</strong>：分兩子組（光影 Luminance / 色彩 Color），SVG feColorMatrix 實作色溫，CSS hue-rotate 實作色調。</div>
+      </div>
+      <div class="anno-item">
+        <span class="anno-dot">4</span>
+        <div><strong>移除 AI panel</strong>：播放器不再顯示 AI 評估資訊，保持無干擾播放的核心定位。AI 資訊回歸 dashboard 管理。</div>
+      </div>
+    </div>
+
+    <div class="anno-card">
+      <div class="anno-title">🎨 Token 對照表</div>
+      <table class="token-table">
+        <thead>
+          <tr>
+            <th>用途</th>
+            <th>Popup / Dashboard</th>
+            <th>Player (dark)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>背景</td>
+            <td><span class="token-swatch" style="background:#F5F5F5;border:1px solid #ddd"></span> #F5F5F5</td>
+            <td><span class="token-swatch" style="background:#111113"></span> #111113</td>
+          </tr>
+          <tr>
+            <td>卡片</td>
+            <td><span class="token-swatch" style="background:#FFFFFF;border:1px solid #ddd"></span> #FFFFFF</td>
+            <td><span class="token-swatch" style="background:#1A1A1E"></span> #1A1A1E</td>
+          </tr>
+          <tr>
+            <td>主文字</td>
+            <td><span class="token-swatch" style="background:#333333"></span> #333333</td>
+            <td><span class="token-swatch" style="background:#F0F0F2"></span> #F0F0F2</td>
+          </tr>
+          <tr>
+            <td>主動色</td>
+            <td><span class="token-swatch" style="background:#333333"></span> #333 (反色)</td>
+            <td><span class="token-swatch" style="background:#F0BC56"></span> #F0BC56 amber</td>
+          </tr>
+          <tr>
+            <td>成功/安全</td>
+            <td><span class="token-swatch" style="background:#34C759"></span> #34C759</td>
+            <td><span class="token-swatch" style="background:#3EC878"></span> #3EC878</td>
+          </tr>
+          <tr>
+            <td>危險</td>
+            <td><span class="token-swatch" style="background:#FF3B30"></span> #FF3B30</td>
+            <td><span class="token-swatch" style="background:#FF5C5C"></span> #FF5C5C</td>
+          </tr>
+          <tr>
+            <td>Radius 基準</td>
+            <td colspan="2" style="text-align:center">xs=4 · sm=6 · md=10 · lg=16 · xl=22 · full=∞</td>
+          </tr>
+          <tr>
+            <td>Motion easing</td>
+            <td colspan="2" style="text-align:center">cubic-bezier(0.16, 1, 0.3, 1) · 160ms / 240ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="preview-banner" aria-hidden="true">🎨 統一 UI 設計預覽 v6.0 — Popup + 無干擾播放器</div>
+
+</body>
+</html>

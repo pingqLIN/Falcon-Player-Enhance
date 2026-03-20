@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Javboys Player Anti-Adblock Simulation</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #222; color: #eee; }
+        .player-box {
+            width: 600px;
+            height: 400px;
+            background: #000;
+            position: relative;
+            border: 1px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Simulated Error Messages based on anti-antiblock.js selectors */
+        .player-error-message, .error-message, .adblock-message {
+            background: rgba(255,0,0,0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            z-index: 9999;
+            text-align: center;
+        }
+
+        /* Elements that should be removed */
+        .ad-banner {
+            width: 100%;
+            height: 50px;
+            background: orange;
+            text-align: center;
+            line-height: 50px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Anti-Adblock Simulation Test</h1>
+    
+    <div class="player-box" id="player">
+        <!-- This simulating the error that appears when adblock is detected -->
+        <div class="player-error">Error: init (Adblock Detected)</div>
+        
+        <div class="error-message">Please disable adblock to watch video</div>
+    </div>
+
+    <div class="ad-banner">
+        Advertiser Link
+    </div>
+
+    <!-- Script that simulates the site's detection logic -->
+    <script>
+        console.log("Site Logic: Checking for adblock...");
+        
+        // 1. Check for bait element (usually hidden by adblockers)
+        // If we were a real site, we'd check if a bait element has height 0
+        
+        // 2. Check for global variables
+        setTimeout(function() {
+            const hasGoogleAds = !!window.google_ad_client;
+            const hasAdsLoaded = !!window.ads_loaded;
+            
+            console.log("Site Logic: window.google_ad_client =", window.google_ad_client);
+            
+            if (hasGoogleAds || hasAdsLoaded) {
+                console.log("Site Logic: Ads detected (Good user!)");
+                // If ads are 'detected' (mocked), we should HIDE the error if the site was dynamic
+                // But in this test, we want to see if our CONTENT SCRIPT hides the error forcibly
+                // unrelated to the logic, OR if mocking satisfies the logic.
+                
+                // Let's simulate dynamic error removal if bypass is successful
+                // const errs = document.querySelectorAll('.player-error');
+                // errs.forEach(e => e.style.display = 'none'); 
+                // NOTE: We won't do this automatically here to test if the CSS/Element removal in content script works.
+            } else {
+                console.log("Site Logic: No ads detected! Showing error.");
+            }
+        }, 500);
+    </script>
+</body>
+</html>

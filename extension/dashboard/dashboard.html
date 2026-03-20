@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="dashboardPageTitle">Falcon-Player-Enhance Settings</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <span class="app-icon">🦅</span>
+                <span class="app-name">Falcon-Player-Enhance</span>
+            </div>
+            <div class="sidebar-menu">
+                <button class="menu-item active" data-tab="overview">
+                    <span class="menu-icon">📊</span>
+                    <span class="menu-label" data-i18n="dashboardMenuOverview">Overview</span>
+                </button>
+                <button class="menu-item" data-tab="sites">
+                    <span class="menu-icon">🌐</span>
+                    <span class="menu-label" data-i18n="dashboardMenuSites">Sites</span>
+                </button>
+                <button class="menu-item" data-tab="ai">
+                    <span class="menu-icon">🤖</span>
+                    <span class="menu-label" data-i18n="dashboardMenuAi">AI</span>
+                </button>
+                <button class="menu-item" data-tab="advanced">
+                    <span class="menu-icon">⚙️</span>
+                    <span class="menu-label" data-i18n="dashboardMenuAdvanced">Advanced</span>
+                </button>
+            </div>
+            <div class="sidebar-footer">
+                <button class="theme-toggle-btn" id="theme-toggle" data-i18n-title="dashboardThemeToggleTitle" title="Toggle theme">
+                    <span id="theme-icon">☀</span>
+                    <span id="theme-label" data-i18n="dashboardThemeLight">Light mode</span>
+                </button>
+            </div>
+        </nav>
+
+        <main class="content-area">
+
+            <!-- ═══ TAB 1: Overview (原 Player settings) ═══ -->
+            <section id="overview" class="tab-panel active">
+                <header class="panel-header">
+                    <h1 data-i18n="dashboardOverviewHeading">Overview</h1>
+                </header>
+
+                <!-- Status bar -->
+                <div class="status-bar" id="overview-status-bar" role="status">
+                    <span class="status-dot" id="status-active-dot"></span>
+                    <span class="status-text" id="status-active-label" data-i18n="dashboardStatusActive">Active</span>
+                    <span class="status-sep">|</span>
+                    <span id="status-enhanced-count">–</span>
+                    <span class="status-sep">|</span>
+                    <span id="status-ai-mode">AI: off</span>
+                </div>
+
+                <!-- Stats (4 cards) -->
+                <div class="stats-overview stats-overview-4">
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-overlays">0</span>
+                        <span class="stat-label" data-i18n="dashboardStatOverlays">Overlay removals</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-popups">0</span>
+                        <span class="stat-label" data-i18n="dashboardStatPopups">Popup blocks</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-players">0</span>
+                        <span class="stat-label" data-i18n="dashboardStatPlayers">Players protected</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="stats-ai-evals">0</span>
+                        <span class="stat-label" data-i18n="dashboardStatAiEvals">AI assessments</span>
+                    </div>
+                </div>
+
+                <!-- Protection features -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardProtectionFeatures">Protection features</div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardFeatureOverlayTitle">Auto overlay removal</div>
+                                <div class="setting-desc" data-i18n="dashboardFeatureOverlayDesc">Automatically detect and remove ad overlays above players</div>
+                            </div>
+                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardFeaturePopupTitle">Popup blocking</div>
+                                <div class="setting-desc" data-i18n="dashboardFeaturePopupDesc">Block malicious popups and redirects triggered by clicks</div>
+                            </div>
+                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardFeatureFakeVideoTitle">Fake video removal</div>
+                                <div class="setting-desc" data-i18n="dashboardFeatureFakeVideoDesc">Automatically remove fake videos</div>
+                            </div>
+                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardFeatureSyncTitle">Playback progress sync</div>
+                                <div class="setting-desc" data-i18n="dashboardFeatureSyncDesc">Remember your watch progress</div>
+                            </div>
+                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Popup display settings -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardPopupDisplayHeader">Popup display</div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardPopupAutoFitTitle">Auto-fit popup player</div>
+                                <div class="setting-desc" data-i18n="dashboardPopupAutoFitDesc">Make distraction-free playback automatically fill the popup window</div>
+                            </div>
+                            <label class="toggle-switch" data-i18n-title="dashboardPopupAutoFitTitle" title="Auto-fit popup player">
+                                <input type="checkbox" id="toggle-popup-auto-fit" checked data-i18n-aria-label="dashboardPopupAutoFitTitle" aria-label="Auto-fit popup player">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardPopupAiMonitorTitle">Show AI monitor in popup</div>
+                                <div class="setting-desc" data-i18n="dashboardPopupAiMonitorDesc">Keep advanced AI policy details hidden by default unless you want to inspect them in the popup.</div>
+                            </div>
+                            <label class="toggle-switch" data-i18n-title="dashboardPopupAiMonitorTitle" title="Show AI monitor in popup">
+                                <input type="checkbox" id="toggle-popup-ai-monitor" data-i18n-aria-label="dashboardPopupAiMonitorTitle" aria-label="Show AI monitor in popup">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hotkeys (collapsible) -->
+                <details class="collapsible-section">
+                    <summary class="collapsible-summary" data-i18n="dashboardHotkeysRef">Hotkey reference</summary>
+                    <div class="collapsible-body">
+                        <div class="hotkeys-card">
+                            <div class="hotkeys-grid">
+                                <div class="hotkey-section">
+                                    <div class="hotkey-section-title" data-i18n="dashboardHotkeysPlayback">Playback</div>
+                                    <div class="hotkey-row"><kbd>Space</kbd><kbd>K</kbd><span data-i18n="dashboardHotkeysPlayPause">Play/Pause</span></div>
+                                    <div class="hotkey-row"><kbd>←</kbd><kbd>→</kbd><span data-i18n="dashboardHotkeysSeek5">Seek ±5 seconds</span></div>
+                                    <div class="hotkey-row"><kbd>J</kbd><kbd>L</kbd><span data-i18n="dashboardHotkeysSeek10">Seek ±10 seconds</span></div>
+                                    <div class="hotkey-row"><kbd>Home</kbd><kbd>End</kbd><span data-i18n="dashboardHotkeysHomeEnd">Jump to start/end</span></div>
+                                    <div class="hotkey-row"><kbd>0</kbd>-<kbd>9</kbd><span data-i18n="dashboardHotkeysJump90">Jump 0%-90%</span></div>
+                                    <div class="hotkey-row"><kbd>0</kbd><kbd>0</kbd>-<kbd>9</kbd><kbd>9</kbd><span data-i18n="dashboardHotkeysJump99">Double-tap two digits within 500ms: precise jump 0%-99%</span></div>
+                                </div>
+                                <div class="hotkey-section">
+                                    <div class="hotkey-section-title" data-i18n="dashboardHotkeysVolumeSpeed">Volume and speed</div>
+                                    <div class="hotkey-row"><kbd>↑</kbd><kbd>↓</kbd><span data-i18n="dashboardHotkeysVolume">Volume ±10%</span></div>
+                                    <div class="hotkey-row"><kbd>M</kbd><span data-i18n="dashboardHotkeysMute">Toggle mute</span></div>
+                                    <div class="hotkey-row"><kbd>Shift</kbd>+<kbd>&lt;</kbd><span data-i18n="dashboardHotkeysSpeedDown">Decrease speed</span></div>
+                                    <div class="hotkey-row"><kbd>Shift</kbd>+<kbd>&gt;</kbd><span data-i18n="dashboardHotkeysSpeedUp">Increase speed</span></div>
+                                </div>
+                                <div class="hotkey-section">
+                                    <div class="hotkey-section-title" data-i18n="dashboardHotkeysOther">Other</div>
+                                    <div class="hotkey-row"><kbd>F</kbd><span data-i18n="dashboardHotkeysFullscreen">Fullscreen</span></div>
+                                    <div class="hotkey-row"><kbd>S</kbd><span data-i18n="dashboardHotkeysScreenshot">Screenshot</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ═══ TAB 2: Sites (Domain list + Enhanced sites) ═══ -->
+            <section id="sites" class="tab-panel">
+                <header class="panel-header">
+                    <h1 data-i18n="dashboardSitesHeading">Sites</h1>
+                </header>
+
+                <!-- Whitelist -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardWhitelistHeader">Whitelist (no rules applied)</div>
+                    <div class="input-row">
+                        <input type="text" id="whitelist-input" class="text-input" data-i18n-placeholder="dashboardWhitelistPlaceholder" placeholder="Enter domain (e.g., example.com)">
+                        <button class="btn-primary" id="btn-add-whitelist" data-i18n="dashboardAdd">Add</button>
+                    </div>
+                    <div class="domain-list" id="whitelist-display"></div>
+                </div>
+
+                <!-- Blacklist -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardBlacklistHeader">Blacklist (strict protection)</div>
+                    <div class="input-row">
+                        <input type="text" id="blacklist-input" class="text-input" data-i18n-placeholder="dashboardBlacklistPlaceholder" placeholder="Enter domain">
+                        <button class="btn-primary" id="btn-add-blacklist" data-i18n="dashboardAdd">Add</button>
+                    </div>
+                    <div class="domain-list" id="blacklist-display"></div>
+                </div>
+
+                <!-- Enhanced sites (built-in + custom merged) -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardEnhancedSitesHeader">Enhanced sites</div>
+                    <div class="info-text info-text-spaced" data-i18n="dashboardCustomSitesAddDesc">Unknown sites already receive basic player tools and baseline ad blocking. Add a domain here to promote it to enhanced protection.</div>
+                    <div class="input-row">
+                        <input type="text" id="custom-site-input" class="text-input" data-i18n-placeholder="dashboardCustomSitesPlaceholder" placeholder="Enter domain (e.g., example.com)">
+                        <button class="btn-primary" id="btn-add-custom-site" data-i18n="dashboardAdd">Add</button>
+                    </div>
+                    <div class="custom-site-feedback" id="custom-site-feedback"></div>
+                    <!-- Merged list: custom + built-in with badge -->
+                    <div class="domain-list enhanced-sites-merged" id="enhanced-sites-merged-display"></div>
+                </div>
+
+                <!-- Match patterns (collapsible) -->
+                <details class="collapsible-section">
+                    <summary class="collapsible-summary" data-i18n="dashboardCustomSitesPreviewHeader">Enhanced match patterns</summary>
+                    <div class="collapsible-body">
+                        <div class="info-text custom-sites-preview" id="custom-sites-preview" data-i18n="dashboardLoading">Loading...</div>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ═══ TAB 3: AI (from Security, promoted to first-class) ═══ -->
+            <section id="ai" class="tab-panel">
+                <header class="panel-header">
+                    <h1 data-i18n="dashboardAiHeading">AI</h1>
+                </header>
+
+                <!-- AI status card -->
+                <div class="settings-group">
+                    <div class="ai-status-card">
+                        <div class="ai-status-left">
+                            <span class="ai-status-dot" id="ai-status-dot"></span>
+                            <div>
+                                <div class="ai-status-title" id="ai-status-title" data-i18n="dashboardAiStatusOffline">Not configured</div>
+                                <div class="ai-status-sub" id="ai-status-sub">–</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch" title="Enable AI policy control">
+                            <input type="checkbox" id="lmstudio-enabled" aria-label="Enable AI policy control" title="Enable AI policy control">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Provider cards -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardAiProviderHeader">Provider</div>
+                    <div class="provider-card-grid" id="provider-card-grid">
+                        <div class="provider-card" data-provider="openai" role="button" tabindex="0" aria-pressed="false">
+                            <div class="provider-card-logo">🤖</div>
+                            <div class="provider-card-name">OpenAI</div>
+                            <div class="provider-card-sub">GPT-5.4-mini</div>
+                        </div>
+                        <div class="provider-card" data-provider="gemini" role="button" tabindex="0" aria-pressed="false">
+                            <div class="provider-card-logo">✨</div>
+                            <div class="provider-card-name">Gemini</div>
+                            <div class="provider-card-sub">Google AI</div>
+                        </div>
+                        <div class="provider-card" data-provider="lmstudio" role="button" tabindex="0" aria-pressed="false">
+                            <div class="provider-card-logo">🖥️</div>
+                            <div class="provider-card-name">LM Studio</div>
+                            <div class="provider-card-sub">Local model</div>
+                        </div>
+                        <div class="provider-card" data-provider="gateway" role="button" tabindex="0" aria-pressed="false">
+                            <div class="provider-card-logo">🔗</div>
+                            <div class="provider-card-name">Gateway</div>
+                            <div class="provider-card-sub">Custom endpoint</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configure fields (per-provider, shown/hidden by JS) -->
+                <div class="settings-group" id="ai-configure-panel" style="display:none">
+                    <div class="settings-header" data-i18n="dashboardAiConfigureHeader">Configure</div>
+
+                    <!-- API key row (always masked) -->
+                    <div class="input-row ai-key-row" id="ai-key-row">
+                        <label class="ai-field-label" for="ai-key-display" data-i18n="dashboardAiApiKeyLabel">API Key</label>
+                        <input type="text" id="ai-key-display" class="text-input" disabled aria-label="API Key">
+                        <button class="btn-secondary" id="btn-update-api-key" data-i18n="dashboardAiUpdateKey">Update</button>
+                    </div>
+                    <div class="input-row ai-key-edit-row" id="ai-key-edit-row" style="display:none">
+                        <label class="ai-field-label" for="ai-provider-token" data-i18n="dashboardAiApiKeyLabel">API Key</label>
+                        <input type="password" id="ai-provider-token" class="text-input" placeholder="Paste new key here" aria-label="New API key">
+                        <button class="btn-primary" id="btn-confirm-api-key" data-i18n="dashboardAiConfirmKey">Confirm</button>
+                    </div>
+
+                    <!-- Model -->
+                    <div class="input-row" id="ai-model-row">
+                        <label class="ai-field-label" for="lmstudio-model" data-i18n="dashboardAiModelLabel">Model</label>
+                        <input type="text" id="lmstudio-model" class="text-input" placeholder="e.g. gpt-5.4-mini">
+                    </div>
+
+                    <!-- Endpoint -->
+                    <div class="input-row" id="ai-endpoint-row">
+                        <label class="ai-field-label" for="lmstudio-endpoint" data-i18n="dashboardAiEndpointLabel">Endpoint</label>
+                        <input type="text" id="lmstudio-endpoint" class="text-input" placeholder="https://api.openai.com/v1/responses">
+                    </div>
+                </div>
+
+                <!-- Mode selection (radio cards) -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardAiModeHeader">Mode</div>
+                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" aria-label="AI mode">
+                        <div class="mode-card" data-mode="off" role="radio" tabindex="0" aria-checked="true">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeOffTitle">Off</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeOffDesc">No AI assessment — all decisions by rule engine</div>
+                            </div>
+                        </div>
+                        <div class="mode-card" data-mode="advisory" role="radio" tabindex="0" aria-checked="false">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeAdvisoryTitle">Advisory</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeAdvisoryDesc">AI suggests actions, rule engine decides — low risk</div>
+                            </div>
+                        </div>
+                        <div class="mode-card" data-mode="hybrid" role="radio" tabindex="0" aria-checked="false">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeHybridTitle">Hybrid</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeHybridDesc">AI actively applies safe policies for complex sites</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Hidden select kept for JS compat -->
+                    <select id="lmstudio-mode" style="display:none" aria-hidden="true">
+                        <option value="off">off</option>
+                        <option value="advisory">advisory</option>
+                        <option value="hybrid">hybrid</option>
+                    </select>
+                </div>
+
+                <!-- Advanced (collapsible) -->
+                <details class="collapsible-section">
+                    <summary class="collapsible-summary" data-i18n="dashboardAiAdvancedHeader">Advanced settings</summary>
+                    <div class="collapsible-body">
+                        <div class="input-row">
+                            <label class="ai-field-label" for="lmstudio-timeout" data-i18n="dashboardAiTimeoutLabel">Timeout (ms)</label>
+                            <input type="number" id="lmstudio-timeout" class="text-input" min="1000" max="60000" step="500" placeholder="20000">
+                        </div>
+                        <div class="input-row">
+                            <label class="ai-field-label" for="lmstudio-cooldown" data-i18n="dashboardAiCooldownLabel">Cooldown (ms)</label>
+                            <input type="number" id="lmstudio-cooldown" class="text-input" min="2000" max="300000" step="1000" placeholder="25000">
+                        </div>
+                        <div class="setting-item" style="border-top:1px solid var(--separator);padding-top:12px;margin-top:4px">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardAiCandidatesTitle">Generate candidate rules</div>
+                                <div class="setting-desc" data-i18n="dashboardAiCandidatesDesc">Store selector/domain candidates from the selected provider for later review.</div>
+                            </div>
+                            <label class="toggle-switch" title="Generate candidate rules">
+                                <input type="checkbox" id="lmstudio-dynamic-rules" aria-label="Generate candidate rules" title="Generate candidate rules">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Save bar -->
+                <div class="settings-group">
+                    <div class="ai-save-bar">
+                        <div class="group-footer">
+                            <button class="btn-primary" id="btn-save-lmstudio" data-i18n="dashboardAiSave">Save settings</button>
+                            <button class="btn-secondary" id="btn-check-lmstudio" data-i18n="dashboardAiHealthCheck">Health check</button>
+                            <button class="btn-secondary" id="btn-export-lmstudio-candidates" data-i18n="dashboardAiExportCandidates">Export candidates</button>
+                        </div>
+                        <div class="info-text" id="lmstudio-status" data-i18n="dashboardAiNotConfigured">AI provider is not configured yet.</div>
+                    </div>
+                </div>
+
+                <!-- Generated candidates -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardAiCandidatesListHeader">Generated candidates</div>
+                    <div class="info-text" id="lmstudio-candidate-summary">No generated rule candidates yet.</div>
+                    <div class="policy-host-list" id="lmstudio-candidate-list">
+                        <div class="empty-state" data-i18n="dashboardAiNoCandidates">No generated rule candidates yet.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ TAB 4: Advanced (Security + Blocked elements) ═══ -->
+            <section id="advanced" class="tab-panel">
+                <header class="panel-header">
+                    <h1 data-i18n="dashboardAdvancedHeading">Advanced</h1>
+                </header>
+
+                <!-- Runtime policy gate -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardPolicyGateHeader">Runtime policy gate</div>
+                    <div class="policy-overview-card">
+                        <div class="policy-overview-row">
+                            <span class="policy-overview-label" data-i18n="dashboardPolicyVersionLabel">Policy version</span>
+                            <strong id="policy-overview-version">-</strong>
+                        </div>
+                        <div class="policy-overview-row">
+                            <span class="policy-overview-label" data-i18n="dashboardGateVersionLabel">Gate version</span>
+                            <strong id="policy-gate-version">-</strong>
+                        </div>
+                        <div class="policy-overview-row">
+                            <span class="policy-overview-label" data-i18n="dashboardHighRiskLabel">High-risk hosts</span>
+                            <strong id="policy-high-risk-count">0</strong>
+                        </div>
+                        <div class="policy-overview-row">
+                            <span class="policy-overview-label" data-i18n="dashboardFallbackLabel">Active fallbacks</span>
+                            <strong id="policy-fallback-count">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- High-risk hosts (collapsible) -->
+                <details class="collapsible-section">
+                    <summary class="collapsible-summary" data-i18n="dashboardHighRiskHostsHeader">High-risk host details</summary>
+                    <div class="collapsible-body">
+                        <div class="policy-host-list" id="policy-host-list">
+                            <div class="empty-state" data-i18n="dashboardNoHighRiskHosts">No high-risk hosts yet</div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Sandbox protection -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardSandboxHeader">Sandbox protection</div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardSandboxTitle">Sandbox protection</div>
+                                <div class="setting-desc" data-i18n="dashboardSandboxDesc">Open suspicious sites in a restricted environment to prevent sensitive data access.</div>
+                            </div>
+                            <label class="toggle-switch" title="Enable or disable sandbox protection">
+                                <input type="checkbox" id="toggle-sandbox" checked aria-label="Enable or disable sandbox protection" title="Enable or disable sandbox protection">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Blocked elements (moved from own tab) -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardBlockedElementsHeader">Blocked page elements</div>
+                    <div id="hidden-elements-list" class="elements-list">
+                        <div class="empty-state" data-i18n="dashboardLoading">Loading...</div>
+                    </div>
+                    <div class="group-footer">
+                        <button class="btn-destructive" id="btn-clear-all-elements" data-i18n="dashboardClearAllRules">Clear all rules</button>
+                    </div>
+                </div>
+
+                <!-- Data management -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardDataManagement">Data management</div>
+                    <div class="setting-item" style="border:1px solid var(--separator);border-radius:4px;padding:14px">
+                        <div class="setting-info">
+                            <div class="setting-title" data-i18n="dashboardResetStatsTitle">Reset statistics</div>
+                            <div class="setting-desc" data-i18n="dashboardResetStatsDesc">Clear all counters and keep settings.</div>
+                        </div>
+                        <button class="btn-destructive" id="btn-reset-stats" data-i18n="dashboardReset">Reset</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <script src="../content/i18n.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

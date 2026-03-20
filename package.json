@@ -1,0 +1,21 @@
+{
+  "name": "falcon-player-enhance",
+  "private": true,
+  "version": "4.4.0",
+  "description": "Falcon-Player-Enhance development scripts",
+  "scripts": {
+    "check:lmstudio": "node tests/ai-eval/check-lmstudio-health.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
+    "check:gateway": "node tests/ai-eval/check-gateway-health.js --endpoint http://127.0.0.1:8787/v1",
+    "test:ai": "node tests/ai-eval/run-ai-evaluation.js",
+    "test:e2e-replay": "node tests/e2e-ai-replay/run-e2e-ai-replay.js",
+    "test:lmstudio": "node tests/ai-eval/run-lmstudio-evaluation.js --mock",
+    "test:lmstudio:live": "node tests/ai-eval/run-lmstudio-evaluation.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
+    "test:openai:live": "node tests/ai-eval/run-openai-direct-evaluation.js --model gpt-5.4-mini",
+    "test:gemini:live": "node tests/ai-eval/run-gemini-direct-evaluation.js --model gemini-2.5-flash",
+    "test:gateway:live": "node tests/ai-eval/check-gateway-policy.js --endpoint http://127.0.0.1:8787/v1",
+    "test:ai:compare": "node tests/ai-eval/compare-provider-reports.js",
+    "build:lmstudio-rules": "node tests/ai-eval/generate-lmstudio-rules.js --mock",
+    "build:lmstudio-rules:live": "node tests/ai-eval/generate-lmstudio-rules.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
+    "gateway:openai": "node scripts/openai-policy-gateway.js"
+  }
+}

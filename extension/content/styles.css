@@ -1,0 +1,65 @@
+/* Player Enhancer - 視覺樣式 */
+
+/* 播放器增強標示 - 僅保留標記功能，移除視覺邊框 */
+.player-enhanced-active {
+  /* box-shadow, outline, animation removed */
+}
+
+/* 「已優化」標籤樣式 */
+.player-enhanced-badge {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  z-index: 2147483646 !important; /* 稍微低於播放器本身 */
+  pointer-events: none !important; /* 不阻擋滑鼠事件 */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+  animation: badge-slide-in 0.5s ease-out !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+@keyframes badge-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 確保標籤在小螢幕上也能正常顯示 */
+@media (max-width: 600px) {
+  .player-enhanced-badge {
+    font-size: 10px !important;
+    padding: 4px 8px !important;
+  }
+}
+
+/* HTML5 video 元素的特殊處理 */
+video.player-enhanced-active {
+  /* 確保 video 控制列不被影響 */
+  position: relative !important;
+}
+
+/* iframe 播放器的特殊處理 */
+iframe.player-enhanced-active {
+  /* 確保 iframe 不被裁切 */
+  overflow: visible !important;
+}
+
+/* 被移除的覆蓋元素標記 (用於除錯) */
+[data-removed-by-enhancer="true"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

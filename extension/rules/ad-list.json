@@ -1,0 +1,86 @@
+{
+  "version": "2026-03-20",
+  "entries": [
+    {
+      "id": "seed-domain-exoclick",
+      "kind": "domain",
+      "value": "exoclick.com",
+      "category": "ad_network",
+      "confidence": 1,
+      "source": "manual_seed",
+      "action": "block_request"
+    },
+    {
+      "id": "seed-domain-magsrv",
+      "kind": "domain",
+      "value": "magsrv.com",
+      "category": "ad_network",
+      "confidence": 1,
+      "source": "manual_seed",
+      "action": "block_request"
+    },
+    {
+      "id": "seed-domain-popads",
+      "kind": "domain",
+      "value": "popads.net",
+      "category": "ad_network",
+      "confidence": 1,
+      "source": "manual_seed",
+      "action": "block_request"
+    },
+    {
+      "id": "seed-token-watch-now",
+      "kind": "token",
+      "value": "watch now",
+      "category": "redirect_lure",
+      "confidence": 0.76,
+      "source": "manual_seed",
+      "action": "guard_navigation"
+    },
+    {
+      "id": "seed-token-live-sex",
+      "kind": "token",
+      "value": "live sex",
+      "category": "external_navigation_lure",
+      "confidence": 0.74,
+      "source": "manual_seed",
+      "action": "guard_navigation"
+    },
+    {
+      "id": "seed-token-remove-ads",
+      "kind": "token",
+      "value": "remove ads",
+      "category": "overlay",
+      "confidence": 0.68,
+      "source": "manual_seed",
+      "action": "hide_element"
+    },
+    {
+      "id": "seed-selector-overlay",
+      "kind": "selector",
+      "value": "[class*=\"overlay\" i]",
+      "category": "overlay",
+      "confidence": 0.63,
+      "source": "manual_seed",
+      "action": "hide_element"
+    },
+    {
+      "id": "seed-selector-banner",
+      "kind": "selector",
+      "value": "[class*=\"banner\" i]",
+      "category": "overlay",
+      "confidence": 0.58,
+      "source": "manual_seed",
+      "action": "hide_element"
+    },
+    {
+      "id": "seed-selector-sponsored",
+      "kind": "selector",
+      "value": "[class*=\"sponsor\" i]",
+      "category": "redirect_lure",
+      "confidence": 0.61,
+      "source": "manual_seed",
+      "action": "hide_element"
+    }
+  ]
+}

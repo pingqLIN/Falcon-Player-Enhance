@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="popupPageTitle">Falcon-Player-Enhance</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <div class="app-info">
+                    <span class="app-icon">🛡️</span>
+                    <div class="app-title-group">
+                        <h1 class="app-title">Falcon-Player-Enhance</h1>
+                        <p class="app-tagline" data-i18n="popupTagline">Clean video. No interference.</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="pin-popup-btn" id="btn-pin-popup" data-i18n-title="popupPinTitle" data-i18n-aria-label="popupPinTitle" aria-label="Pin current control panel window" title="Pin current control panel window">
+                        📌
+                    </button>
+                    <button class="theme-toggle" id="theme-toggle" data-i18n-title="popupThemeToggleTitle" data-i18n-aria-label="popupThemeToggleTitle" aria-label="Toggle theme" title="Toggle theme">
+                        <span class="theme-icon" id="theme-icon">☀</span>
+                    </button>
+                    <label class="toggle-switch" data-i18n-title="popupMasterToggleTitle" title="Enable/disable protection">
+                        <input type="checkbox" id="master-toggle" checked aria-label="Enable or disable protection" title="Enable or disable protection">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="flow-indicator flow-guide" id="flow-indicator">
+                <div class="flow-pipeline">
+                    <span class="flow-node flow-step-card" data-step="click">
+                        <span class="flow-step-num">1</span>
+                        <span class="flow-step-illust">
+                            <img src="../assets/guide/step-click.svg" alt="" class="flow-step-img" width="52" height="52">
+                        </span>
+                        <span class="flow-dot"></span>
+                        <span class="flow-label">CLICK</span>
+                        <span class="flow-sublabel" data-i18n="popupFlowClickSub">點選播放器</span>
+                    </span>
+                    <span class="flow-wire" data-segment="0-1">
+                        <span class="flow-wire-track"></span>
+                        <span class="flow-wire-pulse"></span>
+                    </span>
+                    <span class="flow-node flow-step-card" data-step="detect">
+                        <span class="flow-step-num">2</span>
+                        <span class="flow-step-illust">
+                            <img src="../assets/guide/step-detect.svg" alt="" class="flow-step-img" width="52" height="52">
+                        </span>
+                        <span class="flow-dot"></span>
+                        <span class="flow-label">DETECT</span>
+                        <span class="flow-sublabel" data-i18n="popupFlowDetectSub">偵測與清除</span>
+                    </span>
+                    <span class="flow-wire" data-segment="1-2">
+                        <span class="flow-wire-track"></span>
+                        <span class="flow-wire-pulse"></span>
+                    </span>
+                    <span class="flow-node flow-step-card" data-step="play">
+                        <span class="flow-step-num">3</span>
+                        <span class="flow-step-illust">
+                            <img src="../assets/guide/step-play.svg" alt="" class="flow-step-img" width="52" height="52">
+                        </span>
+                        <span class="flow-dot"></span>
+                        <span class="flow-label">PLAY!</span>
+                        <span class="flow-sublabel" data-i18n="popupFlowPlaySub">安全播放</span>
+                    </span>
+                </div>
+                <div class="flow-status" id="flow-status" data-i18n="popupFlowStatusClickLock">Click target player to lock</div>
+            </section>
+
+            <section class="section-group control-hub">
+                <div class="control-hub-body">
+                    <div class="target-status-row">
+                        <span class="target-lock-badge" id="target-lock-badge" data-i18n="popupTargetUnlocked">Unlocked</span>
+                        <button class="rescan-btn" id="btn-rescan" data-i18n-title="popupRescanTitle" title="Re-detect players">DETECT</button>
+                    </div>
+                    <div class="player-chip-list" id="player-chip-list"></div>
+                    <section class="playback-controls locked-off" id="playback-controls">
+                        <button class="ctrl-btn" id="btn-seek-back" data-i18n-title="popupSeekBackTitle" title="Seek back 5s">◁◁</button>
+                        <button class="ctrl-btn" id="btn-play-pause" data-i18n-title="popupPlayPauseTitle" title="Play/Pause">▶</button>
+                        <button class="ctrl-btn" id="btn-seek-forward" data-i18n-title="popupSeekForwardTitle" title="Seek forward 5s">▷▷</button>
+                        <button class="ctrl-btn" id="btn-mute" data-i18n-title="popupMuteTitle" title="Toggle mute">🔇</button>
+                        <button class="ctrl-btn" id="btn-loop" data-i18n-title="popupLoopTitle" title="Toggle loop">🔁</button>
+                        <button class="ctrl-btn ctrl-btn-sm" id="btn-ab-a" data-i18n-title="popupAbATitle" title="Set A point">A</button>
+                        <button class="ctrl-btn ctrl-btn-sm" id="btn-ab-b" data-i18n-title="popupAbBTitle" title="Set B point">B</button>
+                    </section>
+                </div>
+            </section>
+
+            <section class="section-group stats-grid-section">
+                <section class="stats-grid" aria-live="polite">
+                    <div class="stat-item">
+                        <span class="stat-value" id="overlays-removed">0</span>
+                        <span class="stat-label" data-i18n="popupStatsOverlays">Overlays</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="popups-blocked">0</span>
+                        <span class="stat-label" data-i18n="popupStatsPopups">Popups</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="fake-videos-removed">0</span>
+                        <span class="stat-label" data-i18n="popupStatsFakeVideos">Fake videos</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="players-protected">0</span>
+                        <span class="stat-label" data-i18n="popupStatsProtected">Protected</span>
+                    </div>
+                </section>
+                <div class="stats-empty-state" id="stats-empty-state" data-i18n="popupStatsEmptyFirstUse">Visit a video site to start protecting your player.</div>
+            </section>
+
+            <section class="section-group level-panel">
+                <div class="level-row">
+                    <span class="level-label" data-i18n="popupBlockingLevelLabel">Blocking level</span>
+                    <select id="blocking-level-select" class="level-select" data-i18n-title="popupBlockingLevelTitle" title="0=OFF, 1=Basic player guard, 2=Standard, 3=Enhanced redirect guard">
+                        <option value="0" data-i18n="popupBlockingLevelOption0">0 - OFF</option>
+                        <option value="1" data-i18n="popupBlockingLevelOption1">1 - Basic</option>
+                        <option value="2" selected data-i18n="popupBlockingLevelOption2">2 - Standard</option>
+                        <option value="3" data-i18n="popupBlockingLevelOption3">3 - Enhanced</option>
+                    </select>
+                </div>
+                <div class="level-hint" id="blocking-level-hint" data-i18n="popupBlockingHintL2">L2 Standard: block popups and malicious redirects</div>
+                <div class="level-row whitelist-mode-row">
+                    <span class="level-label" data-i18n="popupWhitelistEnhanceOnlyLabel" data-i18n-title="popupWhitelistEnhanceOnlyTitle" title="Whitelist-only mode">Whitelist-only mode</span>
+                    <label class="toggle-switch toggle-switch-sm" data-i18n-title="popupWhitelistEnhanceOnlyTitle" title="Whitelist-only mode">
+                        <input type="checkbox" id="whitelist-enhance-only-toggle" checked data-i18n-aria-label="popupWhitelistEnhanceOnlyAriaEnabled" aria-label="Whitelist-only mode: Enabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="section-group ai-monitor-panel ai-monitor-hidden" id="ai-monitor-panel">
+                <div class="section-header">
+                    <h2 class="section-title"><span data-i18n="popupAiMonitorTitle">AI always-on monitor</span></h2>
+                    <label class="toggle-switch toggle-switch-sm" data-i18n-title="popupAiMonitorToggleTitle" title="Enable/disable AI monitoring">
+                        <input type="checkbox" id="ai-monitor-toggle" aria-label="Enable or disable AI monitoring" title="Enable or disable AI monitoring">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="ai-monitor-body">
+                    <div class="ai-risk-row">
+                        <span class="ai-tier" id="ai-risk-tier">LOW</span>
+                        <span class="ai-score"><span data-i18n="popupAiRiskScoreLabel">Risk score</span> <strong id="ai-risk-score">0.00</strong></span>
+                    </div>
+                    <div class="ai-meta-row">
+                        <span><span data-i18n="popupAiHighRiskSites">High-risk sites</span> <strong id="ai-high-risk-count">0</strong></span>
+                        <span><span data-i18n="popupAiTelemetryEvents">Telemetry events</span> <strong id="ai-telemetry-size">0</strong></span>
+                    </div>
+                    <div class="ai-meta-row ai-policy-row">
+                        <span>Policy v<strong id="ai-policy-version">-</strong></span>
+                        <span><span data-i18n="popupAiPolicyRecent">Last applied</span> <strong id="ai-policy-applied-at">-</strong></span>
+                    </div>
+                    <div class="ai-meta-row ai-policy-row">
+                        <span><span data-i18n="popupAiProviderLabel">Provider</span> <strong id="ai-provider-status">offline</strong></span>
+                        <span><span data-i18n="popupAiProviderModelLabel">Model</span> <strong id="ai-provider-model">-</strong></span>
+                    </div>
+                    <div class="ai-gate-card">
+                        <div class="ai-gate-row">
+                            <span class="ai-gate-label" data-i18n="popupAiPolicyGateLabel">Policy gate</span>
+                            <span class="ai-gate-pill" id="ai-gate-tier">T1</span>
+                        </div>
+                        <div class="ai-gate-row">
+                            <span class="ai-gate-label" data-i18n="popupAiPolicyModeLabel">Mode</span>
+                            <strong class="ai-gate-value" id="ai-gate-mode">advisory-only</strong>
+                        </div>
+                        <div class="ai-gate-row">
+                            <span class="ai-gate-label" data-i18n="popupAiPolicyReasonLabel">Reason</span>
+                            <strong class="ai-gate-value" id="ai-gate-reason">runtime_default</strong>
+                        </div>
+                        <div class="ai-gate-actions" id="ai-gate-actions">
+                            <span class="ai-gate-action-chip" data-i18n="popupAiNoReversibleActions">No reversible actions</span>
+                        </div>
+                        <div class="ai-gate-evidence" id="ai-gate-evidence">
+                            <div class="ai-gate-evidence-title" data-i18n="popupAiEvidenceLabel">Evidence</div>
+                            <div class="ai-gate-evidence-list" id="ai-gate-evidence-list">
+                                <span class="ai-gate-action-chip" data-i18n="popupAiEvidenceClean">This site looks clean so far.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-actions">
+                        <button class="rescan-btn ai-action-btn" id="btn-export-ai" data-i18n="popupAiExportData" data-i18n-title="popupAiExportTitle" title="Export AI training data">Export data</button>
+                        <button class="rescan-btn ai-action-btn" id="btn-reset-ai" data-i18n="popupAiResetLearning" data-i18n-title="popupAiResetTitle" title="Reset AI learning records">Reset learning</button>
+                    </div>
+                    <div class="ai-actions ai-actions-secondary">
+                        <button class="rescan-btn ai-action-btn ai-downgrade-btn" id="btn-downgrade-host" data-i18n="popupAiDowngradeAction" data-i18n-title="popupAiDowngradeTitle" title="Temporarily downgrade this site's policy">Temporarily downgrade this site policy</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-row">
+                <button class="footer-small-btn" id="btn-pick-element" data-i18n-title="popupPickElementTitle" data-i18n-aria-label="popupPickElementTitle" aria-label="Enable element blocking mode" title="Enable element blocking mode">
+                    🚫
+                </button>
+                <button class="footer-small-btn" id="btn-add-current-site" data-i18n-title="popupAddCurrentSiteTitle" data-i18n-aria-label="popupAddCurrentSiteTitle" aria-label="Promote current site to enhanced Falcon-Player-Enhance protection" title="Promote current site to enhanced Falcon-Player-Enhance protection" hidden>
+                    ➕
+                </button>
+                <div class="shortcuts-reference" id="shortcuts-reference" data-i18n-title="popupShortcutsTitle" data-i18n-aria-label="popupShortcutsToggleLabel" aria-label="Open shortcuts and controls overview" title="Shortcuts and controls overview" tabindex="0" role="button" aria-expanded="false" aria-controls="shortcuts-popover">
+                    <div class="shortcuts-summary">
+                        <span class="shortcut-item"><kbd>Space</kbd><span data-i18n="popupShortcutPlayPause">Play/Pause</span></span>
+                        <span class="shortcut-item"><kbd>←/→</kbd><span data-i18n="popupShortcutSeek5">±5 seconds</span></span>
+                        <span class="shortcut-item"><kbd>↑/↓</kbd><span data-i18n="popupShortcutVolume">Volume</span></span>
+                        <span class="shortcut-item-hint" data-i18n="popupShortcutFocusHint">Click or focus for full list</span>
+                    </div>
+                    <div class="shortcuts-popover" id="shortcuts-popover">
+                        <div class="pinned-toolbar" id="pinned-toolbar">
+                            <button class="pinned-toolbar-btn" id="pinned-pick-element" data-i18n-title="popupPickElementTitle" data-i18n-aria-label="popupPickElementTitle" aria-label="Enable element blocking mode" title="Enable element blocking mode">
+                                <span class="pinned-toolbar-icon">🚫</span>
+                                <span data-i18n="popupToolbarBlockElement">Block element</span>
+                            </button>
+                            <button class="pinned-toolbar-btn" id="pinned-add-site" data-i18n-title="popupAddCurrentSiteTitle" data-i18n-aria-label="popupAddCurrentSiteTitle" aria-label="Promote current site to enhanced Falcon-Player-Enhance protection" title="Promote current site to enhanced Falcon-Player-Enhance protection" hidden>
+                                <span class="pinned-toolbar-icon">➕</span>
+                                <span data-i18n="popupToolbarAddSite">Enhance site</span>
+                            </button>
+                            <button class="pinned-toolbar-btn" id="pinned-open-dashboard" data-i18n-title="popupOpenDashboardTitle" data-i18n-aria-label="popupOpenDashboardTitle" aria-label="Settings and management" title="Settings and management">
+                                <span class="pinned-toolbar-icon">⚙</span>
+                                <span data-i18n="popupToolbarSettings">Settings</span>
+                            </button>
+                        </div>
+                        <div class="shortcuts-title" data-i18n="popupShortcutPanelTitle">Shortcuts and controls overview</div>
+                        <div class="hotkey-section">
+                            <div class="hotkey-section-title" data-i18n="popupShortcutQuickActions">Quick actions</div>
+                            <div class="hotkey-row"><span class="hotkey-action" data-i18n="popupShortcutActionChip">Click player chip</span><span data-i18n="popupShortcutActionChipDesc">Lock control target</span></div>
+                            <div class="hotkey-row"><span class="hotkey-action" data-i18n="popupShortcutActionPick">Click 🚫</span><span data-i18n="popupShortcutActionPickDesc">Enable element blocking mode</span></div>
+                            <div class="hotkey-row"><span class="hotkey-action" data-i18n="popupShortcutActionPin">Click 📌/📍</span><span data-i18n="popupShortcutActionPinDesc">Toggle sidecar pin</span></div>
+                            <div class="hotkey-row"><span class="hotkey-action" data-i18n="popupShortcutActionDowngrade">Temporarily downgrade site policy</span><span data-i18n="popupShortcutActionDowngradeDesc">Quick rollback for false positives</span></div>
+                        </div>
+                        <div class="hotkey-section">
+                            <div class="hotkey-section-title" data-i18n="popupShortcutPlayback">Playback</div>
+                            <div class="hotkey-row"><kbd>Space</kbd><span data-i18n="popupShortcutPlayPauseDesc">Play/Pause</span></div>
+                            <div class="hotkey-row"><kbd>←</kbd><kbd>→</kbd><span data-i18n="popupShortcutSeek5Desc">Seek ±5 seconds</span></div>
+                            <div class="hotkey-row"><kbd>←</kbd><kbd>←</kbd> / <kbd>→</kbd><kbd>→</kbd><span data-i18n="popupShortcutSeek10Desc">Seek ±10 seconds</span></div>
+                            <div class="hotkey-row"><kbd>Home</kbd><kbd>End</kbd><span data-i18n="popupShortcutHomeEndDesc">Start/End</span></div>
+                            <div class="hotkey-row"><kbd>0</kbd>-<kbd>9</kbd><span data-i18n="popupShortcutJump90Desc">Jump 0%-90%</span></div>
+                            <div class="hotkey-row"><kbd>0</kbd><kbd>0</kbd>-<kbd>9</kbd><kbd>9</kbd><span data-i18n="popupShortcutJump99Desc">Precise jump 0%-99%</span></div>
+                            <div class="hotkey-row"><kbd>L</kbd><span data-i18n="popupShortcutLoopDesc">Toggle loop</span></div>
+                            <div class="hotkey-row"><kbd>[</kbd><span data-i18n="popupShortcutAbADesc">Set A point</span></div>
+                            <div class="hotkey-row"><kbd>]</kbd><span data-i18n="popupShortcutAbBDesc">Set B point</span></div>
+                        </div>
+                        <div class="hotkey-section">
+                            <div class="hotkey-section-title" data-i18n="popupShortcutVolumeSpeed">Volume and speed</div>
+                            <div class="hotkey-row"><kbd>↑</kbd><kbd>↓</kbd><span data-i18n="popupShortcutVolumeDesc">Volume ±10%</span></div>
+                            <div class="hotkey-row"><kbd>M</kbd><span data-i18n="popupShortcutMuteDesc">Toggle mute</span></div>
+                            <div class="hotkey-row"><kbd>Shift</kbd>+<kbd>&lt;</kbd><span data-i18n="popupShortcutSpeedDownDesc">Decrease speed</span></div>
+                            <div class="hotkey-row"><kbd>Shift</kbd>+<kbd>&gt;</kbd><span data-i18n="popupShortcutSpeedUpDesc">Increase speed</span></div>
+                            <div class="hotkey-row"><kbd>F</kbd><span data-i18n="popupShortcutFullscreenDesc">Fullscreen</span></div>
+                            <div class="hotkey-row"><kbd>S</kbd><span data-i18n="popupShortcutScreenshotDesc">Screenshot</span></div>
+                        </div>
+                    </div>
+                </div>
+                <button class="footer-small-btn" id="open-dashboard" data-i18n-title="popupOpenDashboardTitle" data-i18n-aria-label="popupOpenDashboardTitle" aria-label="Settings and management" title="Settings and management">
+                    ⚙
+                </button>
+            </div>
+        </footer>
+    </div>
+    <script src="../content/i18n.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

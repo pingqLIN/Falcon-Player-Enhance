@@ -1,0 +1,113 @@
+{
+  "scenarios": [
+    {
+      "id": "invalid_tag_archive",
+      "type": "page_type",
+      "expectedLabel": "invalid_target",
+      "payload": {
+        "url": "https://poapan.xyz/tag/eros/",
+        "title": "KO eros – poapan.xyz",
+        "playerDetected": false,
+        "videoCount": 0,
+        "iframeCount": 1,
+        "overlayCount": 0,
+        "pageHint": "tag archive page with multiple content cards"
+      }
+    },
+    {
+      "id": "invalid_model_listing",
+      "type": "page_type",
+      "expectedLabel": "invalid_target",
+      "payload": {
+        "url": "https://javboys.com/all-models/nomura-kota/",
+        "title": "野村詠太 Nomura Kota – Javboys.com",
+        "playerDetected": false,
+        "videoCount": 0,
+        "iframeCount": 1,
+        "overlayCount": 0,
+        "pageHint": "performer profile page with scene thumbnails"
+      }
+    },
+    {
+      "id": "valid_iframe_playback",
+      "type": "page_type",
+      "expectedLabel": "valid_playback_page",
+      "payload": {
+        "url": "https://poapan.xyz/example-playback",
+        "title": "ガチ撮り密室ロッジ乱交 ガチ撮り – poapan.xyz",
+        "playerDetected": true,
+        "playerTag": "iframe",
+        "playerRect": {
+          "width": 750,
+          "height": 469
+        },
+        "videoCount": 0,
+        "iframeCount": 4,
+        "overlayCount": 0,
+        "pageHint": "single content page with main embedded iframe player"
+      }
+    },
+    {
+      "id": "obvious_overlay",
+      "type": "overlay",
+      "expectedLabel": "malicious_overlay",
+      "payload": {
+        "candidate": {
+          "tag": "a",
+          "text": "Click to continue",
+          "href": "https://trackingclick.example/redirect",
+          "position": "fixed",
+          "zIndex": "99999",
+          "rect": {
+            "width": 820,
+            "height": 460
+          }
+        },
+        "playerRect": {
+          "width": 840,
+          "height": 472
+        },
+        "intersectionRatio": 0.91,
+        "pageHint": "large clickable layer covering most of the player"
+      }
+    },
+    {
+      "id": "benign_player_control",
+      "type": "overlay",
+      "expectedLabel": "benign_ui",
+      "payload": {
+        "candidate": {
+          "tag": "button",
+          "text": "Play",
+          "href": null,
+          "position": "absolute",
+          "zIndex": "4",
+          "rect": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "playerRect": {
+          "width": 840,
+          "height": 472
+        },
+        "intersectionRatio": 0.03,
+        "pageHint": "small in-player control element"
+      }
+    },
+    {
+      "id": "failure_due_to_target_selection",
+      "type": "failure_review",
+      "expectedLabel": "target_curation",
+      "payload": {
+        "url": "https://poapan.xyz/tag/eros/",
+        "score": 60,
+        "playerDetected": false,
+        "overlayCount": 0,
+        "popupCount": 0,
+        "suspiciousNavCount": 0,
+        "pageHint": "archive page incorrectly included in target pool"
+      }
+    }
+  ]
+}
