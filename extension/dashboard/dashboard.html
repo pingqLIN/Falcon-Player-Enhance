@@ -236,8 +236,8 @@
                                 <div class="ai-status-sub" id="ai-status-sub">–</div>
                             </div>
                         </div>
-                        <label class="toggle-switch" data-i18n-title="dashboardAiEnableTitle" title="Enable AI policy control">
-                            <input type="checkbox" id="lmstudio-enabled" data-i18n-aria-label="dashboardAiEnableTitle" aria-label="Enable AI policy control" title="Enable AI policy control">
+                        <label class="toggle-switch" title="Enable AI policy control">
+                            <input type="checkbox" id="lmstudio-enabled" aria-label="Enable AI policy control" title="Enable AI policy control">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -247,11 +247,6 @@
                 <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardAiProviderHeader">Provider</div>
                     <div class="provider-card-grid" id="provider-card-grid">
-                        <div class="provider-card" data-provider="chrome_builtin" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">🧠</div>
-                            <div class="provider-card-name">Chrome Built-in AI</div>
-                            <div class="provider-card-sub" data-i18n="dashboardAiProviderChromeBuiltinSub">Gemini Nano in Chrome</div>
-                        </div>
                         <div class="provider-card" data-provider="openai" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🤖</div>
                             <div class="provider-card-name">OpenAI</div>
@@ -260,17 +255,17 @@
                         <div class="provider-card" data-provider="gemini" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">✨</div>
                             <div class="provider-card-name">Gemini</div>
-                            <div class="provider-card-sub" data-i18n="dashboardAiProviderGeminiSub">Google AI</div>
+                            <div class="provider-card-sub">Google AI</div>
                         </div>
                         <div class="provider-card" data-provider="lmstudio" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🖥️</div>
                             <div class="provider-card-name">LM Studio</div>
-                            <div class="provider-card-sub" data-i18n="dashboardAiProviderLmstudioSub">Local model</div>
+                            <div class="provider-card-sub">Local model</div>
                         </div>
                         <div class="provider-card" data-provider="gateway" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🔗</div>
                             <div class="provider-card-name">Gateway</div>
-                            <div class="provider-card-sub" data-i18n="dashboardAiProviderGatewaySub">Custom endpoint</div>
+                            <div class="provider-card-sub">Custom endpoint</div>
                         </div>
                     </div>
                 </div>
@@ -282,12 +277,12 @@
                     <!-- API key row (always masked) -->
                     <div class="input-row ai-key-row" id="ai-key-row">
                         <label class="ai-field-label" for="ai-key-display" data-i18n="dashboardAiApiKeyLabel">API Key</label>
-                        <input type="text" id="ai-key-display" class="text-input" disabled data-i18n-aria-label="dashboardAiApiKeyAriaLabel" aria-label="API Key">
+                        <input type="text" id="ai-key-display" class="text-input" disabled aria-label="API Key">
                         <button class="btn-secondary" id="btn-update-api-key" data-i18n="dashboardAiUpdateKey">Update</button>
                     </div>
                     <div class="input-row ai-key-edit-row" id="ai-key-edit-row" style="display:none">
                         <label class="ai-field-label" for="ai-provider-token" data-i18n="dashboardAiApiKeyLabel">API Key</label>
-                        <input type="password" id="ai-provider-token" class="text-input" data-i18n-placeholder="dashboardAiNewKeyPlaceholder" data-i18n-aria-label="dashboardAiNewKeyAriaLabel" placeholder="Paste new key here" aria-label="New API key">
+                        <input type="password" id="ai-provider-token" class="text-input" placeholder="Paste new key here" aria-label="New API key">
                         <button class="btn-primary" id="btn-confirm-api-key" data-i18n="dashboardAiConfirmKey">Confirm</button>
                     </div>
 
@@ -307,7 +302,7 @@
                 <!-- Mode selection (radio cards) -->
                 <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardAiModeHeader">Mode</div>
-                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" data-i18n-aria-label="dashboardAiModeAriaLabel" aria-label="AI mode">
+                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" aria-label="AI mode">
                         <div class="mode-card" data-mode="off" role="radio" tabindex="0" aria-checked="true">
                             <div class="mode-card-radio"></div>
                             <div>
@@ -355,8 +350,8 @@
                                 <div class="setting-title" data-i18n="dashboardAiCandidatesTitle">Generate candidate rules</div>
                                 <div class="setting-desc" data-i18n="dashboardAiCandidatesDesc">Store selector/domain candidates from the selected provider for later review.</div>
                             </div>
-                            <label class="toggle-switch" data-i18n-title="dashboardAiCandidatesToggleTitle" title="Generate candidate rules">
-                                <input type="checkbox" id="lmstudio-dynamic-rules" data-i18n-aria-label="dashboardAiCandidatesToggleTitle" aria-label="Generate candidate rules" title="Generate candidate rules">
+                            <label class="toggle-switch" title="Generate candidate rules">
+                                <input type="checkbox" id="lmstudio-dynamic-rules" aria-label="Generate candidate rules" title="Generate candidate rules">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -378,7 +373,7 @@
                 <!-- Generated candidates -->
                 <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardAiCandidatesListHeader">Generated candidates</div>
-                    <div class="info-text" id="lmstudio-candidate-summary" data-i18n="dashboardAiCandidatesSummaryEmpty">No generated rule candidates yet.</div>
+                    <div class="info-text" id="lmstudio-candidate-summary">No generated rule candidates yet.</div>
                     <div class="policy-host-list" id="lmstudio-candidate-list">
                         <div class="empty-state" data-i18n="dashboardAiNoCandidates">No generated rule candidates yet.</div>
                     </div>

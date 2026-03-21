@@ -13,7 +13,6 @@
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
-    "offscreen",
     "sidePanel",
     "scripting",
     "storage",

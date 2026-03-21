@@ -38,11 +38,7 @@ const AI_PROVIDER_SECRET_STORAGE_KEY = 'aiProviderSecret';
 const AI_KNOWLEDGE_VERSION = 1;
 const AI_KNOWLEDGE_MAX_OBSERVATIONS = 300;
 const AI_KNOWLEDGE_MAX_CANDIDATES = 160;
-const AI_KNOWLEDGE_MAX_CONFIRMED = 200;
-const AI_KNOWLEDGE_MAX_SEEDS = 500;
 const AI_KNOWLEDGE_MAX_TEACH_SESSIONS = 200;
-const AI_STORAGE_WARNING_BYTES = 8 * 1024 * 1024;
-const AI_STORAGE_TARGET_BYTES = 6 * 1024 * 1024;
 const TEACHING_CONFIRMATION_THRESHOLD = 3;
 const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 
@@ -217,7 +213,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
 const AI_POLICY_VERSION = 2;
 const AI_POLICY_GATE_VERSION = 1;
 const AI_PROVIDER_VERSION = 2;
-const AI_PROVIDER_TYPES = ['openai', 'chrome_builtin', 'gemini', 'lmstudio', 'gateway'];
+const AI_PROVIDER_TYPES = ['openai', 'gemini', 'lmstudio', 'gateway'];
 const AI_MAX_TELEMETRY = 1500;
 const AI_DECAY_PER_MINUTE = 0.96;
 const AI_HOST_FALLBACK_DURATION_MS = 8 * 60 * 1000;
@@ -229,52 +225,15 @@ const LM_STUDIO_DEFAULT_COOLDOWN_MS = 25000;
 const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1/responses';
 const OPENAI_DEFAULT_MODEL = 'gpt-5.4-mini';
 const OPENAI_DEFAULT_TIMEOUT_MS = 20000;
-const CHROME_BUILTIN_DEFAULT_ENDPOINT = 'chrome://built-in-ai/prompt-api';
-const CHROME_BUILTIN_DEFAULT_MODEL = 'gemini-nano';
-const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 25000;
 const GEMINI_DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 const GEMINI_DEFAULT_TIMEOUT_MS = 20000;
 const GATEWAY_DEFAULT_ENDPOINT = '';
 const GATEWAY_DEFAULT_MODEL = 'gpt-5.4-mini';
 const GATEWAY_DEFAULT_TIMEOUT_MS = 8000;
-const CHROME_BUILTIN_OFFSCREEN_PATH = 'offscreen/chrome-builtin.html';
-const CHROME_BUILTIN_BRIDGE_CHANNEL_NAME = 'falcon-chrome-builtin-ai';
-const AI_RECOMMENDED_ACTION_TOKENS = [
-  'tighten_popup_guard',
-  'tune_overlay_scan',
-  'guard_external_navigation',
-  'apply_extra_blocked_domains'
-];
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
 const LM_STUDIO_DEFAULT_MIN_RISK_SCORE = 8;
 const LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS = 8;
-const chromeBuiltinBridge = typeof BroadcastChannel === 'function'
-  ? new BroadcastChannel(CHROME_BUILTIN_BRIDGE_CHANNEL_NAME)
-  : null;
-const chromeBuiltinBridgePending = new Map();
-
-if (chromeBuiltinBridge) {
-  chromeBuiltinBridge.addEventListener('message', (event) => {
-    const payload = event?.data && typeof event.data === 'object' ? event.data : {};
-    const requestId = String(payload.requestId || '');
-    if (!requestId || payload.direction !== 'response') return;
-
-    const pending = chromeBuiltinBridgePending.get(requestId);
-    if (!pending) return;
-
-    chromeBuiltinBridgePending.delete(requestId);
-    clearTimeout(pending.timer);
-
-    if (payload.success === true) {
-      pending.resolve(payload.result || {});
-      return;
-    }
-
-    pending.reject(new Error(String(payload.error || 'chrome_builtin_bridge_failed')));
-  });
-}
-
 const BLOCKING_LEVEL_DEFAULT = 2;
 const BLOCKING_LEVEL_MIN = 0;
 const BLOCKING_LEVEL_MAX = 3;
@@ -982,18 +941,19 @@ function scheduleAiPersist() {
 }
 
 async function persistAiState() {
-  const storageBytes = Number(await chrome.storage.local.getBytesInUse(null).catch(() => 0) || 0);
-  const payload = buildAiPersistencePayload();
-  const { payload: safePayload, estimatedBytes, pruned } = pruneAiPersistencePayload(payload, storageBytes);
-
-  if (pruned) {
-    aiState.knowledgeStore = normalizeAiKnowledgeStore(safePayload.aiKnowledgeStore || {});
-    console.warn(`[AI] storage budget warning: ${formatStorageMiB(storageBytes)} MiB in use, pruned knowledge store before persist`);
-  } else {
-    console.log(`[AI] storage usage: ${formatStorageMiB(storageBytes)} MiB, next payload ~${formatStorageMiB(estimatedBytes)} MiB`);
-  }
-
-  await chrome.storage.local.set(safePayload);
+  await chrome.storage.local.set({
+    aiMonitorEnabled: aiState.enabled,
+    aiProfiles: aiState.profiles,
+    aiTelemetryLog: aiState.telemetryLog,
+    aiPolicyCache: aiState.policyCache,
+    aiHostMetrics: aiState.hostMetrics,
+    aiHostFallbacks: aiState.hostFallbacks,
+    aiProviderSettings: getPersistableAiProviderSettings(aiState.providerSettings || {}),
+    aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
+    aiProviderAdvisories: aiState.providerAdvisories || {},
+    aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+    aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
+  });
   await persistProviderSecretToSession(aiState.providerSecret);
 }
 
@@ -1275,16 +1235,6 @@ function getProviderDefaults(provider = 'lmstudio') {
       model: OPENAI_DEFAULT_MODEL,
       apiKey: '',
       timeoutMs: OPENAI_DEFAULT_TIMEOUT_MS
-    };
-  }
-
-  if (provider === 'chrome_builtin') {
-    return {
-      provider: 'chrome_builtin',
-      endpoint: CHROME_BUILTIN_DEFAULT_ENDPOINT,
-      model: CHROME_BUILTIN_DEFAULT_MODEL,
-      apiKey: '',
-      timeoutMs: CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
     };
   }
 
@@ -1604,97 +1554,16 @@ function recalculateAiKnowledgeStats(store) {
   };
 }
 
-function formatStorageMiB(bytes) {
-  return (Number(bytes || 0) / (1024 * 1024)).toFixed(2);
-}
-
-function buildAiPersistencePayload() {
-  return {
-    aiMonitorEnabled: aiState.enabled,
-    aiProfiles: aiState.profiles,
-    aiTelemetryLog: aiState.telemetryLog,
-    aiPolicyCache: aiState.policyCache,
-    aiHostMetrics: aiState.hostMetrics,
-    aiHostFallbacks: aiState.hostFallbacks,
-    aiProviderSettings: getPersistableAiProviderSettings(aiState.providerSettings || {}),
-    aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
-    aiProviderAdvisories: aiState.providerAdvisories || {},
-    aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
-    aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
-  };
-}
-
-function estimatePayloadBytes(payload) {
-  try {
-    return new TextEncoder().encode(JSON.stringify(payload)).length;
-  } catch (_) {
-    return 0;
-  }
-}
-
-function pruneAiPersistencePayload(payload = {}, storageBytes = 0) {
-  let next = {
-    ...payload,
-    aiKnowledgeStore: normalizeAiKnowledgeStore(payload.aiKnowledgeStore || {})
-  };
-  let estimatedBytes = Math.max(Number(storageBytes || 0), estimatePayloadBytes(next));
-  let pruned = false;
-
-  if (estimatedBytes <= AI_STORAGE_WARNING_BYTES) {
-    return { payload: next, estimatedBytes, pruned };
-  }
-
-  const knowledge = {
-    ...next.aiKnowledgeStore,
-    observations: Array.isArray(next.aiKnowledgeStore?.observations) ? [...next.aiKnowledgeStore.observations] : [],
-    teachSessions: Array.isArray(next.aiKnowledgeStore?.teachSessions) ? [...next.aiKnowledgeStore.teachSessions] : [],
-    candidates: Array.isArray(next.aiKnowledgeStore?.candidates) ? [...next.aiKnowledgeStore.candidates] : [],
-    confirmedPatterns: Array.isArray(next.aiKnowledgeStore?.confirmedPatterns) ? [...next.aiKnowledgeStore.confirmedPatterns] : []
-  };
-
-  while (estimatedBytes > AI_STORAGE_TARGET_BYTES) {
-    let changed = false;
-
-    if (knowledge.observations.length > 180) {
-      knowledge.observations = knowledge.observations.slice(0, Math.max(180, knowledge.observations.length - 40));
-      changed = true;
-    }
-    if (knowledge.teachSessions.length > 120 && estimatedBytes > AI_STORAGE_TARGET_BYTES) {
-      knowledge.teachSessions = knowledge.teachSessions.slice(0, Math.max(120, knowledge.teachSessions.length - 20));
-      changed = true;
-    }
-    if (knowledge.candidates.length > 100 && estimatedBytes > AI_STORAGE_TARGET_BYTES) {
-      knowledge.candidates = knowledge.candidates.slice(0, Math.max(100, knowledge.candidates.length - 15));
-      changed = true;
-    }
-    if (knowledge.confirmedPatterns.length > 120 && estimatedBytes > AI_STORAGE_TARGET_BYTES) {
-      knowledge.confirmedPatterns = knowledge.confirmedPatterns.slice(0, Math.max(120, knowledge.confirmedPatterns.length - 10));
-      changed = true;
-    }
-
-    if (!changed) break;
-
-    pruned = true;
-    next = {
-      ...next,
-      aiKnowledgeStore: normalizeAiKnowledgeStore(knowledge)
-    };
-    estimatedBytes = Math.max(Number(storageBytes || 0), estimatePayloadBytes(next));
-  }
-
-  return { payload: next, estimatedBytes, pruned };
-}
-
 function normalizeAiKnowledgeStore(input = {}) {
   const defaults = buildDefaultAiKnowledgeStore();
   const store = {
     ...defaults,
     ...input,
     seeds: Array.isArray(input.seeds)
-      ? input.seeds.map((item, index) => normalizeAdListEntry(item, index)).filter(Boolean).slice(0, AI_KNOWLEDGE_MAX_SEEDS)
+      ? input.seeds.map((item, index) => normalizeAdListEntry(item, index)).filter(Boolean)
       : [],
     confirmedPatterns: Array.isArray(input.confirmedPatterns)
-      ? input.confirmedPatterns.map(normalizeKnowledgePattern).filter(Boolean).slice(0, AI_KNOWLEDGE_MAX_CONFIRMED)
+      ? input.confirmedPatterns.map(normalizeKnowledgePattern).filter(Boolean).slice(0, AI_KNOWLEDGE_MAX_CANDIDATES)
       : [],
     candidates: Array.isArray(input.candidates)
       ? input.candidates.map(normalizeKnowledgeCandidate).filter(Boolean).slice(0, AI_KNOWLEDGE_MAX_CANDIDATES)
@@ -1926,7 +1795,12 @@ function sanitizeStringList(values, limit = 12) {
 function normalizeRecommendedActionTokens(values, advisory = {}) {
   const tokens = new Set();
   const items = Array.isArray(values) ? values : [];
-  const exactTokens = new Set(AI_RECOMMENDED_ACTION_TOKENS);
+  const exactTokens = new Set([
+    'tighten_popup_guard',
+    'tune_overlay_scan',
+    'guard_external_navigation',
+    'apply_extra_blocked_domains'
+  ]);
 
   items.forEach((value) => {
     const source = String(value || '').trim().toLowerCase();
@@ -1982,166 +1856,6 @@ function normalizeRecommendedActionTokens(values, advisory = {}) {
   }
 
   return Array.from(tokens).slice(0, 4);
-}
-
-function buildChromeBuiltinAvailabilityOptions() {
-  return {
-    expectedInputs: [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }]
-  };
-}
-
-function buildChromeBuiltinAdvisorySchema() {
-  return {
-    type: 'object',
-    properties: {
-      summary: { type: 'string' },
-      confidence: { type: 'number' },
-      candidateSelectors: { type: 'array', items: { type: 'string' } },
-      candidateDomains: { type: 'array', items: { type: 'string' } },
-      recommendedActions: {
-        type: 'array',
-        items: {
-          type: 'string',
-          enum: AI_RECOMMENDED_ACTION_TOKENS
-        }
-      },
-      policy: {
-        type: 'object',
-        properties: {
-          schemaVersion: { type: 'string' },
-          policyVersion: { type: 'number' },
-          decisionId: { type: 'string' },
-          source: { type: 'string' },
-          generatedAt: { type: 'number' },
-          ttlMs: { type: 'number' },
-          scope: {
-            type: 'object',
-            properties: {
-              host: { type: 'string' },
-              frame: { type: 'string' },
-              selectorClusters: { type: 'array', items: { type: 'string' } }
-            },
-            required: ['host', 'frame']
-          },
-          risk: {
-            type: 'object',
-            properties: {
-              tier: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
-              score: { type: 'number' },
-              reasonCodes: { type: 'array', items: { type: 'string' } }
-            },
-            required: ['tier', 'score', 'reasonCodes']
-          },
-          actions: {
-            type: 'object',
-            properties: {
-              popupStrictMode: { type: 'boolean' },
-              guardExternalNavigation: { type: 'boolean' },
-              overlayScanMs: { type: 'number' },
-              sensitivityBoost: { type: 'number' },
-              forceSandbox: { type: 'boolean' },
-              extraBlockedDomains: { type: 'array', items: { type: 'string' } }
-            },
-            required: ['popupStrictMode', 'guardExternalNavigation', 'overlayScanMs', 'sensitivityBoost', 'forceSandbox', 'extraBlockedDomains']
-          }
-        },
-        required: ['schemaVersion', 'policyVersion', 'decisionId', 'source', 'generatedAt', 'ttlMs', 'scope', 'risk', 'actions']
-      }
-    },
-    required: ['summary', 'confidence', 'policy'],
-    additionalProperties: true
-  };
-}
-
-function buildChromeBuiltinElementClassificationSchema() {
-  return {
-    type: 'object',
-    properties: {
-      category: {
-        type: 'string',
-        enum: ['ad', 'suspicious', 'benign', 'tracker']
-      },
-      confidence: { type: 'number' },
-      reason: { type: 'string' },
-      suggestedAction: {
-        type: 'string',
-        enum: ['observe_only', 'hide_element', 'guard_navigation', 'block_request']
-      }
-    },
-    required: ['category', 'confidence', 'reason', 'suggestedAction'],
-    additionalProperties: false
-  };
-}
-
-function normalizeChromeBuiltinErrorMessage(error) {
-  const value = String(error?.message || error || '').trim();
-  if (!value) return 'chrome_builtin_unknown_error';
-  if (value.includes('NotAllowedError')) return 'chrome_builtin_user_activation_required';
-  if (value.includes('NotSupportedError')) return 'chrome_builtin_not_supported';
-  return value;
-}
-
-async function hasChromeBuiltinOffscreenDocument() {
-  const offscreenUrl = chrome.runtime.getURL(CHROME_BUILTIN_OFFSCREEN_PATH);
-  if (chrome.runtime.getContexts) {
-    const contexts = await chrome.runtime.getContexts({
-      contextTypes: ['OFFSCREEN_DOCUMENT'],
-      documentUrls: [offscreenUrl]
-    });
-    return contexts.length > 0;
-  }
-
-  const clients = await self.clients.matchAll();
-  return clients.some((client) => client.url === offscreenUrl);
-}
-
-async function ensureChromeBuiltinOffscreenDocument() {
-  if (!chrome.offscreen?.createDocument) {
-    throw new Error('chrome_builtin_offscreen_unsupported');
-  }
-
-  if (await hasChromeBuiltinOffscreenDocument()) {
-    return;
-  }
-
-  await chrome.offscreen.createDocument({
-    url: CHROME_BUILTIN_OFFSCREEN_PATH,
-    reasons: [chrome.offscreen?.Reason?.DOM_PARSER || 'DOM_PARSER'],
-    justification: 'Run Chrome built-in AI Prompt API in a document context for provider requests.'
-  });
-}
-
-async function callChromeBuiltinBridge(action, payload = {}, timeoutMs = CHROME_BUILTIN_DEFAULT_TIMEOUT_MS) {
-  if (!chromeBuiltinBridge) {
-    throw new Error('chrome_builtin_bridge_unavailable');
-  }
-
-  await ensureChromeBuiltinOffscreenDocument();
-
-  const requestId = typeof crypto?.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `chrome-builtin-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chromeBuiltinBridgePending.delete(requestId);
-      reject(new Error('chrome_builtin_bridge_timeout'));
-    }, timeoutMs);
-
-    chromeBuiltinBridgePending.set(requestId, {
-      resolve,
-      reject,
-      timer
-    });
-
-    chromeBuiltinBridge.postMessage({
-      direction: 'request',
-      requestId,
-      action,
-      payload
-    });
-  });
 }
 
 function getRecentTelemetryForHost(hostname, limit = LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS) {
@@ -2678,40 +2392,9 @@ function matchKnowledgeSeeds(features = {}) {
   });
 }
 
-function matchConfirmedKnowledge(hostname, features = {}) {
-  const normalizedHost = getHostname(hostname);
-  if (!normalizedHost) return [];
-
-  const summary = buildTeachFeatureSummary(features);
-  const hrefHost = getHostname(summary.href);
-  const srcHost = getHostname(summary.src);
-  const selector = String(summary.selector || '').trim().toLowerCase();
-
-  return (aiState.knowledgeStore?.confirmedPatterns || []).filter((entry) => {
-    if (Array.isArray(entry.hostnames) && entry.hostnames.length > 0 && !entry.hostnames.includes(normalizedHost)) {
-      return false;
-    }
-    if (entry.kind === 'selector') {
-      return selector && selector === String(entry.value || '').trim().toLowerCase();
-    }
-    if (entry.kind === 'domain') {
-      const value = String(entry.value || '').toLowerCase();
-      return Boolean(
-        (hrefHost && hrefHost.includes(value)) ||
-        (srcHost && srcHost.includes(value))
-      );
-    }
-    if (entry.kind === 'token') {
-      return summary.tokens.includes(String(entry.value || '').toLowerCase());
-    }
-    return false;
-  });
-}
-
 function classifyElementLocally(hostname, features = {}) {
   const summary = buildTeachFeatureSummary(features);
   const matches = matchKnowledgeSeeds(features);
-  const learnedMatches = matchConfirmedKnowledge(hostname, features);
   const categories = {
     ad: 0.08,
     suspicious: 0.1,
@@ -2723,13 +2406,6 @@ function classifyElementLocally(hostname, features = {}) {
     if (entry.category === 'ad_network') categories.tracker += 0.45;
     if (entry.category === 'overlay') categories.ad += 0.26;
     if (entry.category === 'redirect_lure' || entry.category === 'external_navigation_lure') categories.suspicious += 0.32;
-  });
-  learnedMatches.forEach((entry) => {
-    const boost = entry.userVerified ? 0.24 : 0.16;
-    if (entry.category === 'ad') categories.ad += boost;
-    if (entry.category === 'tracker') categories.tracker += boost;
-    if (entry.category === 'suspicious') categories.suspicious += boost;
-    if (entry.category === 'benign') categories.benign += boost;
   });
 
   if (summary.href && getHostname(summary.href) && getHostname(summary.href) !== getHostname(hostname)) {
@@ -2760,15 +2436,12 @@ function classifyElementLocally(hostname, features = {}) {
   return {
     category,
     confidence: clamp(Number(score.toFixed(2)), 0, 0.95),
-    reason: learnedMatches.length > 0
-      ? `matched ${learnedMatches.length} confirmed pattern(s)`
-      : matches.length > 0
+    reason: matches.length > 0
       ? `matched ${matches.length} AD LIST seed(s)`
       : category === 'benign'
       ? 'no strong ad signals found'
       : 'heuristic ad-like signals detected',
     matchedSeedIds: matches.map((entry) => entry.id),
-    matchedConfirmedIds: learnedMatches.map((entry) => entry.id),
     provider: 'local-heuristic'
   };
 }
@@ -3196,102 +2869,6 @@ function normalizeGeminiAdvisory(hostname, payload, policy, settings) {
   );
 }
 
-function normalizeChromeBuiltinAdvisory(hostname, payload, policy, settings) {
-  const parsed = payload?.json && typeof payload.json === 'object' ? payload.json : null;
-  if (!parsed) return null;
-
-  const responsePolicy = parsed?.policy && typeof parsed.policy === 'object'
-    ? parsed.policy
-    : parsed;
-
-  return normalizeGatewayAdvisory(
-    hostname,
-    {
-      summary: String(parsed?.summary || responsePolicy?.summary || '').trim(),
-      confidence: Number(parsed?.confidence || 0.8),
-      candidateSelectors: parsed?.candidateSelectors,
-      candidateDomains: parsed?.candidateDomains,
-      recommendedActions: parsed?.recommendedActions,
-      model: {
-        name: String(payload?.resolvedModel || settings?.model || CHROME_BUILTIN_DEFAULT_MODEL)
-      },
-      audit: {
-        compiled: true
-      },
-      policy: responsePolicy
-    },
-    policy,
-    settings
-  );
-}
-
-async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) {
-  try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
-    const startedAt = getNow();
-    const result = await callChromeBuiltinBridge(
-      'healthCheck',
-      {
-        availabilityOptions: buildChromeBuiltinAvailabilityOptions(),
-        promptSchema: {
-          type: 'object',
-          properties: {
-            ok: { type: 'boolean' }
-          },
-          required: ['ok'],
-          additionalProperties: false
-        },
-        systemPrompt: 'You are a JSON health-check assistant. Return JSON only.',
-        prompt: 'Return a JSON object { "ok": true }.'
-      },
-      normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
-    );
-
-    if (result.success !== true) {
-      throw new Error(String(result.error || 'chrome_builtin_unavailable'));
-    }
-
-    const resolvedModel = String(result.resolvedModel || normalized.model || CHROME_BUILTIN_DEFAULT_MODEL);
-    aiState.providerState = normalizeAiProviderState({
-      ...aiState.providerState,
-      lastHealthCheckAt: getNow(),
-      lastHealthOk: true,
-      lastLatencyMs: getNow() - startedAt,
-      lastError: '',
-      lastModelCount: 1,
-      lastResolvedModel: resolvedModel,
-      lastProvider: 'chrome_builtin',
-      lastService: 'chrome_builtin'
-    });
-    scheduleAiPersist();
-
-    return {
-      success: true,
-      provider: 'chrome_builtin',
-      endpoint: normalized.endpoint,
-      service: 'chrome_builtin',
-      resolvedModel,
-      modelCount: 1,
-      availability: String(result.availability || '')
-    };
-  } catch (error) {
-    aiState.providerState = normalizeAiProviderState({
-      ...aiState.providerState,
-      lastHealthCheckAt: getNow(),
-      lastHealthOk: false,
-      lastError: normalizeChromeBuiltinErrorMessage(error),
-      lastProvider: 'chrome_builtin'
-    });
-    scheduleAiPersist();
-    return {
-      success: false,
-      provider: 'chrome_builtin',
-      endpoint: settings?.endpoint || CHROME_BUILTIN_DEFAULT_ENDPOINT,
-      error: normalizeChromeBuiltinErrorMessage(error)
-    };
-  }
-}
-
 async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
   try {
     const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
@@ -3513,9 +3090,6 @@ async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
   if (normalized.provider === 'openai') {
     return runOpenAiHealthCheck(normalized);
   }
-  if (normalized.provider === 'chrome_builtin') {
-    return runChromeBuiltinHealthCheck(normalized);
-  }
   if (normalized.provider === 'gemini') {
     return runGeminiHealthCheck(normalized);
   }
@@ -3693,56 +3267,6 @@ async function requestGatewayAdvisory(hostname, context, policy) {
   return advisory;
 }
 
-async function requestChromeBuiltinAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
-  const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
-  const startedAt = getNow();
-  const result = await callChromeBuiltinBridge(
-    'promptJson',
-    {
-      availabilityOptions: buildChromeBuiltinAvailabilityOptions(),
-      systemPrompt: buildOpenAiInstructions(),
-      prompt: buildOpenAiInput(hostname, context, policy, recentEvents, settings),
-      schema: buildChromeBuiltinAdvisorySchema(),
-      model: settings.model || CHROME_BUILTIN_DEFAULT_MODEL
-    },
-    settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
-  );
-  const advisory = normalizeChromeBuiltinAdvisory(hostname, result, policy, settings);
-  if (!advisory) {
-    throw new Error('chrome_builtin_invalid_policy');
-  }
-
-  const normalizedHost = getHostname(hostname) || 'unknown-host';
-  aiState.providerState = normalizeAiProviderState({
-    ...aiState.providerState,
-    lastHealthCheckAt: getNow(),
-    lastHealthOk: true,
-    lastLatencyMs: getNow() - startedAt,
-    lastError: '',
-    lastResolvedModel: String(result.resolvedModel || settings.model || CHROME_BUILTIN_DEFAULT_MODEL),
-    lastProvider: 'chrome_builtin',
-    lastService: 'chrome_builtin',
-    perHostLastRun: {
-      ...(aiState.providerState?.perHostLastRun || {}),
-      [normalizedHost]: getNow()
-    }
-  });
-  aiState.providerAdvisories[normalizedHost] = advisory;
-  if (settings.enableDynamicRuleCandidates === true) {
-    const candidateSet = buildRuleCandidateSet(normalizedHost, advisory);
-    if (candidateSet) {
-      aiState.generatedRuleCandidates[normalizedHost] = candidateSet;
-      aiState.providerState = normalizeAiProviderState({
-        ...aiState.providerState,
-        lastRulePreviewAt: getNow()
-      });
-    }
-  }
-  scheduleAiPersist();
-  return advisory;
-}
-
 async function requestOpenAiAdvisory(hostname, context, policy) {
   const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
   if (!settings.apiKey) {
@@ -3886,9 +3410,6 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
   if (settings.provider === 'openai') {
     return requestOpenAiAdvisory(hostname, context, policy);
   }
-  if (settings.provider === 'chrome_builtin') {
-    return requestChromeBuiltinAdvisory(hostname, context, policy);
-  }
   if (settings.provider === 'gemini') {
     return requestGeminiAdvisory(hostname, context, policy);
   }
@@ -3907,24 +3428,6 @@ async function requestAiElementClassification(hostname, features = {}) {
 
   const prompt = buildElementClassificationPrompt(hostname, features, localResult);
   try {
-    if (settings.provider === 'chrome_builtin') {
-      const result = await callChromeBuiltinBridge(
-        'promptJson',
-        {
-          availabilityOptions: buildChromeBuiltinAvailabilityOptions(),
-          systemPrompt: 'You classify suspicious page elements. Return JSON only.',
-          prompt,
-          schema: buildChromeBuiltinElementClassificationSchema(),
-          model: settings.model || CHROME_BUILTIN_DEFAULT_MODEL
-        },
-        settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
-      );
-      return {
-        ...normalizeElementClassification(result.json, localResult),
-        provider: 'chrome_builtin'
-      };
-    }
-
     if (settings.provider === 'openai' && settings.apiKey) {
       const timeout = createRequestTimeout(settings.timeoutMs || OPENAI_DEFAULT_TIMEOUT_MS);
       let response = null;
@@ -4328,7 +3831,6 @@ function commitTeachObservation(hostname, features = {}, classification = {}, us
     }
   }
 
-  let promotedPattern = null;
   if (category === 'ad' || category === 'tracker' || category === 'suspicious') {
     const candidate = {
       hostname: normalizedHost,
@@ -4348,11 +3850,6 @@ function commitTeachObservation(hostname, features = {}, classification = {}, us
     );
     if (promotedCandidate && promotedCandidate.observations >= promotedCandidate.requiredObservations) {
       store = promoteKnowledgeCandidate(store, promotedCandidate);
-      promotedPattern = (store.confirmedPatterns || []).find((item) =>
-        item.kind === 'selector' &&
-        item.value === observation.selector &&
-        item.category === category
-      ) || null;
     }
   }
 
@@ -4360,9 +3857,7 @@ function commitTeachObservation(hostname, features = {}, classification = {}, us
   scheduleAiPersist();
   return {
     observation,
-    knowledge: aiState.knowledgeStore,
-    promoted: Boolean(promotedPattern),
-    promotedPattern
+    knowledge: aiState.knowledgeStore
   };
 }
 
@@ -4585,7 +4080,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'injectElementPicker') {
     (async () => {
       const tabId = request.tabId || sender.tab?.id;
-      const mode = String(request.mode || 'block') === 'teach' ? 'teach' : 'block';
       if (!tabId) { sendResponse({ success: false, error: 'no tab' }); return; }
       try {
         await chrome.scripting.executeScript({
@@ -4593,10 +4087,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           files: ['content/element-picker.js']
         });
         // 注入後立即啟用
-        chrome.tabs.sendMessage(tabId, {
-          action: mode === 'teach' ? 'activateTeachMode' : 'activateElementPicker'
-        });
-        sendResponse({ success: true, mode });
+        chrome.tabs.sendMessage(tabId, { action: 'activateElementPicker' });
+        sendResponse({ success: true });
       } catch (error) {
         sendResponse({ success: false, error: String(error?.message || error) });
       }

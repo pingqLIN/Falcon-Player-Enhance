@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fakeVideosRemoved = document.getElementById('fake-videos-removed');
     const playersProtected = document.getElementById('players-protected');
     const btnPickElement = document.getElementById('btn-pick-element');
-    const btnTeachElement = document.getElementById('btn-teach-element');
     const openDashboard = document.getElementById('open-dashboard');
     const popupContainer = document.querySelector('.app-container');
     const btnPinPopup = document.getElementById('btn-pin-popup');
@@ -42,9 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiPolicyAppliedAt = document.getElementById('ai-policy-applied-at');
     const aiProviderStatus = document.getElementById('ai-provider-status');
     const aiProviderModel = document.getElementById('ai-provider-model');
-    const aiLearningSeeds = document.getElementById('ai-learning-seeds');
-    const aiLearningConfirmed = document.getElementById('ai-learning-confirmed');
-    const aiLearningTeach = document.getElementById('ai-learning-teach');
     const aiGateTier = document.getElementById('ai-gate-tier');
     const aiGateMode = document.getElementById('ai-gate-mode');
     const aiGateReason = document.getElementById('ai-gate-reason');
@@ -60,7 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let blockedPlayers = [];
     let currentFlowStep = 0; // 0=detect, 1=play, 2=monitor
     let pickerActive = false;
-    let pickerMode = 'block';
     let aiPanelShowTimer = null;
     let aiPanelHideTimer = null;
     let shortcutsShowTimer = null;
@@ -900,41 +895,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiProviderModel) {
             aiProviderModel.textContent = snapshot.provider?.state?.lastResolvedModel || '-';
         }
-        const knowledge = snapshot.knowledge || {};
-        if (aiLearningSeeds) {
-            aiLearningSeeds.textContent = t('popupAiKnowledgeSeeds', [formatNumber(Number(knowledge.seedCount || 0))]);
-        }
-        if (aiLearningConfirmed) {
-            aiLearningConfirmed.textContent = t('popupAiKnowledgeLearned', [formatNumber(Number(knowledge.confirmedCount || 0))]);
-        }
-        if (aiLearningTeach) {
-            aiLearningTeach.textContent = t('popupAiKnowledgeTeach', [formatNumber(Number(knowledge.teachSessionCount || 0))]);
-        }
     }
 
     function formatPolicyGateReason(reason) {
         const value = String(reason || '').trim();
         if (!value) return 'runtime_default';
-        const key = `policyReason${value.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`;
-        const translated = t(key);
-        return translated === key ? value.replace(/_/g, ' ') : translated;
+        return value.replace(/_/g, ' ');
     }
 
     function formatPolicyGateAction(action) {
-        const value = String(action || '');
-        const fallback = value
+        return String(action || '')
             .replace(/_/g, ' ')
             .replace(/\b\w/g, (char) => char.toUpperCase());
-        const key = `policyAction${value.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`;
-        const translated = t(key);
-        return translated === key ? fallback : translated;
-    }
-
-    function formatPolicyGateMode(mode) {
-        const value = String(mode || '');
-        const key = `policyMode${value.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`;
-        const translated = t(key);
-        return translated === key ? value : translated;
     }
 
     function renderPolicyGateActions(actions) {
@@ -1037,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiGateTier.classList.add(tier.toLowerCase());
         }
         if (aiGateMode) {
-            aiGateMode.textContent = formatPolicyGateMode(policy.policyGate?.mode || 'advisory-only');
+            aiGateMode.textContent = String(policy.policyGate?.mode || 'advisory-only');
         }
         if (aiGateReason) {
             aiGateReason.textContent = formatPolicyGateReason(policy.policyGate?.reason);
@@ -1115,9 +1087,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiPolicyAppliedAt) aiPolicyAppliedAt.textContent = '-';
             if (aiProviderStatus) aiProviderStatus.textContent = t('popupAiProviderStatusOffline');
             if (aiProviderModel) aiProviderModel.textContent = '-';
-            if (aiLearningSeeds) aiLearningSeeds.textContent = t('popupAiKnowledgeSeeds', ['0']);
-            if (aiLearningConfirmed) aiLearningConfirmed.textContent = t('popupAiKnowledgeLearned', ['0']);
-            if (aiLearningTeach) aiLearningTeach.textContent = t('popupAiKnowledgeTeach', ['0']);
             if (aiGateTier) {
                 aiGateTier.textContent = 'T1';
                 aiGateTier.classList.remove('t1', 't2', 't3');
@@ -1210,28 +1179,13 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadAiMonitorState();
     }
 
-    function updatePickerButtonState(active, mode = 'block') {
+    function updatePickerButtonState(active) {
         pickerActive = !!active;
-        pickerMode = mode || 'block';
-        const blockActive = pickerActive && pickerMode === 'block';
-        const teachActive = pickerActive && pickerMode === 'teach';
-
-        btnPickElement.textContent = blockActive ? '⏹' : '🚫';
-        btnPickElement.title = blockActive ? t('popupPickElementTitleActive') : t('popupPickElementTitleInactive');
+        btnPickElement.textContent = pickerActive ? '⏹' : '🚫';
+        btnPickElement.title = pickerActive ? t('popupPickElementTitleActive') : t('popupPickElementTitleInactive');
         btnPickElement.setAttribute('aria-label', btnPickElement.title);
-        btnPickElement.classList.toggle('active', blockActive);
-
-        if (btnTeachElement) {
-            btnTeachElement.textContent = teachActive ? '⏹' : '🎓';
-            btnTeachElement.title = teachActive ? t('popupTeachElementTitleActive') : t('popupTeachElementTitleInactive');
-            btnTeachElement.setAttribute('aria-label', btnTeachElement.title);
-            btnTeachElement.classList.toggle('active', teachActive);
-        }
-
         const pinnedIcon = document.querySelector('#pinned-pick-element .pinned-toolbar-icon');
-        if (pinnedIcon) pinnedIcon.textContent = blockActive ? '⏹' : '🚫';
-        const pinnedTeachIcon = document.querySelector('#pinned-teach-element .pinned-toolbar-icon');
-        if (pinnedTeachIcon) pinnedTeachIcon.textContent = teachActive ? '⏹' : '🎓';
+        if (pinnedIcon) pinnedIcon.textContent = pickerActive ? '⏹' : '🚫';
     }
 
     async function syncPickerState() {
@@ -1243,37 +1197,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve) => {
             chrome.tabs.sendMessage(currentTabId, { action: 'getPickerState' }, (response) => {
                 if (chrome.runtime.lastError) {
-                    updatePickerButtonState(false, 'block');
+                    updatePickerButtonState(false);
                     resolve();
                     return;
                 }
-                updatePickerButtonState(Boolean(response?.active), String(response?.mode || 'block'));
+                updatePickerButtonState(Boolean(response?.active));
                 resolve();
             });
         });
     }
 
-    async function toggleElementPicker(mode = 'block') {
+    async function toggleElementPicker() {
         if (!currentTabId || masterToggle.checked === false) return;
 
-        if (pickerActive && pickerMode === mode) {
+        if (pickerActive) {
             // 停用：直接發送到 content script
             chrome.tabs.sendMessage(currentTabId, { action: 'deactivateElementPicker' }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error('Failed to deactivate element picker:', chrome.runtime.lastError.message);
                     return;
                 }
-                updatePickerButtonState(false, 'block');
+                updatePickerButtonState(false);
             });
         } else {
             // 啟用：透過 background 按需注入後自動啟用
-            chrome.runtime.sendMessage({ action: 'injectElementPicker', tabId: currentTabId, mode }, (response) => {
+            chrome.runtime.sendMessage({ action: 'injectElementPicker', tabId: currentTabId }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error('Failed to inject element picker:', chrome.runtime.lastError.message);
                     return;
                 }
                 if (response?.success) {
-                    updatePickerButtonState(true, mode);
+                    updatePickerButtonState(true);
                     // 啟動後關閉 popup，讓使用者可以直接在頁面選取元素
                     window.close();
                 }
@@ -1348,14 +1302,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnPickElement.addEventListener('click', async () => {
-        await toggleElementPicker('block');
+        await toggleElementPicker();
     });
-
-    if (btnTeachElement) {
-        btnTeachElement.addEventListener('click', async () => {
-            await toggleElementPicker('teach');
-        });
-    }
 
     async function triggerForceDetect() {
         if (!currentTabId) return;
@@ -1451,15 +1399,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Pinned-mode toolbar: delegate clicks to original handlers
     const pinnedPickElement = document.getElementById('pinned-pick-element');
-    const pinnedTeachElement = document.getElementById('pinned-teach-element');
     const pinnedOpenDashboard = document.getElementById('pinned-open-dashboard');
     const pinnedAddSite = document.getElementById('pinned-add-site');
 
     if (pinnedPickElement) {
         pinnedPickElement.addEventListener('click', () => btnPickElement?.click());
-    }
-    if (pinnedTeachElement) {
-        pinnedTeachElement.addEventListener('click', () => btnTeachElement?.click());
     }
     if (pinnedOpenDashboard) {
         pinnedOpenDashboard.addEventListener('click', () => openDashboard?.click());
@@ -1527,11 +1471,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDisabledState(disabled) {
         popupContainer.classList.toggle('disabled', disabled);
         btnPickElement.disabled = disabled;
-        if (btnTeachElement) btnTeachElement.disabled = disabled;
         const pinnedPick = document.getElementById('pinned-pick-element');
         if (pinnedPick) pinnedPick.disabled = disabled;
-        const pinnedTeach = document.getElementById('pinned-teach-element');
-        if (pinnedTeach) pinnedTeach.disabled = disabled;
         if (btnRescan) btnRescan.disabled = disabled;
         if (aiMonitorToggle) aiMonitorToggle.disabled = disabled;
         if (btnExportAi) btnExportAi.disabled = disabled;
@@ -1584,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (changes.stats) {
             loadStats();
         }
-        if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks || changes.aiKnowledgeStore) {
+        if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
             loadAiMonitorState();
         }
         if (changes.blockingLevel) {
