@@ -63,7 +63,10 @@ def load_targets(path: Path) -> list[dict[str, Any]]:
                 "name": str(item.get("name") or f"target-{index}"),
                 "url": url,
                 "tags": item.get("tags") if isinstance(item.get("tags"), list) else [],
-                "requiresManualReview": bool(item.get("requiresManualReview", False))
+                "requiresManualReview": bool(item.get("requiresManualReview", False)),
+                "verificationMode": str(item.get("verificationMode") or "browser_judge"),
+                "expectedSignals": item.get("expectedSignals") if isinstance(item.get("expectedSignals"), dict) else {},
+                "reproSteps": item.get("reproSteps") if isinstance(item.get("reproSteps"), list) else []
             }
         )
     return normalized
@@ -239,6 +242,40 @@ def build_suggestions(snapshot: dict[str, Any], reasons: list[str]) -> list[str]
         suggestions.append("No action needed. Keep this page in the reviewed regression pool.")
 
     return suggestions
+
+
+def validate_expected_signals(snapshot: dict[str, Any], expected_signals: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    if not expected_signals:
+        return failures
+
+    if "playerDetected" in expected_signals and bool(snapshot.get("playerDetected")) != bool(expected_signals["playerDetected"]):
+        failures.append(
+            f"playerDetected expected {bool(expected_signals['playerDetected'])}, got {bool(snapshot.get('playerDetected'))}"
+        )
+
+    if "interstitialType" in expected_signals and snapshot.get("interstitialType") != expected_signals["interstitialType"]:
+        failures.append(
+            f"interstitialType expected {expected_signals['interstitialType']!r}, got {snapshot.get('interstitialType')!r}"
+        )
+
+    numeric_keys = [
+        ("popupCount", "minPopupCount", "maxPopupCount"),
+        ("overlayCount", "minOverlayCount", "maxOverlayCount"),
+        ("suspiciousNavCount", "minSuspiciousNavCount", "maxSuspiciousNavCount"),
+        ("consoleErrorCount", "minConsoleErrorCount", "maxConsoleErrorCount"),
+        ("score", "minScore", "maxScore")
+    ]
+    for value_key, min_key, max_key in numeric_keys:
+        actual = float(snapshot.get(value_key, 0))
+        if min_key in expected_signals and actual < float(expected_signals[min_key]):
+            failures.append(f"{value_key} expected >= {expected_signals[min_key]}, got {actual}")
+        if max_key in expected_signals and actual > float(expected_signals[max_key]):
+            failures.append(f"{value_key} expected <= {expected_signals[max_key]}, got {actual}")
+        if value_key in expected_signals and actual != float(expected_signals[value_key]):
+            failures.append(f"{value_key} expected {expected_signals[value_key]}, got {actual}")
+
+    return failures
 
 
 def evaluate_page(page, settle_ms: int) -> dict[str, Any]:
@@ -474,14 +511,25 @@ def run() -> int:
                     snapshot = evaluate_page(page, args.settle_ms)
                     page.screenshot(path=str(screenshot_path), full_page=True)
                     score, reasons = score_snapshot(snapshot)
+                    signal_failures = validate_expected_signals(snapshot, target.get("expectedSignals", {}))
+                    expected_signals = target.get("expectedSignals", {})
+                    has_expected_signals = bool(expected_signals)
+                    ok = (
+                        not signal_failures
+                        if has_expected_signals
+                        else score >= args.pass_threshold and snapshot.get("playerDetected") and snapshot.get("overlayCount", 0) == 0
+                    )
                     result.update(
                         {
-                            "ok": score >= args.pass_threshold and snapshot.get("playerDetected") and snapshot.get("overlayCount", 0) == 0,
+                            "ok": ok,
                             "score": score,
                             "reasons": reasons,
                             "suggestions": build_suggestions(snapshot, reasons),
                             "screenshot": str(screenshot_path),
-                            "snapshot": snapshot
+                            "snapshot": snapshot,
+                            "verificationMode": target.get("verificationMode", "browser_judge"),
+                            "expectedSignals": expected_signals,
+                            "signalFailures": signal_failures
                         }
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -498,7 +546,10 @@ def run() -> int:
                                 "popupCount": 0,
                                 "suspiciousNavCount": 0,
                                 "consoleErrorCount": 0
-                            }
+                            },
+                            "verificationMode": target.get("verificationMode", "browser_judge"),
+                            "expectedSignals": target.get("expectedSignals", {}),
+                            "signalFailures": [f"Navigation or evaluation failed: {exc}"]
                         }
                     )
                 finally:

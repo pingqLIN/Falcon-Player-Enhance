@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Direct Popup Verification</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #111827;
+        color: #e5e7eb;
+        font-family: Arial, sans-serif;
+      }
+
+      .stage {
+        position: relative;
+        width: 960px;
+        height: 540px;
+        margin: 24px;
+        background: #000;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+      }
+
+      iframe {
+        display: block;
+        width: 960px;
+        height: 540px;
+        border: 0;
+        background: #000;
+      }
+
+      .overlay {
+        position: fixed;
+        top: 96px;
+        left: 80px;
+        width: 720px;
+        height: 320px;
+        z-index: 50;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" aria-label="verification player shell">
+      <iframe
+        title="verification-player"
+        srcdoc='<!doctype html><html lang="en"><head><meta charset="utf-8" /><style>html,body{margin:0;width:100%;height:100%;background:#020617;color:#f8fafc;font-family:Arial,sans-serif}body{display:flex;align-items:center;justify-content:center;font-size:28px;letter-spacing:.04em}</style></head><body>Player Ready</body></html>'
+      ></iframe>
+    </main>
+
+    <div class="overlay" role="dialog" aria-label="direct popup overlay">
+      <div>
+        <div style="font-size: 24px; font-weight: 700; margin-bottom: 12px;">Direct popup overlay</div>
+        <div style="font-size: 16px; line-height: 1.5;">This overlay deliberately overlaps the player area so browser_judge can score a direct-popup style obstruction without manual inspection.</div>
+      </div>
+    </div>
+
+    <script>
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const popup = window.open('about:blank', 'verification-popup', 'width=320,height=240');
+          if (popup) {
+            popup.document.write('<!doctype html><html lang="en"><body style="margin:0;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#111827;color:#e5e7eb">Popup Ready</body></html>');
+            popup.document.close();
+          }
+        }, 120);
+      });
+    </script>
+  </body>
+</html>

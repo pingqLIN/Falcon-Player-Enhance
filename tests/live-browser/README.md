@@ -7,6 +7,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 - `browser_judge.py`: opens targets in Chromium, scores each page, saves evidence.
 - `import_bookmarks.py`: converts a Netscape bookmarks export into reviewed target candidates.
 - `self_learning_loop.py`: orchestrates judge -> regressions -> structured Codex review -> optional patch agent -> retry.
+- `test_popup_verification.py`: repeatable popup-player / direct-popup smoke coverage using local fixtures.
 - `targets.example.json`: reviewed target format.
 - `targets.external-ai.single-page.curated.json`: curated single-page regression targets imported from an external AI review pass.
 - `targets.external-ai.single-page.smoke.json`: reduced smoke subset for faster live-browser validation, updated to keep only validated lower-noise seeds after the first smoke pass.
@@ -20,6 +21,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 python tests/live-browser/import_bookmarks.py --help
 python tests/live-browser/browser_judge.py --help
 python tests/live-browser/self_learning_loop.py --help
+python tests/live-browser/test_popup_verification.py
 pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 ```
 
@@ -50,6 +52,7 @@ Current file mapping:
 - For reliable uBlock coverage, prefer either:
   - an unpacked uBlock directory via `--ublock-extension-dir`
   - an existing Chromium profile via `--browser-profile-dir`
+- `test_popup_verification.py` uses temporary browser-profile storage outside the repo so the verification run stays clean and repeatable.
 
 ## Built-In Patch Agents
 
