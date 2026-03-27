@@ -144,11 +144,11 @@ extension 目前已支援以下 provider:
 - fuzzy fallback 只接受更窄的短語，如 `guard external navigation`、`increase overlay scan`
 - `tests/ai-eval/run-openai-direct-evaluation.js` 也同步收緊，避免 runtime 與 eval 行為分岔
 
-#### F4 — Shield Pro 品牌殘留
+#### F4 — Falcon-Player-Enhance 品牌殘留
 
 先前問題:
 
-- extension 內仍有 9 處 `Shield Pro`
+- extension 內仍有 9 處 `Falcon-Player-Enhance`
 - `extension/rules/noop.js` 還會在 MAIN world `console.log`
 
 目前狀態:

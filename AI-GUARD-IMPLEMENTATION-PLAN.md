@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a practical AI-assisted protection stack for Shield Pro with three distinct roles:
+Build a practical AI-assisted protection stack for Falcon-Player-Enhance with three distinct roles:
 
 1. `Codex reviewer`: development-time evaluator and repair orchestrator
 2. `Gemini Nano guard`: runtime local advisory guard inside the browser environment
@@ -22,7 +22,7 @@ The repository already has a usable live-browser validation loop:
 Current strengths:
 
 - reviewed target import from bookmark exports
-- Chromium + Shield Pro + uBlock Origin Lite live validation
+- Chromium + Falcon-Player-Enhance + uBlock Origin Lite live validation
 - browser evidence capture via screenshots and DOM snapshot summaries
 - optional patch-agent loop using `codex`, `claude`, or `opencode`
 - offline regression gates:
@@ -159,7 +159,7 @@ The Gemini Nano starter already demonstrates:
 
 ### Feasibility Questions
 
-1. Can Shield Pro extension code access Prompt API reliably in the intended Chrome environment?
+1. Can Falcon-Player-Enhance extension code access Prompt API reliably in the intended Chrome environment?
 2. What is the average decision latency for short DOM classification prompts?
 3. Is the API stable enough under multiple tabs and noisy pages?
 4. Can entity isolation prevent conversation bleed across hosts/tabs?
@@ -200,7 +200,7 @@ For each test host, record:
 
 ### Deliverables
 
-1. A small integration probe inside Shield Pro test harness
+1. A small integration probe inside Falcon-Player-Enhance test harness
 2. A `nano_guard_probe` report format
 3. A compatibility matrix by host/page type
 4. A recommendation: `proceed`, `proceed-advisory-only`, or `do-not-integrate`
@@ -227,7 +227,7 @@ Observed on `2026-03-13` in the local harness:
 
 Current conclusion:
 
-- treat Gemini Nano as `not yet production-viable` for Shield Pro runtime guard decisions
+- treat Gemini Nano as `not yet production-viable` for Falcon-Player-Enhance runtime guard decisions
 - continue feasibility testing only
 - do not make runtime policy depend on Nano availability
 

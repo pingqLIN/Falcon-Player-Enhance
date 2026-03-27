@@ -147,8 +147,7 @@ Popup 頂部以視覺流程圖引導使用者：
 | 按鈕 | 功能 |
 |------|------|
 | 🚫 | Pick Element — 選取元素模式（手動標記廣告） |
-| 🤖 | Teach Element — AI 學習模式 |
-| ＋ | 新增功能（保留） |
+| ➕ | Promote site — 將目前網站升級為增強保護 |
 | ⚙ | 開啟 Dashboard 設定面板 |
 | 快捷鍵參考 | 可展開的快捷鍵速查表 |
 
@@ -455,7 +454,7 @@ xvideos.com     1 rule
 | 操作 | 說明 |
 |------|------|
 | **Reset statistics** | 清除所有計數器（overlays、popups、players、AI assessments） |
-| 資料匯出/匯入 | 備份與還原設定（保留功能） |
+| **Export candidates / Export data** | 匯出 AI 候選規則或 AI 遙測資料，方便外部審查與回放 |
 
 ---
 

@@ -2,124 +2,87 @@
 
 ## 安裝步驟
 
-### 方法 1: 從原始檔安裝 (開發模式)
+1. 開啟 `chrome://extensions/`
+2. 啟用右上角的「開發人員模式」
+3. 點擊「載入未封裝項目」
+4. 選擇 `Falcon-Player-Enhance/extension`
+5. 確認工具列已出現 Falcon-Player-Enhance 圖示
 
-1. **開啟 Chrome 擴充功能頁面**
-   - 在網址列輸入 `chrome://extensions/`
-   - 或點擊右上角 ⋮ → 擴充功能 → 管理擴充功能
+![擴充功能 Popup 畫面](docs/screenshots/09-popup-main.png)
 
-2. **啟用開發者模式**
-   - 在頁面右上角找到「開發人員模式」開關
-   - 將其切換至「開啟」狀態
+## 首次檢查
 
-3. **載入擴充功能**
-   - 點擊左上角的「載入未封裝項目」按鈕
-   - 選擇此專案下的資料夾: `ad-blocker-player-enhancer/extension`
-   - 點擊「選擇資料夾」
+| 項目 | 預期結果 |
+|------|----------|
+| 擴充功能主開關 | 預設為開啟 |
+| 封鎖等級 | 預設為 `L2 Standard` |
+| 側邊欄 / Popup | 左鍵開啟側邊欄，右鍵可開啟 popup 視窗 |
+| Dashboard 語系 | 可切換 `Auto / 繁體中文 / English` |
 
-4. **確認安裝成功**
-   - 您應該會看到擴充功能出現在清單中
-   - 圖示會顯示在瀏覽器工具列
+## 主要介面
 
-## 使用說明
+### Popup
 
-### 基本功能
+- 顯示三步驟流程：`CLICK → DETECT → PLAY`
+- 顯示四張統計卡：`Overlays / Popups / Fake videos / Protected`
+- 可直接調整封鎖等級、啟用元素封鎖、將目前網站升級為增強保護
 
-#### 🛡️ 自動防護
+### Dashboard
 
-擴充功能會自動在背景運行,攔截:
+![Dashboard 畫面](docs/screenshots/11-dashboard-actual.png)
 
-- ✅ 彈出式廣告
-- ✅ 追蹤腳本 (Google Analytics, Facebook Pixel 等)
-- ✅ 惡意程式連結
-- ✅ 未授權的彈出視窗
+| 分頁 | 功能 |
+|------|------|
+| `Overview` | 保護狀態、統計卡、Popup 顯示設定、快捷鍵參考 |
+| `Sites` | 白名單、黑名單、增強站點、比對範圍預覽 |
+| `AI` | Provider、API key、模式、候選規則、健康檢查 |
+| `Advanced` | Runtime policy gate、高風險站點、Sandbox、Blocked elements |
 
-#### 🎬 播放器優化
+## AI Provider 設定
 
-當您訪問包含媒體播放器的網站時:
+| Provider | 用途 | 需要設定 |
+|----------|------|----------|
+| `OpenAI` | 雲端模型分析 | API key |
+| `Gemini` | Google AI 分析 | API key |
+| `LM Studio` | 本機模型 | 本機 endpoint |
+| `Gateway` | 自訂代理服務 | endpoint，必要時加 API key |
 
-- ✅ 自動偵測 HTML5 video 與 iframe 播放器
-- ✅ 為播放器添加醒目的綠色邊框標示
-- ✅ 自動調整播放器至最高顯示層級
-- ✅ 移除覆蓋在播放器上的廣告元素
+預設 LM Studio endpoint:
 
-### 查看統計資料
-
-1. 點擊瀏覽器工具列上的擴充功能圖示
-2. 彈出視窗會顯示:
-   - 已攔截的廣告數量
-   - 已阻擋的追蹤碼數量
-   - 已防護的惡意程式數量
-   - 已攔截的彈出視窗數量
-   - 當前頁面偵測到的播放器數量
-
-### 控制功能
-
-- **🔄 重新整理統計** - 刷新顯示的數據
-- **🗑️ 清除統計** - 重置所有計數器
-
-## 支援的網站
-
-### 播放器偵測支援
-
-- ✅ YouTube
-- ✅ Vimeo
-- ✅ Dailymotion
-- ✅ Twitch
-- ✅ Facebook Video
-- ✅ 所有 HTML5 video 播放器
-- ✅ 大多數自訂播放器
-
-### 廣告攔截支援
-
-- ✅ Google Ads
-- ✅ DoubleClick
-- ✅ Taboola
-- ✅ Outbrain
-- ✅ 大多數常見廣告網路
+```text
+http://127.0.0.1:1234/v1/chat/completions
+```
 
 ## 疑難排解
 
-### 問題: 擴充功能無法載入
+### 擴充功能無法載入
 
-**解決方法:**
+1. 確認已啟用開發人員模式
+2. 確認 `extension/manifest.json` 存在
+3. 檢查 Chrome 擴充功能頁的錯誤訊息
 
-1. 確認已啟用「開發人員模式」
-2. 檢查資料夾中是否包含 `manifest.json`
-3. 查看 Chrome 是否顯示錯誤訊息
-
-### 問題: 播放器沒有被標示
-
-**解決方法:**
+### Popup 沒有偵測到播放器
 
 1. 重新整理頁面
-2. 檢查瀏覽器控制台 (F12) 是否有錯誤訊息
-3. 某些動態載入的播放器可能需要等待 2-5 秒
+2. 再按一次 `DETECT`
+3. 等待動態播放器載入完成後再測試
 
-### 問題: 統計數字不更新
+### AI provider 無法連線
 
-**解決方法:**
+1. 到 Dashboard 的 `AI` 分頁
+2. 檢查 API key 或 endpoint
+3. 使用 `Health check` 確認服務狀態
 
-1. 點擊「重新整理統計」按鈕
-2. 關閉並重新開啟 popup 視窗
+## 隱私與資料
 
+- 所有保護邏輯預設在本地執行
+- AI provider 僅在你啟用後才會被使用
+- 統計、站點清單、候選規則與 AI 狀態都保存在瀏覽器本機儲存
 
-## 隱私權
+## 延伸文件
 
-- ✅ 不收集任何使用者資料
-- ✅ 預設不連接外部伺服器
-- ✅ 所有處理都在本地進行
-- ✅ 統計資料僅保存在您的瀏覽器中
-
-### LM Studio 本地模型
-
-- 可選功能，需自行在本機啟動 LM Studio local server
-- 預設端點: `http://127.0.0.1:1234/v1/chat/completions`
-- 功能用途:
-  - 本地風險策略建議
-  - 播放器廣告遮罩候選規則產生
-- 目前只接受結構化建議與候選規則，不直接執行模型生成程式碼
-
-## 授權
-
-MIT License - 您可以自由使用、修改與分發此擴充功能。
+| 文件 | 說明 |
+|------|------|
+| `README.zh-TW.md` | 專案總覽與截圖 |
+| `docs/FEATURE_GUIDE.zh-TW.md` | 完整功能導覽 |
+| `docs/PROGRESS_SNAPSHOT.zh-TW.md` | 最新開發進度 |

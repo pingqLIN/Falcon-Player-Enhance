@@ -1,4 +1,4 @@
-# Shield Pro 替代架構提案：Probe-First + 最小權限模型
+# Falcon-Player-Enhance 替代架構提案：Probe-First + 最小權限模型
 
 > 這份提案從**不同角度**補充先前的三層式架構提案，聚焦於：探測優先注入、權限最小化、CSS 安全防線、以及業界模式參照。
 
@@ -239,7 +239,7 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
     await injectSiteScopedCSS(details.tabId, details.frameId, hostname);
     
   } catch (err) {
-    console.warn(`[Shield Pro] Injection failed for ${hostname}:`, err);
+    console.warn(`[Falcon-Player-Enhance] Injection failed for ${hostname}:`, err);
   }
 }, { url: PLAYER_URL_FILTERS });
 
@@ -274,7 +274,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
       });
     }
   } catch (err) {
-    console.warn(`[Shield Pro] Idle injection failed for ${hostname}:`, err);
+    console.warn(`[Falcon-Player-Enhance] Idle injection failed for ${hostname}:`, err);
   }
 }, { url: PLAYER_URL_FILTERS });
 ```
@@ -715,7 +715,7 @@ const PLAYER_PROTECTION_CSS = `
     display: none !important;
   }
   
-  /* Shield Pro 自身的 UI 元素 */
+  /* Falcon-Player-Enhance 自身的 UI 元素 */
   .player-enhanced-badge {
     /* ... badge styles ... */
   }
@@ -1104,7 +1104,7 @@ async function runFalsePositiveTests(extensionPath) {
           for (const sel of KNOWN_SAFE_SELECTORS) {
             if (el.matches?.(sel)) {
               console.warn(
-                `⚠️ [Shield Pro Self-Check] Potentially false positive:`,
+                `⚠️ [Falcon-Player-Enhance Self-Check] Potentially false positive:`,
                 `Element matching "${sel}" was hidden.`,
                 el
               );
@@ -1195,7 +1195,7 @@ async function removeCustomSite(domain) {
 ### 7.4 防止復發的架構守則
 
 ```
-📋 Shield Pro 架構守則（Team Agreement）
+📋 Falcon-Player-Enhance 架構守則（Team Agreement）
 
 1. 【正面清單原則】
    content_scripts 的 matches 欄位永遠使用正面清單
@@ -1254,7 +1254,7 @@ uBOL 在 MV3 下的策略：
 └─────────────────────────────────────────────────┘
 ```
 
-**Shield Pro 可借鑑的模式**：
+**Falcon-Player-Enhance 可借鑑的模式**：
 - **Domain-scoped cosmetic filters**：每條 CSS 規則都綁到具體域名
 - **Filtering mode 分級**：Basic（純 DNR）→ Optimal（+ cosmetic）→ Complete（+ scriptlets）
 - **無 `<all_urls>` 也能運作**的純 DNR 模式
@@ -1285,7 +1285,7 @@ uBOL 在 MV3 下的策略：
 └─────────────────────────────────────────────────┘
 ```
 
-**Shield Pro 可借鑑的模式**：
+**Falcon-Player-Enhance 可借鑑的模式**：
 - **`chrome.scripting.insertCSS()` 動態注入**：比靜態 CSS 檔案更安全
 - **Scriptlet 庫模式**：將 `inject-blocker.js` 中的各項功能拆成獨立 scriptlets，按需注入
 - **$domain modifier 概念**：每條規則明確標記適用域名
@@ -1314,13 +1314,13 @@ uBOL 在 MV3 下的策略：
 └─────────────────────────────────────────────────┘
 ```
 
-**Shield Pro 可借鑑的模式**：
+**Falcon-Player-Enhance 可借鑑的模式**：
 - **Per-tab 規則切換**：用 `chrome.declarativeNetRequest.updateSessionRules` + `tabIds` 條件
 - **上下文感知阻擋**：`overlay-remover.js` 應該要有更多頁面上下文判斷
 
 ### 8.4 業界共識總結
 
-| 模式 | uBOL | AdGuard | Ghostery | Shield Pro 應採用 |
+| 模式 | uBOL | AdGuard | Ghostery | Falcon-Player-Enhance 應採用 |
 |---|---|---|---|---|
 | 全域 CSS | ❌ 不用 | ❌ 不用 | ❌ 不用 | ❌ 應淘汰 |
 | Domain-scoped CSS | ✅ | ✅ | ✅ | ✅ 改用此模式 |

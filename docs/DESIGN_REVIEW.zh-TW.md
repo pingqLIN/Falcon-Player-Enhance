@@ -218,7 +218,7 @@
 
 ### 致命缺口：無 DESIGN.md
 
-設計系統規格只存在於 `/* Shield Pro v4.0 — Three-Gray Achromatic Design System */` 這一行 CSS 註解，沒有：
+設計系統規格只存在於 `/* Falcon-Player-Enhance v4.0 — Three-Gray Achromatic Design System */` 這一行 CSS 註解，沒有：
 - 完整 token 清單
 - 元件庫清單
 - 設計決策記錄（為什麼選無彩色？）

@@ -3,7 +3,7 @@
 This repository now includes an MVP design for a live-browser validation loop that can:
 
 1. Discover or import new target pages from search/forum workflows.
-2. Open pages in Chromium with both Shield Pro and uBlock enabled.
+2. Open pages in Chromium with both Falcon-Player-Enhance and uBlock enabled.
 3. Score each page with a browser-working judge agent.
 4. Produce a patch brief for an external coding agent.
 5. Re-run live checks plus existing offline regressions until the stop condition is met.
@@ -62,7 +62,7 @@ python tests/live-browser/import_bookmarks.py `
 
 `tests/live-browser/browser_judge.py` launches Chromium in a persistent context and:
 
-- Loads Shield Pro as an unpacked extension.
+- Loads Falcon-Player-Enhance as an unpacked extension.
 - Optionally loads uBlock as another unpacked extension.
 - Optionally reuses a browser profile where uBlock is already installed.
 - Visits each target page and records:
@@ -115,7 +115,7 @@ This is the most reproducible mode if you have an unpacked copy of uBlock Origin
 
 Provide `--browser-profile-dir <path>`.
 
-Use this when uBlock is already installed in a Chromium/Chrome profile and you only need the loop to inject Shield Pro alongside it.
+Use this when uBlock is already installed in a Chromium/Chrome profile and you only need the loop to inject Falcon-Player-Enhance alongside it.
 
 ## Safety Guardrails
 

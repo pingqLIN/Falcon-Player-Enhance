@@ -50,14 +50,14 @@ Three-tier fallback (`chrome.windows.create` → `window.open(extension URL)` �
 |----------|-----------|
 | `README.md`, `manifest.json` | Falcon-Player-Enhance |
 | `background.js` code | APP_BRAND = `'Falcon-Player-Enhance'` |
-| `inject-blocker.js` comments | Shield Pro |
-| `ai-runtime.js` header | Shield Pro |
-| `.DEVELOPMENT_PLAN.md` | Shield Pro 重構 |
-| `POLICY-GATE.md` | Shield Pro |
+| `inject-blocker.js` comments | Falcon-Player-Enhance |
+| `ai-runtime.js` header | Falcon-Player-Enhance |
+| `.DEVELOPMENT_PLAN.md` | Falcon-Player-Enhance 重構 |
+| `POLICY-GATE.md` | Falcon-Player-Enhance |
 
 **Problem:** Internal code and external documentation use different brand names, indicating the refactoring is incomplete and creating maintenance confusion.
 
-**Recommendation:** Standardize on `Falcon-Player-Enhance` and replace all `Shield Pro` strings throughout the codebase.
+**Recommendation:** Standardize on `Falcon-Player-Enhance` and replace all `Falcon-Player-Enhance` strings throughout the codebase.
 
 ### 2.2 Unclear Refactoring Status 🟡 Medium Priority
 
@@ -126,7 +126,7 @@ Chrome Web Store policy prohibits extensions primarily targeting adult content s
 #### 3.2.2 Developer Machine Path Leaked in POLICY-GATE.md
 
 ```
-[background.js](C:\Dev\Projects\ad-blocker-player-enhancer\extension\background.js)
+[background.js](C:\Dev\Projects\Falcon-Player-Enhance\extension\background.js)
 ```
 
 Absolute paths to the developer's local machine are hardcoded in documentation.
@@ -294,7 +294,7 @@ Complex MAIN world scripts lack static analysis protection.
 
 | Priority | Action |
 |----------|--------|
-| P1 | Unify brand naming — replace all `Shield Pro` with `Falcon-Player-Enhance` |
+| P1 | Unify brand naming — replace all `Falcon-Player-Enhance` with `Falcon-Player-Enhance` |
 | P1 | Choose one canonical architecture doc; archive the others |
 | P2 | Add unit tests for `isInternalElement`, `detectPlayers`, overlay rules |
 | P2 | Address multi-frame race condition with policy versioning (audit Phase A) |

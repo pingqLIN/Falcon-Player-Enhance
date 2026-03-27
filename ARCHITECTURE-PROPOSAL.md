@@ -1,4 +1,4 @@
-# Shield Pro 架構重構提案：從負面清單到正面清單
+# Falcon-Player-Enhance 架構重構提案：從負面清單到正面清單
 
 ## 目錄
 
@@ -124,7 +124,7 @@
 
 ```javascript
 // ============================================================================
-// Shield Pro - Centralized Site Registry (Single Source of Truth)
+// Falcon-Player-Enhance - Centralized Site Registry (Single Source of Truth)
 // ============================================================================
 // 所有站點清單的唯一定義。其他模組一律引用此處。
 // ============================================================================

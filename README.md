@@ -112,7 +112,7 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 | Feature | Description |
 |---------|-------------|
 | **Element Picker** | Click any page element to create a custom blocking rule |
-| **AI Teach Mode** | Click elements to train the AI — it decides how to handle them |
+| **Enhanced Site Promotion** | Promote the current host into the enhanced-protection pool from the popup or dashboard |
 | **4-Level Blocking** | OFF → BASIC → STANDARD → HARDENED protection levels |
 | **Dashboard** | Full settings panel with 4 tabs: Overview / Sites / AI / Advanced |
 | **Whitelist / Blacklist** | Per-site protection policies |

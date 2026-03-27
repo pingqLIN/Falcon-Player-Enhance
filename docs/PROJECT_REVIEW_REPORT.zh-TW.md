@@ -49,14 +49,14 @@ Policy Gate（T0–T3）層級制度設計嚴謹，明確禁止 AI 直接執行 
 |------|----------|
 | `README.md`、`manifest.json` | Falcon-Player-Enhance |
 | `background.js` 程式碼 | APP_BRAND = `'Falcon-Player-Enhance'` |
-| `inject-blocker.js` 註解 | Shield Pro |
-| `ai-runtime.js` 標頭 | Shield Pro |
-| `.DEVELOPMENT_PLAN.md` | Shield Pro 重構 |
-| `POLICY-GATE.md` | Shield Pro |
+| `inject-blocker.js` 註解 | Falcon-Player-Enhance |
+| `ai-runtime.js` 標頭 | Falcon-Player-Enhance |
+| `.DEVELOPMENT_PLAN.md` | Falcon-Player-Enhance 重構 |
+| `POLICY-GATE.md` | Falcon-Player-Enhance |
 
 **問題**：程式碼內部與外部文件品牌不統一，顯示重構尚未完成，容易造成維護混亂。
 
-**建議**：統一採用 `Falcon-Player-Enhance`，全面替換程式碼中的 `Shield Pro` 字串。
+**建議**：統一採用 `Falcon-Player-Enhance`，全面替換程式碼中的 `Falcon-Player-Enhance` 字串。
 
 ### 2.2 重構狀態不明確 🟡 中優先
 
@@ -125,7 +125,7 @@ manifest.json 同時請求：
 #### 3.2.2 POLICY-GATE.md 洩漏開發機器路徑
 
 ```
-[background.js](C:\Dev\Projects\ad-blocker-player-enhancer\extension\background.js)
+[background.js](C:\Dev\Projects\Falcon-Player-Enhance\extension\background.js)
 ```
 
 文件中硬編碼了開發者的本機絕對路徑，不應進入版本控制。
@@ -323,7 +323,7 @@ manifest.json 同時請求：
 
 | 優先 | 項目 | 說明 |
 |------|------|------|
-| P1 | 統一品牌名稱 | 全面將 `Shield Pro` 替換為 `Falcon-Player-Enhance` |
+| P1 | 統一品牌名稱 | 全面將 `Falcon-Player-Enhance` 替換為 `Falcon-Player-Enhance` |
 | P1 | 確定架構方向 | 選定一份架構文件為主，其他標記為歷史記錄 |
 | P2 | 補充核心模組單元測試 | `isInternalElement`、`detectPlayers`、overlay 識別邏輯 |
 | P2 | 解決多框架競態 | 參考審查報告 Phase A，加入 policy version 與生效時間戳 |

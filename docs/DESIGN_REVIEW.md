@@ -218,7 +218,7 @@ Problem: "Falcon-Player-Enhance" is a technical product name, not user language.
 
 ### Fatal Gap: No DESIGN.md
 
-The design system specification exists only as `/* Shield Pro v4.0 — Three-Gray Achromatic Design System */` in a CSS comment, with no:
+The design system specification exists only as `/* Falcon-Player-Enhance v4.0 — Three-Gray Achromatic Design System */` in a CSS comment, with no:
 - Complete token list
 - Component library list
 - Design decision record (why achromatic?)
