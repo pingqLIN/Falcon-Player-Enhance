@@ -46,3 +46,8 @@ tests/live-browser/_tmp-*.json
 
 # Backup files
 *.backup
+
+# Local agent / review workspace artifacts
+.gstack/
+OPEN.txt
+*.psd
