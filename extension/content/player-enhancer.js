@@ -9,9 +9,9 @@
     const OVERLAY_FEATURE_KEY = 'removeOverlays';
     const FRAME_SOURCE_MESSAGE_TYPE = 'shield:frame-source';
     const IS_TOP_FRAME = window === window.top;
-    const COMPATIBILITY_MODE_SITES = [
-        'boyfriendtv.com'
-    ];
+    let compatibilityMode = false;
+    let forcePopupDirect = false;
+    let shouldRunAggressiveOverlayCleanup = true;
     let cleanupEnabled = false;
     let overlayMonitorTimer = null;
 
@@ -21,6 +21,18 @@
 
     function isDomainOrSubdomain(hostname, domain) {
         return hostname === domain || hostname.endsWith('.' + domain);
+    }
+
+    function getSiteProfilesApi() {
+        return window.FalconSiteProfiles;
+    }
+
+    function readProfileCapability(name, fallback = false) {
+        const api = getSiteProfilesApi();
+        if (!api?.getCapability) return fallback;
+
+        const value = api.getCapability(name, fallback);
+        return value === undefined ? fallback : value;
     }
 
     function resolveCleanupMode() {
@@ -37,12 +49,39 @@
         });
     }
 
-    function isCompatibilityModeSite() {
-        const host = window.location.hostname.toLowerCase();
-        return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+    async function syncSiteProfileState() {
+        const api = getSiteProfilesApi();
+        if (!api?.ready) {
+            compatibilityMode = readProfileCapability('compatibilityMode', false) === true;
+            forcePopupDirect = readProfileCapability('forcePopupDirect', false) === true;
+            shouldRunAggressiveOverlayCleanup = !compatibilityMode;
+            return {
+                compatibilityMode,
+                forcePopupDirect,
+                shouldRunAggressiveOverlayCleanup
+            };
+        }
+
+        await api.ready;
+        compatibilityMode = readProfileCapability('compatibilityMode', false) === true;
+        forcePopupDirect = readProfileCapability('forcePopupDirect', false) === true;
+        shouldRunAggressiveOverlayCleanup = !compatibilityMode;
+        return {
+            compatibilityMode,
+            forcePopupDirect,
+            shouldRunAggressiveOverlayCleanup
+        };
     }
 
-    const shouldRunAggressiveOverlayCleanup = !isCompatibilityModeSite();
+    function isCompatibilityModeSite() {
+        return compatibilityMode === true || readProfileCapability('compatibilityMode', false) === true;
+    }
+
+    void syncSiteProfileState().catch(() => {
+        compatibilityMode = false;
+        forcePopupDirect = false;
+        shouldRunAggressiveOverlayCleanup = true;
+    });
 
     /**
      * 為播放器添加視覺標示（精簡版 - 無視覺干擾）
@@ -816,15 +855,8 @@
     }
 
     function shouldOpenPopupDirectly(url) {
-        const normalized = String(url || '').trim();
-        if (!normalized) return false;
-
-        try {
-            const hostname = new URL(normalized).hostname.toLowerCase().replace(/^www\./, '');
-            return hostname === 'boyfriendtv.com' || hostname.endsWith('.boyfriendtv.com');
-        } catch (_) {
-            return false;
-        }
+        if (forcePopupDirect === true) return true;
+        return false;
     }
 
     function hasSignedMediaQuery(url) {

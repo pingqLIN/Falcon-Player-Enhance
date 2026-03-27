@@ -209,7 +209,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
   {
     id: 'shield-main-world',
     matches: [],
-    js: ['content/anti-antiblock.js', 'content/inject-blocker.js'],
+    js: ['content/site-profile.js', 'content/anti-antiblock.js', 'content/inject-blocker.js'],
     runAt: 'document_start',
     world: 'MAIN',
     allFrames: true,

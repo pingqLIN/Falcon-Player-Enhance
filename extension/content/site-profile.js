@@ -102,6 +102,16 @@
         return value === undefined ? fallback : value;
     }
 
+    function getNavigation(name, fallback = undefined) {
+        const value = cache.primaryProfile?.navigation?.[name];
+        return value === undefined ? fallback : value;
+    }
+
+    function getAntiAntiBlock(name, fallback = undefined) {
+        const value = cache.primaryProfile?.antiAntiBlock?.[name];
+        return value === undefined ? fallback : value;
+    }
+
     function hasCapability(name) {
         return getCapability(name, false) === true;
     }
@@ -112,6 +122,8 @@
         getPrimaryProfile,
         getMatchedProfiles,
         getCapability,
+        getNavigation,
+        getAntiAntiBlock,
         hasCapability
     };
 

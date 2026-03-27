@@ -86,6 +86,38 @@ function isPlayerSite() {
     return IS_PLAYER_SITE;
 }
 
+function getSiteProfilesApi() {
+    return window.FalconSiteProfiles;
+}
+
+function getActiveAntiAntiBlockProfile() {
+    const api = getSiteProfilesApi();
+    if (!api?.getCapability) return '';
+
+    const profile = api.getCapability('antiAntiBlockProfile', '');
+    return String(profile || '').trim().toLowerCase();
+}
+
+function isLegacyJavboysHost(hostname) {
+    const host = normalizeHostname(hostname);
+    if (!host) return false;
+
+    return host.includes('javboys') || host.includes('myvidplay') || host.includes('luluvdoo');
+}
+
+function isLegacyJavboysPlayerFrame(hostname) {
+    const host = normalizeHostname(hostname);
+    if (!host) return false;
+
+    return host === 'player.javboys.online' || host === 'player.javboys.com' || host.includes('luluvdoo');
+}
+
+function shouldUseJavboysAntiAntiBlockStrategy() {
+    const profile = getActiveAntiAntiBlockProfile();
+    if (profile) return profile === 'javboys-cvp';
+    return isLegacyJavboysHost(window.location.hostname);
+}
+
 const extensionRuntime = typeof chrome === 'object' && chrome?.runtime ? chrome.runtime : null;
 const extensionStorageLocal = typeof chrome === 'object' && chrome?.storage?.local ? chrome.storage.local : null;
 
@@ -424,11 +456,13 @@ function removeAdblockMessages() {
 // 8. 專門針對 javboys 播放器的處理 (增強版 v2)
 // ============================================================================
 function handleJavboysPlayer() {
+    if (!shouldUseJavboysAntiAntiBlockStrategy()) {
+        return;
+    }
+
     const host = window.location.hostname;
-    
-    // 適用於 javboys 相關網站和播放器 (包括播放器 iframe 內部)
-    const isJavboysSite = host.includes('javboys') || host.includes('myvidplay') || host.includes('luluvdoo');
-    const isPlayerIframe = host === 'player.javboys.online' || host === 'player.javboys.com' || host.includes('luluvdoo');
+    const isJavboysSite = isLegacyJavboysHost(host);
+    const isPlayerIframe = isLegacyJavboysPlayerFrame(host);
 
     
     if (!isJavboysSite && !isPlayerIframe) {

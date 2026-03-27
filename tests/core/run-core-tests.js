@@ -57,9 +57,23 @@ const BLOCKING_LEVEL = {
 const normalizeBlockingLevel = loadFunction('extension/content/inject-blocker.js', 'normalizeBlockingLevel', {
   BLOCKING_LEVEL
 });
+const escapeRegex = loadFunction('extension/content/inject-blocker.js', 'escapeRegex');
+const hasBlockedUrlToken = loadFunction(
+  'extension/content/inject-blocker.js',
+  'hasBlockedUrlToken',
+  {
+    escapeRegex
+  }
+);
 const isBlockedUrl = loadFunction('extension/content/inject-blocker.js', 'isBlockedUrl', {
   MALICIOUS_DOMAINS: ['exoclick', 'trafficjunky', 'juicyads'],
-  aiDynamicBlockedDomains: new Set(['bad-redirect.example'])
+  aiDynamicBlockedDomains: new Set(['bad-redirect.example']),
+  hasBlockedUrlToken,
+  window: {
+    location: {
+      origin: 'https://vidboys.com'
+    }
+  }
 });
 const isInternalElement = loadFunction('extension/content/inject-blocker.js', 'isInternalElement');
 const resolveNavigationUrl = loadFunction('extension/content/inject-blocker.js', 'resolveNavigationUrl', {
@@ -263,6 +277,58 @@ const matchSiteBehaviorProfile = loadFunction(
     isSiteBehaviorIframeMatch
   }
 );
+const getNavigation = loadFunction(
+  'extension/content/site-profile.js',
+  'getNavigation',
+  {
+    cache: {
+      primaryProfile: {
+        navigation: {
+          redirectTrapHosts: ['trap.example'],
+          redirectRecoveryEnabled: true
+        }
+      }
+    }
+  }
+);
+const getAntiAntiBlock = loadFunction(
+  'extension/content/site-profile.js',
+  'getAntiAntiBlock',
+  {
+    cache: {
+      primaryProfile: {
+        antiAntiBlock: {
+          fakeGlobals: ['CVP'],
+          suppressErrors: true
+        }
+      }
+    }
+  }
+);
+const isLegacyJavboysHost = loadFunction(
+  'extension/content/anti-antiblock.js',
+  'isLegacyJavboysHost',
+  {
+    normalizeHostname(hostname) {
+      return String(hostname || '').toLowerCase().replace(/^www\./, '');
+    }
+  }
+);
+const shouldUseJavboysAntiAntiBlockStrategy = loadFunction(
+  'extension/content/anti-antiblock.js',
+  'shouldUseJavboysAntiAntiBlockStrategy',
+  {
+    getActiveAntiAntiBlockProfile() {
+      return 'javboys-cvp';
+    },
+    isLegacyJavboysHost,
+    window: {
+      location: {
+        hostname: 'safe.example.com'
+      }
+    }
+  }
+);
 
 function makeElement({ className = '', dataset = {}, parentElement = null } = {}) {
   return {
@@ -342,6 +408,13 @@ run('inject-blocker blocks malicious and AI-provided redirect domains', () => {
   assert.equal(isBlockedUrl('https://ads.exoclick.com/track'), true);
   assert.equal(isBlockedUrl('https://safe.example/watch'), false);
   assert.equal(isBlockedUrl('https://bad-redirect.example/landing'), true);
+  assert.equal(isBlockedUrl('https://media.example/casinoroyale-trailer'), false);
+});
+
+run('inject-blocker token matching uses boundary-aware checks', () => {
+  assert.equal(hasBlockedUrlToken('https://ads.exoclick.com/track', 'exoclick'), true);
+  assert.equal(hasBlockedUrlToken('https://safe.example/casinoroyale', 'casino'), false);
+  assert.equal(hasBlockedUrlToken('https://safe.example/path/casino/offer', 'casino'), true);
 });
 
 run('inject-blocker detects internal shield elements on self and ancestors', () => {
@@ -622,6 +695,22 @@ run('site-profile matches player family profile by iframe source hint', () => {
   );
 
   assert.equal(profile?.id, 'javboys-family');
+});
+
+run('site-profile navigation helper returns matched navigation values', () => {
+  assert.deepEqual(getNavigation('redirectTrapHosts', []), ['trap.example']);
+  assert.equal(getNavigation('redirectRecoveryEnabled', false), true);
+  assert.equal(getNavigation('missingFlag', 'fallback'), 'fallback');
+});
+
+run('site-profile anti-antiblock helper returns matched strategy values', () => {
+  assert.deepEqual(getAntiAntiBlock('fakeGlobals', []), ['CVP']);
+  assert.equal(getAntiAntiBlock('suppressErrors', false), true);
+  assert.equal(getAntiAntiBlock('missingValue', 'fallback'), 'fallback');
+});
+
+run('anti-antiblock strategy dispatch prefers configured profile', () => {
+  assert.equal(shouldUseJavboysAntiAntiBlockStrategy(), true);
 });
 
 console.log('Core smoke tests passed.');

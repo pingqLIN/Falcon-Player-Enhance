@@ -27,7 +27,7 @@ const BLOCKING_LEVEL = {
     STANDARD: 2,
     HARDENED: 3
 };
-const L3_REDIRECT_TRAP_DOMAINS = [
+const DEFAULT_REDIRECT_TRAP_DOMAINS = [
     'sfnu-protect.sbs',
     'xsotrk.com',
     'exoclick-adb.com',
@@ -58,10 +58,7 @@ const aiRuntimeState = {
 // 不再需要維護獨立的站點清單
 const IS_PLAYER_SITE = true;
 
-// 相容模式網站：避免侵入式攔截干擾播放器初始化
-const COMPATIBILITY_MODE_SITES = [
-    'boyfriendtv.com'
-];
+let compatibilityMode = false;
 
 // 已知惡意廣告域名 (播放器相關)
 const MALICIOUS_DOMAINS = [
@@ -88,13 +85,68 @@ function isPlayerSite() {
     return IS_PLAYER_SITE;
 }
 
+function getSiteProfilesApi() {
+    return window.FalconSiteProfiles;
+}
+
+function readProfileCapability(name, fallback = false) {
+    const api = getSiteProfilesApi();
+    if (!api?.getCapability) return fallback;
+
+    const value = api.getCapability(name, fallback);
+    return value === undefined ? fallback : value;
+}
+
+function readProfileNavigation(name, fallback) {
+    const api = getSiteProfilesApi();
+    if (!api?.getNavigation) return fallback;
+
+    const value = api.getNavigation(name, fallback);
+    return value === undefined ? fallback : value;
+}
+
+async function syncSiteProfileState() {
+    const api = getSiteProfilesApi();
+    if (!api?.ready) {
+        compatibilityMode = readProfileCapability('compatibilityMode', false) === true;
+        return compatibilityMode;
+    }
+
+    await api.ready;
+    compatibilityMode = readProfileCapability('compatibilityMode', false) === true;
+    return compatibilityMode;
+}
+
+function getRedirectTrapDomains() {
+    const configured = readProfileNavigation('redirectTrapHosts', []);
+    if (!Array.isArray(configured) || configured.length === 0) {
+        return DEFAULT_REDIRECT_TRAP_DOMAINS;
+    }
+
+    return configured
+        .map((domain) => String(domain || '').trim().toLowerCase())
+        .filter(Boolean);
+}
+
 function isCompatibilityModeSite() {
-    const host = window.location.hostname.toLowerCase();
-    return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+    return compatibilityMode === true || readProfileCapability('compatibilityMode', false) === true;
 }
 
 function isAdvancedPlayerProtectionEnabled() {
     return isPlayerSite() && !isCompatibilityModeSite() && isLevelAtLeast(BLOCKING_LEVEL.STANDARD);
+}
+
+function escapeRegex(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasBlockedUrlToken(value, token) {
+    const text = String(value || '').toLowerCase();
+    const normalizedToken = String(token || '').trim().toLowerCase();
+    if (!text || !normalizedToken) return false;
+
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(normalizedToken)}([^a-z0-9]|$)`);
+    return pattern.test(text);
 }
 
 function isBlockedUrl(url) {
@@ -105,13 +157,18 @@ function isBlockedUrl(url) {
     if (urlStr.startsWith('chrome-extension://') || urlStr.startsWith('moz-extension://')) {
         return false;
     }
-    
-    if (MALICIOUS_DOMAINS.some(domain => urlStr.includes(domain.toLowerCase()))) {
+
+    let resolvedHost = '';
+    try {
+        resolvedHost = new URL(urlStr, window.location.origin).hostname.toLowerCase();
+    } catch (e) {}
+
+    if (MALICIOUS_DOMAINS.some((domain) => hasBlockedUrlToken(resolvedHost, domain) || hasBlockedUrlToken(urlStr, domain))) {
         return true;
     }
     if (aiDynamicBlockedDomains.size > 0) {
         for (const domain of aiDynamicBlockedDomains) {
-            if (urlStr.includes(domain)) {
+            if (hasBlockedUrlToken(resolvedHost, domain) || hasBlockedUrlToken(urlStr, domain)) {
                 return true;
             }
         }
@@ -160,6 +217,9 @@ function isLevelAtLeast(level) {
 }
 
 setProtectionLevel(protectionLevel);
+void syncSiteProfileState().catch(() => {
+    compatibilityMode = false;
+});
 
 function emitAiEvent(type, options = {}) {
     try {
@@ -586,7 +646,7 @@ function findContentCardNavigationAnchor(target) {
 function isRedirectTrapHost(hostname) {
     const host = String(hostname || '').toLowerCase();
     if (!host) return false;
-    return L3_REDIRECT_TRAP_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+    return getRedirectTrapDomains().some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
 function isDomainOrSubdomain(hostname, domain) {
@@ -621,7 +681,7 @@ function shouldRecoverFromRedirectTrap() {
     }
 
     if (!knownTrapHost) return false;
-    return L3_REDIRECT_TRAP_DOMAINS.some((domain) => referrer.toLowerCase().includes(domain));
+    return getRedirectTrapDomains().some((domain) => referrer.toLowerCase().includes(domain));
 }
 
 function recoverFromRedirectTrap() {
