@@ -29,12 +29,15 @@ const CONTENT_SCRIPT_IDS = [
   'shield-docidle-isolated'
 ];
 
-const DIRECT_POPUP_IFRAME_HOSTS = [
-  'boyfriendtv.com'
-];
+const ACTION_MENU_IDS = {
+  openSidebar: 'open-action-side-panel',
+  openPopup: 'open-action-popup-window'
+};
 const SITE_REGISTRY_RESOURCE_PATH = 'rules/site-registry.json';
+const SITE_BEHAVIORS_RESOURCE_PATH = 'rules/site-behaviors.json';
 const AD_LIST_RESOURCE_PATH = 'rules/ad-list.json';
 const AI_PROVIDER_SECRET_STORAGE_KEY = 'aiProviderSecret';
+const AI_PROVIDER_SECRETS_STORAGE_KEY = 'aiProviderSecrets';
 const AI_KNOWLEDGE_VERSION = 1;
 const AI_KNOWLEDGE_MAX_OBSERVATIONS = 300;
 const AI_KNOWLEDGE_MAX_CANDIDATES = 160;
@@ -45,6 +48,8 @@ const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 const directPopupOverlayTabs = {};
 let siteRegistryLoadPromise = null;
 let siteRegistryDomains = [];
+let siteBehaviorLoadPromise = null;
+let siteBehaviorProfiles = [];
 let adListLoadPromise = null;
 let adListEntries = [];
 
@@ -104,6 +109,31 @@ async function loadSiteRegistry() {
   return siteRegistryLoadPromise;
 }
 
+async function loadSiteBehaviors() {
+  if (siteBehaviorLoadPromise) return siteBehaviorLoadPromise;
+
+  siteBehaviorLoadPromise = (async () => {
+    try {
+      const response = await fetch(chrome.runtime.getURL(SITE_BEHAVIORS_RESOURCE_PATH), {
+        cache: 'no-store'
+      });
+      if (!response.ok) {
+        throw new Error(`site_behaviors_http_${response.status}`);
+      }
+
+      const payload = await response.json();
+      siteBehaviorProfiles = Array.isArray(payload?.profiles) ? payload.profiles : [];
+      return siteBehaviorProfiles;
+    } catch (error) {
+      siteBehaviorProfiles = [];
+      console.error('✗ 站點行為規則載入失敗:', error);
+      return siteBehaviorProfiles;
+    }
+  })();
+
+  return siteBehaviorLoadPromise;
+}
+
 async function loadAdList() {
   if (adListLoadPromise) return adListLoadPromise;
 
@@ -153,6 +183,7 @@ const BASIC_GLOBAL_CONTENT_SCRIPT_DEFINITIONS = [
     matches: ['<all_urls>'],
     css: ['content/styles.css', 'content/player-overlay-fix.css'],
     js: [
+      'content/site-profile.js',
       'content/player-detector.js',
       'content/fake-video-remover.js',
       'content/overlay-remover.js',
@@ -187,7 +218,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
   {
     id: 'shield-docstart-isolated',
     matches: [],
-    js: ['content/cosmetic-filter.js', 'content/anti-popup.js'],
+    js: ['content/site-profile.js', 'content/cosmetic-filter.js', 'content/anti-popup.js'],
     runAt: 'document_start',
     allFrames: true,
     persistAcrossSessions: true
@@ -197,6 +228,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
     matches: [],
     css: ['content/styles.css', 'content/player-overlay-fix.css'],
     js: [
+      'content/site-profile.js',
       'content/player-detector.js',
       'content/fake-video-remover.js',
       'content/overlay-remover.js',
@@ -308,6 +340,7 @@ let aiState = {
   hostFallbacks: {},
   providerSettings: null,
   providerSecret: '',
+  providerSecrets: {},
   providerState: null,
   providerAdvisories: {},
   generatedRuleCandidates: {},
@@ -316,6 +349,7 @@ let aiState = {
 
 let aiPersistTimer = null;
 let contentScriptSyncQueue = Promise.resolve();
+let actionContextMenuSetupPromise = null;
 
 function normalizeStats(source) {
   return {
@@ -328,6 +362,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   console.log(`🎬 ${APP_BRAND} v4.4 已安裝/更新`);
   await configureProviderSecretStorage();
   await loadSiteRegistry();
+  await loadSiteBehaviors();
   await loadAdList();
   await initStorage(details.reason);
   await loadStats();
@@ -335,12 +370,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await loadPinnedPopupPlayers();
   await loadAiState();
   await configureActionClickBehavior();
+  await configureActionContextMenus();
   await applyExtensionState(resolveEnabledByBlockingLevel(blockingLevel), 'install');
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
   await configureProviderSecretStorage();
   await loadSiteRegistry();
+  await loadSiteBehaviors();
   await loadAdList();
   await initStorage('startup');
   await loadStats();
@@ -348,12 +385,14 @@ chrome.runtime.onStartup?.addListener(async () => {
   await loadPinnedPopupPlayers();
   await loadAiState();
   await configureActionClickBehavior();
+  await configureActionContextMenus();
   await applyExtensionState(resolveEnabledByBlockingLevel(blockingLevel), 'startup');
 });
 
 (async () => {
   await configureProviderSecretStorage();
   await loadSiteRegistry();
+  await loadSiteBehaviors();
   await loadAdList();
   await initStorage('runtime_init');
   await loadStats();
@@ -361,6 +400,7 @@ chrome.runtime.onStartup?.addListener(async () => {
   await loadPinnedPopupPlayers();
   await loadAiState();
   await configureActionClickBehavior();
+  await configureActionContextMenus();
   await applyExtensionState(resolveEnabledByBlockingLevel(blockingLevel), 'runtime_init');
 })();
 
@@ -371,6 +411,9 @@ async function initStorage(reason = 'update') {
     'removeOverlays',
     'bypassAntiBlock',
     'playerEnhancement',
+    'popupBlockingEnabled',
+    'fakeVideoRemovalEnabled',
+    'playerSyncEnabled',
     'extensionEnabled',
     'blockingLevel',
     'lastActiveBlockingLevel',
@@ -382,10 +425,12 @@ async function initStorage(reason = 'update') {
     'aiHostMetrics',
     'aiHostFallbacks',
     'aiProviderSettings',
+    AI_PROVIDER_SECRETS_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
     'aiKnowledgeStore',
+    'uiLanguage',
     'theme'
   ]);
 
@@ -416,6 +461,18 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.playerEnhancement !== 'boolean') {
     patch.playerEnhancement = true;
+  }
+
+  if (typeof result.popupBlockingEnabled !== 'boolean') {
+    patch.popupBlockingEnabled = true;
+  }
+
+  if (typeof result.fakeVideoRemovalEnabled !== 'boolean') {
+    patch.fakeVideoRemovalEnabled = true;
+  }
+
+  if (typeof result.playerSyncEnabled !== 'boolean') {
+    patch.playerSyncEnabled = true;
   }
 
   if (typeof result.extensionEnabled !== 'boolean') {
@@ -503,6 +560,14 @@ async function initStorage(reason = 'update') {
 
   if (!result.theme) {
     patch.theme = 'light';
+  }
+
+  if (typeof result[AI_PROVIDER_SECRETS_STORAGE_KEY] !== 'object' || result[AI_PROVIDER_SECRETS_STORAGE_KEY] === null) {
+    patch[AI_PROVIDER_SECRETS_STORAGE_KEY] = normalizeAiProviderSecrets({});
+  }
+
+  if (typeof result.uiLanguage !== 'string') {
+    patch.uiLanguage = 'auto';
   }
 
   if (Object.keys(patch).length > 0) {
@@ -597,7 +662,8 @@ function withSenderPopupPlayerContext(input = {}, sender) {
   if (!payload.sourceTabUrl && sender?.tab?.url) {
     payload.sourceTabUrl = String(sender.tab.url);
   }
-  if (shouldOpenPopupDirectly(payload) && payload.sourceTabId > 0) {
+  const popupBehavior = getPopupBehaviorForPayload(payload);
+  if (popupBehavior.forcePopupDirect && popupBehavior.popupMode === 'remote-control' && payload.sourceTabId > 0) {
     payload.remoteControlPreferred = true;
   }
   return payload;
@@ -611,16 +677,42 @@ function isPopupDomainOrSubdomain(hostname, domain) {
   return hostname === domain || hostname.endsWith('.' + domain);
 }
 
-function shouldOpenPopupDirectly(payload = {}) {
+function findSiteBehaviorProfileByHost(hostname = '') {
+  const normalized = normalizePopupHost(hostname);
+  if (!normalized) return null;
+
+  return siteBehaviorProfiles.find((profile) => {
+    const hostSuffixes = Array.isArray(profile?.match?.hostSuffixes) ? profile.match.hostSuffixes : [];
+    return hostSuffixes.some((domain) => isPopupDomainOrSubdomain(normalized, normalizePopupHost(domain)));
+  }) || null;
+}
+
+function getPopupBehaviorForPayload(payload = {}) {
   const iframeSrc = String(payload.iframeSrc || '').trim();
-  if (!iframeSrc) return false;
+  if (!iframeSrc) {
+    return {
+      forcePopupDirect: false,
+      popupMode: 'standard'
+    };
+  }
 
   try {
     const hostname = normalizePopupHost(new URL(iframeSrc).hostname);
-    return DIRECT_POPUP_IFRAME_HOSTS.some((domain) => isPopupDomainOrSubdomain(hostname, domain));
+    const profile = findSiteBehaviorProfileByHost(hostname);
+    return {
+      forcePopupDirect: profile?.capabilities?.forcePopupDirect === true,
+      popupMode: String(profile?.capabilities?.popupMode || 'standard')
+    };
   } catch (_) {
-    return false;
+    return {
+      forcePopupDirect: false,
+      popupMode: 'standard'
+    };
   }
+}
+
+function shouldOpenPopupDirectly(payload = {}) {
+  return getPopupBehaviorForPayload(payload).forcePopupDirect === true;
 }
 
 function buildPopupPlayerUrl(payload = {}) {
@@ -779,6 +871,69 @@ async function configureActionClickBehavior() {
   }
 }
 
+function getActionMenuLabel(key, fallback) {
+  return chrome.i18n?.getMessage?.(key) || fallback;
+}
+
+async function configureActionContextMenus() {
+  if (!chrome.contextMenus?.removeAll || !chrome.contextMenus?.create) {
+    return;
+  }
+
+  if (actionContextMenuSetupPromise) {
+    return actionContextMenuSetupPromise;
+  }
+
+  const removeAllMenus = () => new Promise((resolve, reject) => {
+    chrome.contextMenus.removeAll(() => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
+  });
+
+  const createMenu = (options) => new Promise((resolve, reject) => {
+    chrome.contextMenus.create(options, () => {
+      if (!chrome.runtime.lastError) {
+        resolve();
+        return;
+      }
+
+      const message = String(chrome.runtime.lastError.message || '');
+      if (message.includes('duplicate id')) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(message));
+    });
+  });
+
+  actionContextMenuSetupPromise = (async () => {
+    try {
+      await removeAllMenus();
+      await createMenu({
+        id: ACTION_MENU_IDS.openSidebar,
+        title: getActionMenuLabel('actionMenuOpenSidebar', 'Open sidebar control panel'),
+        contexts: ['action']
+      });
+      await createMenu({
+        id: ACTION_MENU_IDS.openPopup,
+        title: getActionMenuLabel('actionMenuOpenPopup', 'Open popup window'),
+        contexts: ['action']
+      });
+    } catch (error) {
+      console.warn('⚠️ 無法建立常駐列右鍵選單:', String(error?.message || error));
+    } finally {
+      actionContextMenuSetupPromise = null;
+    }
+  })();
+
+  return actionContextMenuSetupPromise;
+}
+
 async function openDefaultControlSidePanel(tabId) {
   const resolvedTabId = Number(tabId || 0);
   if (!Number.isFinite(resolvedTabId) || resolvedTabId <= 0) {
@@ -858,6 +1013,26 @@ async function openActionPopupForTab(tabId) {
   }
 }
 
+async function openActionPopupWindowForTab(tabId) {
+  const resolvedTabId = Number(tabId || 0);
+  if (!Number.isFinite(resolvedTabId) || resolvedTabId <= 0) {
+    return { opened: false, reason: 'missing_tab_id' };
+  }
+
+  const url = chrome.runtime.getURL(
+    `popup/popup.html?tabId=${encodeURIComponent(String(resolvedTabId))}`
+  );
+  const created = await chrome.windows.create({
+    url,
+    type: 'popup',
+    focused: true,
+    width: 1280,
+    height: 840
+  });
+
+  return { opened: true, tabId: resolvedTabId, windowId: created?.id || 0, mode: 'popup_window' };
+}
+
 function broadcastStatsUpdated() {
   try {
     chrome.runtime.sendMessage({ action: 'statsUpdated', stats }).catch(() => {});
@@ -888,6 +1063,7 @@ async function loadAiState() {
     'aiHostMetrics',
     'aiHostFallbacks',
     'aiProviderSettings',
+    AI_PROVIDER_SECRETS_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
@@ -898,14 +1074,24 @@ async function loadAiState() {
     storedSettings.provider !== 'lmstudio' && storedSettings.apiKey
       ? String(storedSettings.apiKey || '').trim()
       : '';
-  const sessionSecret = await loadProviderSecretFromSession();
-  const providerSecret = sessionSecret || migratedSecret;
+  const legacySessionSecret = await loadProviderSecretFromSession();
+  const providerSecrets = normalizeAiProviderSecrets(result[AI_PROVIDER_SECRETS_STORAGE_KEY] || {});
+  const legacyProvider = String(storedSettings.provider || 'openai');
+  const nextProviderSecrets = normalizeAiProviderSecrets({
+    ...providerSecrets,
+    [legacyProvider]: providerSecrets[legacyProvider] || legacySessionSecret || migratedSecret
+  });
 
-  if (migratedSecret && !sessionSecret) {
-    await persistProviderSecretToSession(migratedSecret);
+  if (
+    migratedSecret ||
+    legacySessionSecret ||
+    JSON.stringify(nextProviderSecrets) !== JSON.stringify(providerSecrets)
+  ) {
     await chrome.storage.local.set({
-      aiProviderSettings: getPersistableAiProviderSettings(storedSettings)
+      aiProviderSettings: getPersistableAiProviderSettings(storedSettings),
+      [AI_PROVIDER_SECRETS_STORAGE_KEY]: nextProviderSecrets
     });
+    await persistProviderSecretToSession('');
   }
 
   aiState.enabled = result.aiMonitorEnabled !== false;
@@ -915,7 +1101,8 @@ async function loadAiState() {
   aiState.hostMetrics = result.aiHostMetrics || {};
   aiState.hostFallbacks = result.aiHostFallbacks || {};
   aiState.providerSettings = getPersistableAiProviderSettings(storedSettings);
-  aiState.providerSecret = providerSecret;
+  aiState.providerSecrets = nextProviderSecrets;
+  aiState.providerSecret = String(nextProviderSecrets[legacyProvider] || '').trim();
   aiState.providerState = normalizeAiProviderState(result.aiProviderState || {});
   aiState.providerAdvisories =
     result.aiProviderAdvisories && typeof result.aiProviderAdvisories === 'object'
@@ -949,12 +1136,13 @@ async function persistAiState() {
     aiHostMetrics: aiState.hostMetrics,
     aiHostFallbacks: aiState.hostFallbacks,
     aiProviderSettings: getPersistableAiProviderSettings(aiState.providerSettings || {}),
+    [AI_PROVIDER_SECRETS_STORAGE_KEY]: normalizeAiProviderSecrets(aiState.providerSecrets || {}),
     aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
     aiProviderAdvisories: aiState.providerAdvisories || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
     aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
   });
-  await persistProviderSecretToSession(aiState.providerSecret);
+  await persistProviderSecretToSession('');
 }
 
 async function isExtensionEnabled() {
@@ -1108,11 +1296,40 @@ async function syncContentScripts(enabled) {
 function notifyAllTabs(message) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
-      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
-        chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+      if (tab.id && tab.url && isManagedPageUrl(tab.url)) {
+        sendMessageToTab(tab.id, message).catch(() => {});
       }
     });
   });
+}
+
+async function dispatchElementPickerEvent(tabId, eventName) {
+  const resolvedTabId = Number(tabId || 0);
+  if (!Number.isFinite(resolvedTabId) || resolvedTabId <= 0) {
+    return;
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId: resolvedTabId, allFrames: true },
+    func: (name) => {
+      window.dispatchEvent(new CustomEvent(name));
+    },
+    args: [eventName]
+  });
+}
+
+async function sendMessageToTab(tabId, message) {
+  if (message?.action === 'activateElementPicker') {
+    await dispatchElementPickerEvent(tabId, '__shield_pro_activate_picker__');
+    return;
+  }
+
+  if (message?.action === 'deactivateElementPicker') {
+    await dispatchElementPickerEvent(tabId, '__shield_pro_deactivate_picker__');
+    return;
+  }
+
+  await chrome.tabs.sendMessage(tabId, message).catch(() => {});
 }
 
 function refreshCosmeticRulesForAllTabs() {
@@ -1174,6 +1391,22 @@ function getHostname(value) {
     return String(value).toLowerCase();
   } catch {
     return '';
+  }
+}
+
+function isManagedPageUrl(url) {
+  try {
+    const value = new URL(String(url || ''));
+    return (
+      value.protocol === 'http:' ||
+      value.protocol === 'https:' ||
+      value.protocol === 'file:' ||
+      value.protocol === 'ftp:' ||
+      value.protocol === 'ws:' ||
+      value.protocol === 'wss:'
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -1300,6 +1533,28 @@ function buildDefaultAiProviderState() {
   };
 }
 
+function normalizeAiProviderSecrets(input = {}) {
+  const source = input && typeof input === 'object' ? input : {};
+  return AI_PROVIDER_TYPES.reduce((acc, provider) => {
+    if (provider === 'lmstudio') {
+      acc[provider] = '';
+      return acc;
+    }
+    acc[provider] = String(source[provider] || '').trim();
+    return acc;
+  }, {});
+}
+
+function getAiProviderSecretKeyState(secrets = {}) {
+  const normalized = normalizeAiProviderSecrets(secrets);
+  return AI_PROVIDER_TYPES.reduce((acc, provider) => {
+    acc[provider] = provider === 'lmstudio'
+      ? false
+      : Boolean(normalized[provider]);
+    return acc;
+  }, {});
+}
+
 function normalizeAiProviderSettings(input = {}) {
   const defaults = buildDefaultAiProviderSettings();
   const provider = AI_PROVIDER_TYPES.includes(String(input.provider || defaults.provider).trim().toLowerCase())
@@ -1344,13 +1599,16 @@ function getPersistableAiProviderSettings(input = {}) {
 
 function resolveAiProviderSettings(input = {}, secret = '') {
   const settings = normalizeAiProviderSettings(input);
+  const secretMap = typeof secret === 'string'
+    ? { [settings.provider]: String(secret || '').trim() }
+    : normalizeAiProviderSecrets(secret || {});
   if (settings.provider === 'lmstudio') {
     return settings;
   }
 
   return normalizeAiProviderSettings({
     ...settings,
-    apiKey: String(secret || '').trim()
+    apiKey: String(secretMap[settings.provider] || '').trim()
   });
 }
 
@@ -2871,7 +3129,7 @@ function normalizeGeminiAdvisory(hostname, payload, policy, settings) {
 
 async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecrets);
     const baseUrl = resolveOpenAiBaseUrl(normalized.endpoint);
     if (!normalized.apiKey) {
       throw new Error('openai_api_key_required');
@@ -2947,7 +3205,7 @@ async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
 
 async function runGeminiHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecrets);
     const requestInfo = resolveGeminiModelRequest(normalized.endpoint, normalized.model);
     if (!normalized.apiKey) {
       throw new Error('gemini_api_key_required');
@@ -3018,7 +3276,7 @@ async function runGeminiHealthCheck(settings = aiState.providerSettings) {
 
 async function runGatewayHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecrets);
     const baseUrl = resolveGatewayBaseUrl(normalized.endpoint);
     if (!baseUrl) {
       throw new Error('gateway_endpoint_required');
@@ -3086,7 +3344,7 @@ async function runGatewayHealthCheck(settings = aiState.providerSettings) {
 }
 
 async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
-  const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+  const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecrets);
   if (normalized.provider === 'openai') {
     return runOpenAiHealthCheck(normalized);
   }
@@ -3100,7 +3358,7 @@ async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
 }
 
 function shouldQueryAiProvider(hostname, policy, events = []) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   if (settings.enabled !== true) return false;
   if (settings.mode === 'off') return false;
 
@@ -3119,7 +3377,7 @@ function shouldQueryAiProvider(hostname, policy, events = []) {
 }
 
 async function requestLmStudioAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
   const model = await resolveLmStudioModel(settings);
   if (!model) {
@@ -3201,7 +3459,7 @@ async function requestLmStudioAdvisory(hostname, context, policy) {
 }
 
 async function requestGatewayAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   const baseUrl = resolveGatewayBaseUrl(settings.endpoint);
   if (!baseUrl) {
     throw new Error('gateway_endpoint_required');
@@ -3268,7 +3526,7 @@ async function requestGatewayAdvisory(hostname, context, policy) {
 }
 
 async function requestOpenAiAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   if (!settings.apiKey) {
     throw new Error('openai_api_key_required');
   }
@@ -3339,7 +3597,7 @@ async function requestOpenAiAdvisory(hostname, context, policy) {
 }
 
 async function requestGeminiAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   if (!settings.apiKey) {
     throw new Error('gemini_api_key_required');
   }
@@ -3420,7 +3678,7 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
 }
 
 async function requestAiElementClassification(hostname, features = {}) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   const localResult = classifyElementLocally(hostname, features);
   if (settings.enabled !== true || settings.mode === 'off') {
     return localResult;
@@ -3935,7 +4193,7 @@ function processAiTelemetry(request, sender) {
 }
 
 function sendPolicyToTab(tabId, url) {
-  if (!tabId || !aiState.enabled) return;
+  if (!tabId || !aiState.enabled || !isManagedPageUrl(url)) return;
   const policy = getPolicyForUrl(url);
   const dispatchPolicy = {
     ...policy,
@@ -3948,7 +4206,7 @@ function notifyAllPoliciesToAllTabs() {
   if (!aiState.enabled) return;
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
-      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
+      if (tab.id && tab.url && isManagedPageUrl(tab.url)) {
         sendPolicyToTab(tab.id, tab.url);
       }
     });
@@ -3968,7 +4226,7 @@ function buildAiInsightsSnapshot() {
   const profiles = Object.values(aiState.profiles || {});
   profiles.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
   const nowTs = getNow();
-  const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
   const providerState = normalizeAiProviderState(aiState.providerState || {});
   const advisoryHosts = Object.values(aiState.providerAdvisories || {})
     .filter((item) => item && typeof item === 'object')
@@ -4083,16 +4341,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (!tabId) { sendResponse({ success: false, error: 'no tab' }); return; }
       try {
         await chrome.scripting.executeScript({
-          target: { tabId },
+          target: { tabId, allFrames: true },
           files: ['content/element-picker.js']
         });
-        // 注入後立即啟用
-        chrome.tabs.sendMessage(tabId, { action: 'activateElementPicker' });
+        await dispatchElementPickerEvent(tabId, '__shield_pro_activate_picker__');
         sendResponse({ success: true });
       } catch (error) {
         sendResponse({ success: false, error: String(error?.message || error) });
       }
     })();
+    return true;
+  }
+
+  if (request.action === 'deactivateElementPicker') {
+    (async () => {
+      const tabId = request.tabId || sender.tab?.id;
+      if (!tabId) { sendResponse({ success: false, error: 'no tab' }); return; }
+      await dispatchElementPickerEvent(tabId, '__shield_pro_deactivate_picker__');
+      sendResponse({ success: true });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
     return true;
   }
 
@@ -4155,7 +4424,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     sendResponse({
       success: true,
-      settings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
+      settings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets),
+      keyStates: getAiProviderSecretKeyState(aiState.providerSecrets || {}),
       state: normalizeAiProviderState(aiState.providerState || {})
     });
     return true;
@@ -4167,20 +4437,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     (async () => {
-      const currentSettings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+      const currentSettings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets);
       const nextSettings = normalizeAiProviderSettings(request.settings || {});
-      aiState.providerSecret =
-        nextSettings.provider === 'lmstudio'
-          ? ''
-          : String(
-              nextSettings.apiKey ||
-              (nextSettings.provider === currentSettings.provider ? aiState.providerSecret : '')
-            ).trim();
+      const nextSecrets = normalizeAiProviderSecrets(aiState.providerSecrets || {});
+      const submittedApiKey = String(nextSettings.apiKey || '').trim();
+      if (nextSettings.provider !== 'lmstudio') {
+        if (submittedApiKey) {
+          nextSecrets[nextSettings.provider] = submittedApiKey;
+        } else if (nextSettings.provider === currentSettings.provider && currentSettings.apiKey) {
+          nextSecrets[nextSettings.provider] = String(currentSettings.apiKey || '').trim();
+        }
+      }
+      aiState.providerSecrets = nextSecrets;
+      aiState.providerSecret = String(nextSecrets[nextSettings.provider] || '').trim();
       aiState.providerSettings = getPersistableAiProviderSettings(nextSettings);
       scheduleAiPersist();
       sendResponse({
         success: true,
-        settings: redactAiProviderSettings(aiState.providerSettings, aiState.providerSecret),
+        settings: redactAiProviderSettings(aiState.providerSettings, aiState.providerSecrets),
+        keyStates: getAiProviderSecretKeyState(aiState.providerSecrets || {}),
         state: normalizeAiProviderState(aiState.providerState || {})
       });
     })().catch((error) => {
@@ -4413,7 +4688,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         profiles: aiState.profiles,
         hostMetrics: aiState.hostMetrics,
         hostFallbacks: aiState.hostFallbacks,
-        providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
+        providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecrets),
         providerState: normalizeAiProviderState(aiState.providerState || {}),
         providerAdvisories: aiState.providerAdvisories || {},
         generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
@@ -4585,12 +4860,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get(['hiddenElements'], (result) => {
       const rules = result.hiddenElements || [];
       const selector = String(request.selector || '').trim();
+      const selectors = [...new Set(
+        (Array.isArray(request.selectors) ? request.selectors : [selector])
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+      )];
       const hostname = String(request.hostname || '').trim().toLowerCase();
-      const duplicate = rules.some((rule) => rule.selector === selector && String(rule.hostname || '').trim().toLowerCase() === hostname);
+      const duplicateIndex = rules.findIndex((rule) => rule.selector === selector && String(rule.hostname || '').trim().toLowerCase() === hostname);
+      const duplicate = duplicateIndex >= 0;
       const nextRules = duplicate
-        ? rules
+        ? rules.map((rule, index) => {
+            if (index !== duplicateIndex) return rule;
+            const existingSelectors = Array.isArray(rule.selectors) ? rule.selectors : [rule.selector].filter(Boolean);
+            return {
+              ...rule,
+              selectors: [...new Set(existingSelectors.concat(selectors))]
+            };
+          })
         : rules.concat({
             selector,
+            selectors,
             hostname,
             timestamp: Date.now()
           });
@@ -4672,6 +4961,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     return;
   }
 
+  if (!isManagedPageUrl(tab.url)) {
+    return;
+  }
+
   if (directPopupOverlayTabs[String(tabId)]) {
     injectDirectPopupOverlay(tabId, tab.url).catch(() => {});
   }
@@ -4680,7 +4973,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   if (!enabled || whitelisted) {
     chrome.tabs.sendMessage(tabId, { action: 'disableBlocking' }).catch(() => {});
-    chrome.tabs.sendMessage(tabId, { action: 'deactivateElementPicker' }).catch(() => {});
+    sendMessageToTab(tabId, { action: 'deactivateElementPicker' }).catch(() => {});
     chrome.tabs.sendMessage(tabId, { action: 'disableAiMonitor' }).catch(() => {});
 
     if (whitelisted) {
@@ -4715,6 +5008,23 @@ chrome.action?.onClicked?.addListener((tab) => {
     return;
   }
   openDefaultControlSidePanel(targetTabId).catch(() => {});
+});
+
+chrome.contextMenus?.onClicked?.addListener(async (info, tab) => {
+  if (info?.menuItemId === ACTION_MENU_IDS.openSidebar) {
+    const targetTabId = Number(tab?.id || info?.tabId || 0);
+    await openDefaultControlSidePanel(targetTabId).catch((error) => {
+      console.error('❌ 無法開啟 SIDEBAR 視窗:', String(error?.message || error));
+    });
+    return;
+  }
+
+  if (info?.menuItemId === ACTION_MENU_IDS.openPopup) {
+    const targetTabId = Number(tab?.id || info?.tabId || 0);
+    await openActionPopupWindowForTab(targetTabId).catch((error) => {
+      console.error('❌ 無法開啟 POPUP 視窗:', String(error?.message || error));
+    });
+  }
 });
 
 chrome.windows.onRemoved.addListener((removedWindowId) => {

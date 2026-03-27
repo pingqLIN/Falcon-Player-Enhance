@@ -4,6 +4,13 @@
   "version": "4.4.0",
   "description": "Falcon-Player-Enhance development scripts",
   "scripts": {
+    "check:manifest": "node scripts/check-manifest.js",
+    "check:syntax": "node scripts/check-js-syntax.js",
+    "check:css": "node scripts/lint-css-safety.js",
+    "check:site-behaviors": "node scripts/validate-site-behaviors.js",
+    "check:targets": "node scripts/validate-live-browser-targets.js",
+    "test:core": "node tests/core/run-core-tests.js",
+    "check": "npm run check:manifest && npm run check:syntax && npm run test:core && npm run check:css && npm run check:site-behaviors && npm run check:targets",
     "check:lmstudio": "node tests/ai-eval/check-lmstudio-health.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
     "check:gateway": "node tests/ai-eval/check-gateway-health.js --endpoint http://127.0.0.1:8787/v1",
     "test:ai": "node tests/ai-eval/run-ai-evaluation.js",

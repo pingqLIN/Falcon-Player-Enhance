@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "boyfriendtv-compatibility",
+      "match": {
+        "hostSuffixes": [
+          "boyfriendtv.com"
+        ],
+        "iframeSrcIncludes": []
+      },
+      "capabilities": {
+        "compatibilityMode": true,
+        "forcePopupDirect": true,
+        "popupMode": "remote-control",
+        "antiAntiBlockProfile": "",
+        "safeMediaHosts": []
+      },
+      "selectors": {
+        "cosmeticHide": [],
+        "overlayIgnore": [],
+        "playerHints": []
+      },
+      "navigation": {
+        "redirectTrapHosts": [],
+        "redirectRecoveryEnabled": false
+      },
+      "antiAntiBlock": {
+        "fakeGlobals": [],
+        "suppressErrors": false,
+        "errorSelectors": []
+      },
+      "dnrAllowRules": [],
+      "notes": "Compatibility profile for remote-control popup routing and less aggressive player interception."
+    },
+    {
+      "id": "javboys-family",
+      "match": {
+        "hostSuffixes": [
+          "javboys.com",
+          "javboys.online",
+          "player.javboys.com",
+          "player.javboys.online",
+          "myvidplay.com",
+          "luluvdoo.com"
+        ],
+        "iframeSrcIncludes": [
+          "javboys.online",
+          "myvidplay",
+          "luluvdoo",
+          "streamtape",
+          "dood"
+        ]
+      },
+      "capabilities": {
+        "compatibilityMode": false,
+        "forcePopupDirect": false,
+        "popupMode": "standard",
+        "antiAntiBlockProfile": "javboys-cvp",
+        "safeMediaHosts": [
+          "javboys.com",
+          "javboys.online",
+          "player.javboys.com",
+          "player.javboys.online",
+          "myvidplay.com",
+          "luluvdoo.com",
+          "upn.one"
+        ]
+      },
+      "selectors": {
+        "cosmeticHide": [],
+        "overlayIgnore": [],
+        "playerHints": []
+      },
+      "navigation": {
+        "redirectTrapHosts": [
+          "sfnu-protect.sbs",
+          "xsotrk.com",
+          "exoclick-adb.com",
+          "exoclick.com",
+          "cooladblocker.app",
+          "cooladblocker.com",
+          "cyltor88mf.com",
+          "drynvalo.info",
+          "nn125.com",
+          "playafterdark.com"
+        ],
+        "redirectRecoveryEnabled": true
+      },
+      "antiAntiBlock": {
+        "fakeGlobals": [
+          "CVP",
+          "ExoLoader",
+          "VAST",
+          "VPAID",
+          "adblock_detected"
+        ],
+        "suppressErrors": true,
+        "errorSelectors": []
+      },
+      "dnrAllowRules": [
+        "player.javboys.online",
+        "player.javboys.com",
+        "myvidplay.com",
+        "javboys.online"
+      ],
+      "notes": "Javboys player family profile. Includes player iframe hosts, redirect-trap recovery, and anti-antiblock metadata for later strategy extraction."
+    }
+  ]
+}

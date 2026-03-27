@@ -6,9 +6,11 @@
 
     const MAX_Z_INDEX = 2147483647;
     const BASE_PROCESS_INTERVAL_MS = 3000;
+    const OVERLAY_FEATURE_KEY = 'removeOverlays';
     let processIntervalMs = BASE_PROCESS_INTERVAL_MS;
     let processLoopTimer = null;
     let blockingEnabled = false;
+    let safeMediaHosts = [];
     let aiPolicy = {
         riskTier: 'low',
         overlayScanMs: BASE_PROCESS_INTERVAL_MS,
@@ -31,15 +33,28 @@
 
     function resolveBlockingMode() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
+            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', OVERLAY_FEATURE_KEY], (result) => {
                 const hostname = normalizeHostname(window.location.hostname);
                 const whitelist = Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [];
                 const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
                 const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-                blockingEnabled = !(onWhitelist && whitelistEnhanceOnly);
+                const featureEnabled = result[OVERLAY_FEATURE_KEY] !== false;
+                blockingEnabled = featureEnabled && !(onWhitelist && whitelistEnhanceOnly);
                 resolve(blockingEnabled);
             });
         });
+    }
+
+    function applyFeatureToggle(enabled) {
+        blockingEnabled = enabled === true;
+        if (!blockingEnabled && processLoopTimer) {
+            clearInterval(processLoopTimer);
+            processLoopTimer = null;
+        }
+        if (blockingEnabled && !processLoopTimer) {
+            scheduleProcessLoop();
+            setTimeout(processAllPlayers, 150);
+        }
     }
 
     // ========== 覆蓋層特徵識別 ==========
@@ -100,14 +115,6 @@
         'plugrush', 'popads', 'popcash', 'propellerads',
         'adsterra', 'clickadu', 'revcontent', 'outbrain',
         'taboola', 'mgid', 'adskeeper', 'hilltopads'
-    ];
-
-    const SAFE_MEDIA_HOST_PATTERNS = [
-        'javboys.com',
-        'javboys.online',
-        'luluvdoo.com',
-        'myvidplay.com',
-        'upn.one'
     ];
 
     // 播放器控制項白名單
@@ -190,9 +197,22 @@
     let removedCount = 0;
     let processedElements = new WeakSet();
 
+    async function syncSiteProfileState() {
+        const api = window.FalconSiteProfiles;
+        if (!api?.ready) {
+            safeMediaHosts = [];
+            return safeMediaHosts;
+        }
+
+        await api.ready;
+        const configuredHosts = api.getCapability('safeMediaHosts', []);
+        safeMediaHosts = Array.isArray(configuredHosts) ? configuredHosts.map(normalizeHostname) : [];
+        return safeMediaHosts;
+    }
+
     function isSafeMediaHost() {
-        const host = (window.location.hostname || '').toLowerCase();
-        return SAFE_MEDIA_HOST_PATTERNS.some(pattern => host.includes(pattern));
+        const host = normalizeHostname(window.location.hostname);
+        return safeMediaHosts.some((domain) => isDomainOrSubdomain(host, normalizeHostname(domain)));
     }
 
     function containsProtectedMedia(element) {
@@ -670,6 +690,7 @@
      * 初始化
      */
     async function init() {
+        await syncSiteProfileState();
         await resolveBlockingMode();
         if (!blockingEnabled) {
             console.log('⚪ Overlay Remover: 白名單增強模式，已停用基礎覆蓋層清理');
@@ -752,6 +773,11 @@
         }
 
         return false;
+    });
+
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[OVERLAY_FEATURE_KEY]) return;
+        applyFeatureToggle(changes[OVERLAY_FEATURE_KEY].newValue !== false);
     });
 
     init();

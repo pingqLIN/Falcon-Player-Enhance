@@ -282,6 +282,47 @@
         return width <= 340 && height <= 300 && /zoneid=|banner|advert|bftv-ntv/.test(signature);
     }
 
+    function hasMeaningfulIframeSource(url) {
+        const normalized = String(url || '').trim();
+        if (!normalized) return false;
+        return !/^(about:blank|data:|javascript:)/i.test(normalized);
+    }
+
+    function shouldDetectIframePlayerCandidate(iframe, effectiveSrc) {
+        if (!iframe) return false;
+
+        const style = window.getComputedStyle(iframe);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+            return false;
+        }
+
+        const rect = iframe.getBoundingClientRect();
+        const width = rect.width || parseInt(iframe.getAttribute('width') || iframe.width || '0', 10) || 0;
+        const height = rect.height || parseInt(iframe.getAttribute('height') || iframe.height || '0', 10) || 0;
+        if (width <= 0 || height <= 0) {
+            return false;
+        }
+
+        const className = String(iframe.className || '').toLowerCase();
+        const elementId = String(iframe.id || '').toLowerCase();
+        const hasPlayerContext = Boolean(
+            iframe.closest?.(
+                '.shield-detected-container, [class*="player"], [id*="player"], [class*="video"], [id*="video"], [data-testid="videoPlayer"], [data-testid="videoComponent"]'
+            )
+        );
+        const hasMeaningfulSource = hasMeaningfulIframeSource(effectiveSrc);
+        if (!hasMeaningfulSource && !hasPlayerContext) {
+            return false;
+        }
+
+        return /player|embed|video|watch|stream|media/i.test(effectiveSrc) ||
+            /player|video/i.test(className) ||
+            /player|video/i.test(elementId) ||
+            hasPlayerContext ||
+            width > 300 ||
+            height > 200;
+    }
+
     /**
      * 識別播放器類型
      */
@@ -461,14 +502,7 @@
 
             const { type, platform } = identifyPlayerType(iframe);
             if (isLikelyAdIframe(iframe, effectiveSrc)) return;
-
-            // 只偵測看起來像播放器的 iframe
-            const isLikelyPlayer = /player|embed|video|watch|stream|media/i.test(effectiveSrc) ||
-                /player|video/i.test(iframe.className || '') ||
-                /player|video/i.test(iframe.id || '') ||
-                (iframe.width && parseInt(iframe.width) > 300) ||
-                (iframe.height && parseInt(iframe.height) > 200);
-            if (platform === 'generic' && !isLikelyPlayer) return;
+            if (!shouldDetectIframePlayerCandidate(iframe, effectiveSrc)) return;
 
             const iframeRect = iframe.getBoundingClientRect();
             const iframeArea = iframeRect.width * iframeRect.height;

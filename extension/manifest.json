@@ -13,10 +13,12 @@
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
+    "contextMenus",
     "sidePanel",
     "scripting",
     "storage",
     "unlimitedStorage",
+    "windows",
     "tabs",
     "activeTab"
   ],

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// Shield Pro - CSS Safety Lint
+// Falcon-Player-Enhance - CSS Safety Lint
 // ============================================================================
 // 掃描所有 CSS 檔案，檢查是否有危險的全域 attribute selectors
 // 用法: node scripts/lint-css-safety.js
@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CSS_DIR = path.join(__dirname, '..', 'extension', 'content');
+const CSS_DIR = path.join(__dirname, '..', 'extension');
 const DANGEROUS_PATTERNS = [
   /\[class\*="/g,
   /\[id\*="/g,
@@ -43,20 +43,48 @@ const ALLOWED_EXCEPTIONS = [
   'video-wrapper',    // 播放器容器
   'shield-player-type', // 自身標記
   'shield-id',        // 自身標記
+  'shadow-host',      // 已知安全的 Shadow DOM 標記
 ];
 
 let totalWarnings = 0;
 let totalFiles = 0;
+
+function walkCssFiles(dir, files = []) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  entries.forEach((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkCssFiles(full, files);
+      return;
+    }
+
+    if (entry.isFile() && entry.name.endsWith('.css')) {
+      files.push(full);
+    }
+  });
+
+  return files;
+}
 
 function scanFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   const lines = content.split('\n');
   const fileName = path.relative(process.cwd(), filePath);
   let fileWarnings = 0;
+  let inBlockComment = false;
 
   lines.forEach((line, idx) => {
-    // 跳過註解
-    if (line.trim().startsWith('/*') || line.trim().startsWith('*') || line.trim().startsWith('//')) return;
+    const trimmed = line.trim();
+    if (inBlockComment) {
+      if (trimmed.includes('*/')) inBlockComment = false;
+      return;
+    }
+    if (trimmed.startsWith('/*')) {
+      if (!trimmed.includes('*/')) inBlockComment = true;
+      return;
+    }
+    if (trimmed.startsWith('*') || trimmed.startsWith('//')) return;
 
     for (const pattern of DANGEROUS_PATTERNS) {
       pattern.lastIndex = 0;
@@ -80,11 +108,9 @@ function scanFile(filePath) {
 }
 
 // 掃描所有 CSS 檔案
-const cssFiles = fs.readdirSync(CSS_DIR)
-  .filter(f => f.endsWith('.css'))
-  .map(f => path.join(CSS_DIR, f));
+const cssFiles = walkCssFiles(CSS_DIR).sort();
 
-console.log('🔍 Shield Pro CSS Safety Lint');
+console.log('🔍 Falcon-Player-Enhance CSS Safety Lint');
 console.log('=============================');
 console.log(`掃描 ${cssFiles.length} 個 CSS 檔案...\n`);
 

@@ -40,6 +40,8 @@ const L3_REDIRECT_TRAP_DOMAINS = [
     'playafterdark.com'
 ];
 let protectionLevel = BLOCKING_LEVEL.BASIC;
+let requestedProtectionLevel = BLOCKING_LEVEL.BASIC;
+let popupBlockingEnabled = true;
 const aiRuntimeState = {
     popupStrictMode: false,
     sensitivityBoost: 0,
@@ -137,8 +139,18 @@ function normalizeBlockingLevel(level) {
 }
 
 function setProtectionLevel(level) {
-    protectionLevel = normalizeBlockingLevel(level);
+    requestedProtectionLevel = normalizeBlockingLevel(level);
+    protectionLevel = popupBlockingEnabled ? requestedProtectionLevel : BLOCKING_LEVEL.OFF;
     try {
+        window.__shieldProtectionLevel = protectionLevel;
+    } catch (e) {}
+}
+
+function setPopupBlockingEnabled(enabled) {
+    popupBlockingEnabled = enabled === true;
+    protectionLevel = popupBlockingEnabled ? requestedProtectionLevel : BLOCKING_LEVEL.OFF;
+    try {
+        window.__shieldPopupBlockingEnabled = popupBlockingEnabled;
         window.__shieldProtectionLevel = protectionLevel;
     } catch (e) {}
 }
@@ -326,6 +338,56 @@ function isInternalElement(element) {
     return false;
 }
 
+function isContentNavigationContainer(element) {
+    if (!element || !element.nodeType) return false;
+
+    try {
+        const tagName = String(element.tagName || '').toLowerCase();
+        if (tagName === 'aside' || tagName === 'nav') {
+            return true;
+        }
+
+        const className = String(element.className || '').toLowerCase();
+        const id = String(element.id || '').toLowerCase();
+        const navigationHints = [
+            'sidebar',
+            'widget',
+            'related',
+            'tagcloud',
+            'tag-cloud',
+            'category',
+            'categories',
+            'archive',
+            'menu',
+            'nav',
+            'list'
+        ];
+        if (navigationHints.some((hint) => className.includes(hint) || id.includes(hint))) {
+            return true;
+        }
+
+        if (!element.querySelectorAll) return false;
+
+        const anchors = Array.from(element.querySelectorAll('a[href]'));
+        if (anchors.length < 3) return false;
+
+        const uniqueSafeUrls = new Set();
+        anchors.forEach((anchor) => {
+            const href = anchor.getAttribute('href') || anchor.href || '';
+            const resolved = resolveNavigationUrl(href);
+            if (!resolved) return;
+            if (resolved.origin !== window.location.origin) return;
+            if (!isSafeUrl(resolved.href)) return;
+            if (resolved.hash && resolved.pathname === window.location.pathname) return;
+            uniqueSafeUrls.add(resolved.href);
+        });
+
+        return uniqueSafeUrls.size >= 3;
+    } catch (e) {}
+
+    return false;
+}
+
 // ============================================================================
 // Statistics
 // ============================================================================
@@ -389,6 +451,136 @@ function isDangerousNavigationUrl(url) {
     if (isBlockedUrl(urlStr)) return true;
     if (!isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return false;
     return !isSafeUrl(urlStr);
+}
+
+function resolveNavigationUrl(url) {
+    if (!url) return null;
+    try {
+        return new URL(String(url), window.location.origin);
+    } catch (e) {
+        return null;
+    }
+}
+
+function shouldForceSameOriginAnchorNavigation(event, anchor) {
+    if (!event?.isTrusted) return false;
+    if (!anchor || !anchor.href) return false;
+    if (event.defaultPrevented) return false;
+    if (event.button !== 0) return false;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+    if (!isPlayerSite() || isCompatibilityModeSite()) return false;
+
+    const target = String(anchor.target || '').trim().toLowerCase();
+    if (target && target !== '_self') return false;
+
+    const resolved = resolveNavigationUrl(anchor.href);
+    if (!resolved) return false;
+    if (resolved.origin !== window.location.origin) return false;
+    if (!isSafeUrl(resolved.href)) return false;
+
+    const hrefAttribute = String(anchor.getAttribute('href') || '').trim();
+    if (!hrefAttribute || hrefAttribute.startsWith('#')) return false;
+
+    return true;
+}
+
+function forceSameOriginAnchorNavigation(anchor) {
+    const resolved = resolveNavigationUrl(anchor?.href || '');
+    if (!resolved) return;
+    try {
+        window.location.assign(resolved.href);
+    } catch (e) {
+        window.location.href = resolved.href;
+    }
+}
+
+function isEligibleSameOriginNavigationAnchor(anchor) {
+    if (!anchor || !anchor.href) return false;
+
+    const resolved = resolveNavigationUrl(anchor.href);
+    if (!resolved) return false;
+    if (resolved.origin !== window.location.origin) return false;
+    if (!isSafeUrl(resolved.href)) return false;
+
+    const hrefAttribute = String(anchor.getAttribute('href') || '').trim();
+    if (!hrefAttribute || hrefAttribute.startsWith('#')) return false;
+
+    const rel = String(anchor.getAttribute('rel') || '').toLowerCase();
+    const className = String(anchor.className || '').toLowerCase();
+    if (rel.includes('tag') || rel.includes('category')) return false;
+    if (className.includes('tag') || className.includes('category')) return false;
+
+    return true;
+}
+
+function findContentCardNavigationAnchor(target) {
+    if (!target || !target.closest) return null;
+    if (!isPlayerSite() || isCompatibilityModeSite()) return null;
+    if (isInternalElement(target)) return null;
+    if (target.closest('a[href], button, input, select, textarea, label, [role="button"], [onclick]')) {
+        return null;
+    }
+
+    let element = target;
+    let depth = 0;
+    while (element && element !== document.body && depth < 8) {
+        if (containsProtectedMedia(element)) return null;
+
+        const tagName = String(element.tagName || '').toLowerCase();
+        const className = String(element.className || '').toLowerCase();
+        const looksLikeCard =
+            tagName === 'article' ||
+            className.includes('post') ||
+            className.includes('entry') ||
+            className.includes('thumb') ||
+            className.includes('thumbnail') ||
+            className.includes('card') ||
+            className.includes('item') ||
+            element.hasAttribute?.('data-post-id');
+
+        if (looksLikeCard && element.querySelectorAll) {
+            const anchors = [];
+            const seen = new Set();
+            element.querySelectorAll('a[href]').forEach((anchor) => {
+                if (!isEligibleSameOriginNavigationAnchor(anchor)) return;
+                const resolved = resolveNavigationUrl(anchor.href);
+                if (!resolved || seen.has(resolved.href)) return;
+                seen.add(resolved.href);
+                anchors.push(anchor);
+            });
+
+            if (anchors.length === 1) {
+                return anchors[0];
+            }
+
+            if (anchors.length > 1) {
+                const preferred = anchors.find((anchor) => {
+                    const anchorClass = String(anchor.className || '').toLowerCase();
+                    const anchorText = String(anchor.textContent || '').trim();
+                    if (anchor.querySelector?.('img, picture, h1, h2, h3, h4')) return true;
+                    if (
+                        anchorClass.includes('title') ||
+                        anchorClass.includes('thumb') ||
+                        anchorClass.includes('thumbnail') ||
+                        anchorClass.includes('cover') ||
+                        anchorClass.includes('poster')
+                    ) {
+                        return true;
+                    }
+                    return anchorText.length >= 20;
+                });
+
+                if (preferred) {
+                    return preferred;
+                }
+            }
+        }
+
+        element = element.parentElement;
+        depth += 1;
+    }
+
+    return null;
 }
 
 function isRedirectTrapHost(hostname) {
@@ -800,6 +992,24 @@ function neutralizeMetaRefresh() {
 }
 
 document.addEventListener('click', function(e) {
+    const trustedAnchor = e.target?.closest?.('a[href]');
+    if (trustedAnchor && shouldForceSameOriginAnchorNavigation(e, trustedAnchor)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        forceSameOriginAnchorNavigation(trustedAnchor);
+        return false;
+    }
+
+    const contentCardAnchor = findContentCardNavigationAnchor(e.target);
+    if (contentCardAnchor && shouldForceSameOriginAnchorNavigation(e, contentCardAnchor)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        forceSameOriginAnchorNavigation(contentCardAnchor);
+        return false;
+    }
+
     if (!isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return;
     const target = e.target;
     if (!target || !target.closest) return;
@@ -834,6 +1044,7 @@ function neutralizeLevel3FullscreenOverlays() {
         if (!el || isInternalElement(el)) return;
         if (containsProtectedMedia(el)) return;
         if (isMainPageContainer(el)) return;
+        if (isContentNavigationContainer(el)) return;
 
         const style = window.getComputedStyle(el);
         if (style.pointerEvents === 'none') return;
@@ -872,6 +1083,7 @@ function isClickjackingLayer(element) {
     // 🔴 關鍵保護：絕不標記主頁面容器為覆蓋層
     if (isMainPageContainer(element)) return false;
     if (containsProtectedMedia(element)) return false;
+    if (isContentNavigationContainer(element)) return false;
 
     // 白名單：播放器控制項
     if (element.closest('.video-js, .jwplayer, .plyr, .html5-video-player, #player, .art-video-player')) return false;
@@ -946,6 +1158,10 @@ function removeClickjackingLayer(element) {
         log('跳過播放器容器:', element.id || element.className?.substring?.(0, 30));
         return;
     }
+    if (isContentNavigationContainer(element)) {
+        log('跳過內容導覽容器:', element.id || element.className?.substring?.(0, 30));
+        return;
+    }
     
     try {
         element.style.setProperty('display', 'none', 'important');
@@ -964,6 +1180,42 @@ function removeClickjackingLayer(element) {
         });
         warn('已移除覆蓋層:', element.className?.substring?.(0, 50) || element.id || element.tagName);
     } catch (err) {}
+}
+
+function replaySafeUnderlyingClick(event) {
+    if (!event || event.type !== 'click') return;
+    const clientX = Number(event.clientX);
+    const clientY = Number(event.clientY);
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+
+    const hiddenTarget = event.target;
+    if (hiddenTarget && hiddenTarget.style) {
+        hiddenTarget.style.setProperty('pointer-events', 'none', 'important');
+    }
+
+    let candidate = null;
+    try {
+        candidate = document.elementFromPoint(clientX, clientY);
+    } catch (e) {
+        candidate = null;
+    }
+
+    if (!candidate || candidate === hiddenTarget) return;
+    if (isInternalElement(candidate)) return;
+
+    const interactiveTarget = candidate.closest('a[href], button, input, select, textarea, label, [role="button"]');
+    if (!interactiveTarget || isInternalElement(interactiveTarget)) return;
+
+    if (interactiveTarget.matches('a[href]')) {
+        const href = interactiveTarget.getAttribute('href') || interactiveTarget.href || '';
+        if (!isSafeUrl(href)) return;
+    }
+
+    setTimeout(() => {
+        try {
+            interactiveTarget.click();
+        } catch (e) {}
+    }, 0);
 }
 
 // 點擊事件攔截
@@ -992,6 +1244,7 @@ function removeClickjackingLayer(element) {
             e.stopPropagation();
             e.stopImmediatePropagation();
             removeClickjackingLayer(target);
+            replaySafeUnderlyingClick(e);
             return false;
         }
     }, true);
@@ -1054,6 +1307,10 @@ function removeKnownOverlays() {
                         log('跳過播放器容器:', el.id || el.className?.substring?.(0, 30));
                         return;
                     }
+                    if (isContentNavigationContainer(el)) {
+                        log('跳過內容導覽容器:', el.id || el.className?.substring?.(0, 30));
+                        return;
+                    }
                     
                     el.style.setProperty('display', 'none', 'important');
                     el.style.setProperty('visibility', 'hidden', 'important');
@@ -1111,6 +1368,7 @@ function protectVideoElements() {
                 el.tagName === 'LABEL' || el.tagName === 'TEXTAREA') return;
             if (el.closest('a, button, [role="button"], [onclick]')) return;
             if (el.hasAttribute('href') || el.hasAttribute('onclick')) return;
+            if (isContentNavigationContainer(el)) return;
             
             // 白名單：播放器控制項
             if (el.closest('.video-js, .jwplayer, .plyr, .html5-video-player, #player, .art-video-player')) return;
@@ -1374,6 +1632,7 @@ if (isPlayerSite() && !isCompatibilityModeSite() && isLevelAtLeast(BLOCKING_LEVE
                     
                     target.style.setProperty('pointer-events', 'none', 'important');
                     target.style.setProperty('display', 'none', 'important');
+                    replaySafeUnderlyingClick(e);
                     
                     return false;
                 }
@@ -1433,6 +1692,10 @@ function setupPostMessageBridge() {
                 type: '__SHIELD_PRO_PAGE_STATS__',
                 stats: pageStats
             }, '*');
+            return;
+        }
+        if (event.data && event.data.type === '__SHIELD_FEATURE_SETTINGS__') {
+            setPopupBlockingEnabled(event.data.settings?.popupBlockingEnabled !== false);
         }
     });
 }

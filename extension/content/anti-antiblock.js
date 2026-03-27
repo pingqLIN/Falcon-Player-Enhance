@@ -17,6 +17,67 @@ function log(...args) {
     if (DEV_MODE) console.log(LOG_PREFIX, ...args);
 }
 
+function normalizeHostname(hostname) {
+    return String(hostname || '').toLowerCase().replace(/^www\./, '');
+}
+
+function resolveNavigationUrl(url) {
+    if (!url) return null;
+    try {
+        return new URL(String(url), window.location.origin);
+    } catch (e) {
+        return null;
+    }
+}
+
+function isSafeSameOriginNavigationHref(url) {
+    const resolved = resolveNavigationUrl(url);
+    if (!resolved) return false;
+    if (resolved.origin !== window.location.origin) return false;
+    if (resolved.hash && resolved.pathname === window.location.pathname) return false;
+    return true;
+}
+
+function isContentNavigationContainer(element) {
+    if (!element || element.nodeType !== 1 || !element.querySelectorAll) return false;
+
+    try {
+        const tagName = String(element.tagName || '').toLowerCase();
+        const className = String(element.className || '').toLowerCase();
+        const id = String(element.id || '').toLowerCase();
+        const hints = ['sidebar', 'widget', 'related', 'nav', 'menu', 'list', 'archive', 'category', 'tagcloud'];
+        const anchors = Array.from(element.querySelectorAll('a[href]'));
+        const uniqueUrls = new Set(
+            anchors
+                .map((anchor) => anchor.getAttribute?.('href') || anchor.href || '')
+                .filter((href) => isSafeSameOriginNavigationHref(href))
+                .map((href) => resolveNavigationUrl(href)?.href)
+                .filter(Boolean)
+        );
+
+        if (tagName === 'aside' || tagName === 'nav') {
+            return uniqueUrls.size >= 2;
+        }
+        if (hints.some((hint) => className.includes(hint) || id.includes(hint))) {
+            return uniqueUrls.size >= 2;
+        }
+        return uniqueUrls.size >= 3;
+    } catch (e) {}
+
+    return false;
+}
+
+function findNavigationContainer(element) {
+    let current = element;
+    let depth = 0;
+    while (current && depth < 6) {
+        if (isContentNavigationContainer(current)) return current;
+        current = current.parentElement;
+        depth += 1;
+    }
+    return null;
+}
+
 // Only enable this module on known player sites. Running it on general websites can
 // break their ad libraries (e.g. googletag stubs) and increase page errors.
 // 此腳本已透過 content script matches 限定只在播放器站點載入
@@ -24,6 +85,9 @@ const IS_PLAYER_SITE = true;
 function isPlayerSite() {
     return IS_PLAYER_SITE;
 }
+
+const extensionRuntime = typeof chrome === 'object' && chrome?.runtime ? chrome.runtime : null;
+const extensionStorageLocal = typeof chrome === 'object' && chrome?.storage?.local ? chrome.storage.local : null;
 
 if (!isPlayerSite()) {
     return;
@@ -535,6 +599,9 @@ function handleJavboysPlayer() {
     const removeVideoAdvertiserOverlay = () => {
         const elements = document.querySelectorAll('a, div, img, span, section, aside');
         elements.forEach(el => {
+            if (isContentNavigationContainer(el) || findNavigationContainer(el)) {
+                return;
+            }
             const href = el.href || '';
             const text = (el.textContent || '').toLowerCase();
             const alt = el.alt || '';
@@ -572,6 +639,9 @@ function handleJavboysPlayer() {
         
         // 3. 移除固定位置的廣告覆蓋層
         document.querySelectorAll('div, section, aside, span').forEach(el => {
+            if (isContentNavigationContainer(el) || findNavigationContainer(el)) {
+                return;
+            }
             const style = window.getComputedStyle(el);
             const zIndex = parseInt(style.zIndex) || 0;
             
@@ -637,6 +707,7 @@ function handleJavboysPlayer() {
                     if (layer.tagName === 'SCRIPT' || layer.tagName === 'STYLE') return;
                     if (layer.tagName === 'VIDEO' || layer.tagName === 'IFRAME') return;
                     if (layer.contains && layer.contains(iframe)) return;
+                    if (isContentNavigationContainer(layer) || findNavigationContainer(layer)) return;
 
                     const style = window.getComputedStyle(layer);
                     if (style.pointerEvents === 'none') return;
@@ -682,6 +753,7 @@ function handleJavboysPlayer() {
             if (parent) {
                 Array.from(parent.children).forEach(sibling => {
                     if (sibling !== iframe && sibling.tagName !== 'SCRIPT') {
+                        if (isContentNavigationContainer(sibling) || findNavigationContainer(sibling)) return;
                         const sibStyle = window.getComputedStyle(sibling);
                         if (sibStyle.position === 'absolute' || sibStyle.position === 'fixed') {
                             sibling.style.setProperty('pointer-events', 'none', 'important');
@@ -723,6 +795,7 @@ function protectIframes() {
                 const siblings = parent.children;
                 Array.from(siblings).forEach(sibling => {
                     if (sibling !== iframe && sibling.tagName !== 'SCRIPT') {
+                        if (isContentNavigationContainer(sibling) || findNavigationContainer(sibling)) return;
                         const style = window.getComputedStyle(sibling);
                         const pos = style.position;
                         const zIndex = parseInt(style.zIndex) || 0;
@@ -775,7 +848,7 @@ const WHITELIST_DOMAINS = [
 ];
 
 function isWhitelistDomain() {
-    const host = window.location.hostname.toLowerCase();
+    const host = normalizeHostname(window.location.hostname);
     return WHITELIST_DOMAINS.some(d => host === d || host.endsWith('.' + d));
 }
 
@@ -783,12 +856,14 @@ function isWhitelistDomain() {
 let whitelistEnhanceOnly = true;
 
 // 監聽 popup 切換事件
-chrome.runtime.onMessage.addListener((request) => {
-    if (request.action === 'setWhitelistEnhanceOnly') {
-        whitelistEnhanceOnly = !!request.enabled;
-        log('白名單保護模式:', whitelistEnhanceOnly ? '開啟（只增強）' : '關閉（完整清除）');
-    }
-});
+if (extensionRuntime?.onMessage?.addListener) {
+    extensionRuntime.onMessage.addListener((request) => {
+        if (request.action === 'setWhitelistEnhanceOnly') {
+            whitelistEnhanceOnly = !!request.enabled;
+            log('白名單保護模式:', whitelistEnhanceOnly ? '開啟（只增強）' : '關閉（完整清除）');
+        }
+    });
+}
 
 function init() {
     // 設定標記，讓 inject-blocker.js 知道此模組已載入
@@ -798,9 +873,11 @@ function init() {
     const onWhitelist = isWhitelistDomain();
 
     // 從 storage 讀取白名單保護模式設定（同步初始值）
-    chrome.storage.local.get(['whitelistEnhanceOnly'], (result) => {
-        whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-    });
+    if (extensionStorageLocal?.get) {
+        extensionStorageLocal.get(['whitelistEnhanceOnly'], (result) => {
+            whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
+        });
+    }
 
     fakeAdAPIs();
     blockAdblockDetection();

@@ -8,20 +8,36 @@
 (function () {
     'use strict';
 
-    const COMPATIBILITY_MODE_SITES = [
-        'boyfriendtv.com'
-    ];
+    const POPUP_FEATURE_KEY = 'popupBlockingEnabled';
     // 此腳本已透過 content script matches 限定只在播放器站點載入
     const IS_PLAYER_SITE = true;
+    let compatibilityMode = false;
+    let initPromise = null;
+
+    async function syncSiteProfileState() {
+        const api = window.FalconSiteProfiles;
+        if (!api?.ready) {
+            compatibilityMode = false;
+            return compatibilityMode;
+        }
+
+        await api.ready;
+        compatibilityMode = api.hasCapability('compatibilityMode');
+        return compatibilityMode;
+    }
 
     function isCompatibilityModeSite() {
-        const host = window.location.hostname.toLowerCase();
-        return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+        return compatibilityMode === true;
     }
 
     function isPlayerSite() {
         return IS_PLAYER_SITE;
     }
+
+    let popupBlockingEnabled = true;
+    let scanTimer = null;
+    let observer = null;
+    let initialized = false;
 
     // ========== 年齡驗證守衛 ==========
     const AGE_GATE_SIGNALS = [
@@ -101,41 +117,83 @@
     }
 
     // ========== 初始化 ==========
-    function init() {
-        if (!isPlayerSite()) {
-            return;
-        }
+    async function init() {
+        if (initialized) return;
+        if (initPromise) return initPromise;
 
-        if (isCompatibilityModeSite()) {
-            console.log('🧩 [Falcon-Player-Enhance] Anti-Popup 相容模式啟用，已停用侵入式覆蓋層清理');
-            return;
-        }
+        initPromise = (async () => {
+            if (initialized) return;
+            if (!isPlayerSite()) {
+                return;
+            }
 
-        // 立即執行
-        removeInsetOverlays();
-        protectPlayerIframes();
+            await syncSiteProfileState();
+            if (isCompatibilityModeSite()) {
+                console.log('🧩 [Falcon-Player-Enhance] Anti-Popup 相容模式啟用，已停用侵入式覆蓋層清理');
+                return;
+            }
 
-        // 定期掃描
-        setInterval(() => {
+            initialized = true;
+
             removeInsetOverlays();
             protectPlayerIframes();
-        }, 1000);
 
-        // DOM 變化時掃描
-        const observer = new MutationObserver(() => {
-            removeInsetOverlays();
-        });
+            scanTimer = setInterval(() => {
+                if (!popupBlockingEnabled) return;
+                removeInsetOverlays();
+                protectPlayerIframes();
+            }, 1000);
 
-        if (document.body) {
-            observer.observe(document.body, { childList: true, subtree: true });
-        } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                observer.observe(document.body, { childList: true, subtree: true });
+            observer = new MutationObserver(() => {
+                if (!popupBlockingEnabled) return;
+                removeInsetOverlays();
             });
+
+            if (document.body) {
+                observer.observe(document.body, { childList: true, subtree: true });
+            } else {
+                document.addEventListener('DOMContentLoaded', () => {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                });
+            }
+
+            console.log('🛡️ [Falcon-Player-Enhance] Anti-Popup (播放器版) 已啟動');
+        })();
+
+        try {
+            await initPromise;
+        } finally {
+            initPromise = null;
         }
-        
-        console.log('🛡️ [Falcon-Player-Enhance] Anti-Popup (播放器版) 已啟動');
     }
 
-    init();
+    async function applyPopupFeatureToggle(enabled) {
+        popupBlockingEnabled = enabled === true;
+        if (popupBlockingEnabled) {
+            await init();
+            if (initialized) {
+                removeInsetOverlays();
+                protectPlayerIframes();
+            }
+            return;
+        }
+        if (scanTimer) {
+            clearInterval(scanTimer);
+            scanTimer = null;
+        }
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+        initialized = false;
+    }
+
+    chrome.storage.local.get([POPUP_FEATURE_KEY], (result) => {
+        void applyPopupFeatureToggle(result[POPUP_FEATURE_KEY] !== false);
+    });
+
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[POPUP_FEATURE_KEY]) return;
+        void applyPopupFeatureToggle(changes[POPUP_FEATURE_KEY].newValue !== false);
+    });
 })();

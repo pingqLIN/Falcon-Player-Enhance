@@ -6,12 +6,14 @@
 
     const MAX_Z_INDEX = 2147483647; // JavaScript 最大安全整數 z-index
     const OVERLAY_CHECK_INTERVAL = 3000; // 每 3 秒檢查一次覆蓋元素
+    const OVERLAY_FEATURE_KEY = 'removeOverlays';
     const FRAME_SOURCE_MESSAGE_TYPE = 'shield:frame-source';
     const IS_TOP_FRAME = window === window.top;
     const COMPATIBILITY_MODE_SITES = [
         'boyfriendtv.com'
     ];
     let cleanupEnabled = false;
+    let overlayMonitorTimer = null;
 
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
@@ -23,12 +25,13 @@
 
     function resolveCleanupMode() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
+            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', OVERLAY_FEATURE_KEY], (result) => {
                 const hostname = normalizeHostname(window.location.hostname);
                 const whitelist = Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [];
                 const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
                 const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-                cleanupEnabled = !(onWhitelist && whitelistEnhanceOnly);
+                const featureEnabled = result[OVERLAY_FEATURE_KEY] !== false;
+                cleanupEnabled = featureEnabled && !(onWhitelist && whitelistEnhanceOnly);
                 resolve(cleanupEnabled);
             });
         });
@@ -133,8 +136,10 @@
         const btn = document.createElement('button');
         btn.className = 'shield-popup-player-btn';
         btn.setAttribute('data-shield-internal', 'true');
+        btn.setAttribute('aria-label', '在新視窗無干擾播放');
         btn.innerHTML = '🎬';
         btn.title = '在新視窗無干擾播放';
+        btn.tabIndex = 0;
 
         Object.assign(btn.style, {
             position: 'fixed',
@@ -159,6 +164,7 @@
         const tooltip = document.createElement('div');
         tooltip.className = 'shield-video-tooltip';
         tooltip.setAttribute('data-shield-internal', 'true');
+        tooltip.setAttribute('aria-hidden', 'true');
         Object.assign(tooltip.style, {
             position: 'fixed',
             zIndex: String(MAX_Z_INDEX),
@@ -176,8 +182,30 @@
 
         let hoverPinned = false;
         let hoverTimeout = null;
+        let refreshTimer = null;
+        let disposed = false;
+
+        function hideOverlayNow() {
+            btn.style.opacity = '0';
+            tooltip.style.opacity = '0';
+        }
+
+        function isButtonStateAlive() {
+            return Boolean(
+                player?.isConnected &&
+                btn?.isConnected &&
+                tooltip?.isConnected &&
+                document.body?.contains(btn) &&
+                document.body?.contains(tooltip)
+            );
+        }
 
         function showOverlay() {
+            if (disposed) return;
+            if (!isButtonStateAlive()) {
+                cleanup();
+                return;
+            }
             clearTimeout(hoverTimeout);
             if (!applyFloatingPopupAnchorPosition(player, btn, tooltip)) {
                 return;
@@ -187,36 +215,52 @@
             updateVideoTooltip(player, tooltip);
         }
 
-        function hideOverlaySoon() {
+        function hideOverlaySoon(delay = 80) {
             clearTimeout(hoverTimeout);
             hoverTimeout = window.setTimeout(() => {
                 if (hoverPinned) return;
-                btn.style.opacity = '0';
-                tooltip.style.opacity = '0';
-            }, 80);
+                hideOverlayNow();
+            }, delay);
         }
 
-        player.addEventListener('mouseenter', () => {
+        const onPlayerEnter = () => {
             hoverPinned = true;
             showOverlay();
-        });
-        player.addEventListener('mouseleave', () => {
+        };
+        const onPlayerLeave = () => {
             hoverPinned = false;
             hideOverlaySoon();
-        });
+        };
 
-        btn.addEventListener('mouseenter', () => {
+        const onButtonEnter = () => {
             hoverPinned = true;
             showOverlay();
             btn.style.transform = 'scale(1.1)';
             btn.style.background = 'rgba(50, 50, 50, 0.9)';
-        });
-        btn.addEventListener('mouseleave', () => {
+        };
+        const onButtonLeave = () => {
             hoverPinned = false;
             hideOverlaySoon();
             btn.style.transform = 'scale(1)';
             btn.style.background = 'rgba(0, 0, 0, 0.7)';
-        });
+        };
+        const onButtonFocus = () => {
+            hoverPinned = true;
+            showOverlay();
+            btn.style.outline = '2px solid rgba(255, 214, 130, 0.95)';
+            btn.style.outlineOffset = '2px';
+        };
+        const onButtonBlur = () => {
+            hoverPinned = false;
+            btn.style.outline = 'none';
+            hideOverlaySoon(140);
+        };
+        const onPlayerPointerDown = (event) => {
+            if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+            hoverPinned = false;
+            showOverlay();
+            hideOverlaySoon(2200);
+        };
 
         btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -224,28 +268,68 @@
             openPopupPlayer(player);
         });
 
-        tooltip.addEventListener('mouseenter', () => {
+        const onTooltipEnter = () => {
             hoverPinned = true;
             showOverlay();
-        });
-        tooltip.addEventListener('mouseleave', () => {
+        };
+        const onTooltipLeave = () => {
             hoverPinned = false;
             hideOverlaySoon();
-        });
+        };
 
         document.body.appendChild(btn);
         document.body.appendChild(tooltip);
 
         const refreshOverlayPosition = () => {
+            if (!isButtonStateAlive()) {
+                cleanup();
+                return;
+            }
             if (btn.style.opacity === '1' || tooltip.style.opacity === '1') {
                 applyFloatingPopupAnchorPosition(player, btn, tooltip);
             }
         };
 
+        function cleanup() {
+            if (disposed) return;
+            disposed = true;
+            clearTimeout(hoverTimeout);
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+            window.removeEventListener('scroll', refreshOverlayPosition, true);
+            window.removeEventListener('resize', refreshOverlayPosition, true);
+            player.removeEventListener('mouseenter', onPlayerEnter);
+            player.removeEventListener('mouseleave', onPlayerLeave);
+            player.removeEventListener('pointerdown', onPlayerPointerDown, true);
+            btn.removeEventListener('mouseenter', onButtonEnter);
+            btn.removeEventListener('mouseleave', onButtonLeave);
+            btn.removeEventListener('focus', onButtonFocus);
+            btn.removeEventListener('blur', onButtonBlur);
+            tooltip.removeEventListener('mouseenter', onTooltipEnter);
+            tooltip.removeEventListener('mouseleave', onTooltipLeave);
+            btn.remove();
+            tooltip.remove();
+        }
+
+        player.addEventListener('mouseenter', onPlayerEnter);
+        player.addEventListener('mouseleave', onPlayerLeave);
+        player.addEventListener('pointerdown', onPlayerPointerDown, true);
+        btn.addEventListener('mouseenter', onButtonEnter);
+        btn.addEventListener('mouseleave', onButtonLeave);
+        btn.addEventListener('focus', onButtonFocus);
+        btn.addEventListener('blur', onButtonBlur);
+        tooltip.addEventListener('mouseenter', onTooltipEnter);
+        tooltip.addEventListener('mouseleave', onTooltipLeave);
         window.addEventListener('scroll', refreshOverlayPosition, true);
         window.addEventListener('resize', refreshOverlayPosition, true);
-        setInterval(() => {
+        refreshTimer = setInterval(() => {
             refreshOverlayPosition();
+            if (!isButtonStateAlive()) {
+                cleanup();
+                return;
+            }
             updateVideoTooltip(player, tooltip);
         }, 1000);
     }
@@ -644,6 +728,35 @@
             getResolvedIframeSource(iframe) ||
             ''
         );
+    }
+
+    function shouldProcessPlayerOverlayCleanup(player) {
+        if (!isEffectivelyVisible(player)) {
+            return false;
+        }
+
+        if (player.tagName === 'VIDEO') {
+            return Boolean(getVideoSource(player)) || Number(player.readyState || 0) > 0;
+        }
+
+        if (player.tagName === 'IFRAME') {
+            return Boolean(getIframeSource(player) || getResolvedIframeSource(player));
+        }
+
+        const descendants = getDirectPlayableDescendants(player);
+        if (descendants.length === 0) {
+            return false;
+        }
+
+        return descendants.some((element) => {
+            if (element.tagName === 'VIDEO') {
+                return Boolean(getVideoSource(element)) || Number(element.readyState || 0) > 0;
+            }
+            if (element.tagName === 'IFRAME') {
+                return Boolean(getIframeSource(element) || getResolvedIframeSource(element));
+            }
+            return false;
+        });
     }
 
     function buildElementSignature(element, src = '') {
@@ -1350,6 +1463,7 @@
      * 移除播放器上的覆蓋元素 (增強版)
      */
     function removeOverlays(player) {
+        if (!shouldProcessPlayerOverlayCleanup(player)) return;
         const playerRect = player.getBoundingClientRect();
 
         // 只檢查可見的播放器
@@ -1447,6 +1561,7 @@
      */
     function processPlayers(players) {
         players.forEach(player => {
+            if (!shouldProcessPlayerOverlayCleanup(player)) return;
             enhancePlayer(player);
             if (cleanupEnabled && shouldRunAggressiveOverlayCleanup) {
                 removeOverlays(player);
@@ -1459,14 +1574,32 @@
      */
     function startOverlayMonitoring() {
         if (!shouldRunAggressiveOverlayCleanup) return;
+        if (overlayMonitorTimer) return;
 
-        setInterval(() => {
+        overlayMonitorTimer = setInterval(() => {
             if (!cleanupEnabled) return;
             const enhancedPlayers = document.querySelectorAll('.player-enhanced-active');
             enhancedPlayers.forEach(player => {
                 removeOverlays(player);
             });
         }, OVERLAY_CHECK_INTERVAL);
+    }
+
+    function applyOverlayFeatureToggle(enabled) {
+        cleanupEnabled = enabled === true;
+        if (!cleanupEnabled && overlayMonitorTimer) {
+            clearInterval(overlayMonitorTimer);
+            overlayMonitorTimer = null;
+        }
+        if (!cleanupEnabled) return;
+        startOverlayMonitoring();
+        if (shouldRunAggressiveOverlayCleanup) {
+            removeParentPageOverlays();
+            const enhancedPlayers = document.querySelectorAll('.player-enhanced-active');
+            enhancedPlayers.forEach(player => {
+                removeOverlays(player);
+            });
+        }
     }
 
     /**
@@ -1608,6 +1741,11 @@
             return true;
         }
         return false;
+    });
+
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[OVERLAY_FEATURE_KEY]) return;
+        applyOverlayFeatureToggle(changes[OVERLAY_FEATURE_KEY].newValue !== false);
     });
 
     init();
