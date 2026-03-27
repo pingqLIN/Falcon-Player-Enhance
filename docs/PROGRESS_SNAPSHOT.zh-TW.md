@@ -1,294 +1,271 @@
-# Falcon-Player-Enhance 進度說明儲存
-
-> 更新日期: 2026-03-20（第二次更新：加入審查報告摘要）
-> 用途: 提供給 Opus 做快速檢查與二次審閱
-> 範圍: AI provider 串接、AI 評測、live-browser 測試資料、近期 UX / 安全修正、專案審查紀錄
-
-## 1. 目前已完成的核心進度
-
-### 1.1 AI provider 架構已擴充
-
-目前 extension 端已支援以下 AI provider:
-
-- `openai`
-- `gemini`
-- `lmstudio`
-- `gateway`
-
-其中目前的預設與第一選擇是:
-
-- provider: `openai`
-- model: `gpt-5.4-mini`
-- endpoint: `https://api.openai.com/v1/responses`
-
-相關核心實作已接入:
-
-- `extension/background.js`
-- `extension/dashboard/dashboard.js`
-- `extension/dashboard/dashboard.html`
-
-### 1.2 OpenAI direct 已可由使用者直接設定
-
-目前設計已改成:
-
-- 使用者安裝 extension 後，可直接在 dashboard 選擇 `OpenAI direct`
-- 可自行填入 OpenAI API key
-- 可自行調整 endpoint 與 model
-- 不再強制需要自架 gateway 才能使用 GPT 模型
-
-這是依照目前產品方向調整成「使用者自行提供 API key 與官方接口」的模式。
-
-### 1.3 `gpt-5.4-mini` 已做輸出優化
-
-先前 `gpt-5.4-mini` 雖然能理解場景，但 `recommendedActions` 常輸出自然語言，無法穩定命中 extension 需要的固定 token。
-
-目前已做兩層修正:
-
-- prompt 明確要求只輸出固定 action token
-- 本地 normalization 會將偏自然語言的動作建議收斂為固定枚舉
-
-目前固定 action token 以這幾個為主:
-
-- `tighten_popup_guard`
-- `tune_overlay_scan`
-- `guard_external_navigation`
-- `apply_extra_blocked_domains`
-
-### 1.4 live eval / compare 基礎設施已補齊
-
-已新增或整理以下測試能力:
-
-- OpenAI live evaluation
-- Gemini live evaluation
-- LM Studio live evaluation
-- provider report compare / ranking
-
-主要檔案:
-
-- `tests/ai-eval/run-openai-direct-evaluation.js`
-- `tests/ai-eval/run-gemini-direct-evaluation.js`
-- `tests/ai-eval/run-lmstudio-evaluation.js`
-- `tests/ai-eval/compare-provider-reports.js`
-- `tests/ai-eval/README.md`
-
-### 1.5 live-browser 測試目標已加入 curated 單頁樣本
-
-已把外部 AI 篩出的 5 個「單一內容頁 / 單一影片詳情頁」整理為 machine-readable target 檔:
-
-- `tests/live-browser/targets.external-ai.single-page.curated.json`
-
-這批 target 的用途是:
-
-- 測播放器周邊廣告干擾
-- 測 overlay / redirect CTA / popup trigger / external navigation lure
-- 作為固定 regression 樣本池的第一版種子資料
-
-README 也已同步補充:
-
-- `tests/live-browser/README.md`
-
-## 2. 已完成的驗證
-
-### 2.1 語法與回歸
-
-已跑過並通過:
-
-- `node --check extension/background.js`
-- `node --check extension/dashboard/dashboard.js`
-- `npm run test:ai`
-- `npm run test:e2e-replay`
-
-### 2.2 OpenAI direct 實測
-
-已確認:
-
-- OpenAI 官方 API 可連線
-- `gpt-5.4-mini` 可正常回應
-- extension 端設計已可直接吃 OpenAI Responses API
-
-### 2.3 `gpt-5.4-mini` 評測結論
-
-經過 prompt + normalization 優化後，目前 `gpt-5.4-mini` 是現階段最適合的第一選擇。
-
-已知結果:
-
-- `gpt-5.4-mini` optimized report: 通過
-- `gpt-5.4-nano`: 不理想
-- `gpt-5-nano`: 不理想
-- `gemini-2.5-flash`: 可理解場景，但 machine-strict 程度不足
-
-## 3. 目前仍存在的缺口
-
-### 3.1 OpenAI direct 的信任邊界仍值得再審
-
-雖然目前產品方向允許使用者自行填 API key，但這仍屬於 extension 直接持有第三方 API credential 的模式。
-
-建議 Opus 重點檢查:
-
-- API key 儲存位置與暴露風險
-- background / content script 之間是否有不必要的 credential 傳遞
-- provider health check / advisory request 是否有過量日誌或洩漏風險
-
-### 3.2 AI advisory 到 runtime action 的映射仍可更嚴格
-
-目前已經可用，但仍建議再審:
-
-- token normalization 是否過度寬鬆
-- candidate selectors 是否可能過量或過 noisy
-- 哪些欄位應被 runtime 忽略，不應直接信任模型自然語句
-
-### 3.3 live-browser curated targets 尚未完成第一輪實跑報告
-
-target 檔已建立，但還沒有針對這 5 個樣本跑出第一份固定報告。
-
-這代表目前資料層已準備好，但真實瀏覽器結果還缺:
-
-- 穩定度評分
-- 是否有效觸發干擾
-- 哪些 target 應保留進 smoke pool
-
-## 4. 建議 Opus 優先檢查的點
-
-建議 Opus 先看這幾塊:
-
-1. `extension/background.js`
-   檢查 provider dispatch、OpenAI direct、normalization、policy trust boundary。
-
-2. `extension/dashboard/dashboard.js` 與 `extension/dashboard/dashboard.html`
-   檢查使用者設定流程是否合理，是否有遺漏的安全或 UX 問題。
-
-3. `tests/ai-eval/run-openai-direct-evaluation.js`
-   檢查目前評測方式是否足夠代表 extension 真實需求。
-
-4. `tests/live-browser/targets.external-ai.single-page.curated.json`
-   檢查 target schema、tagging 策略、以及是否適合作為長期 regression 樣本池。
-
-## 5. 建議下一步
-
-最合理的下一步順序如下:
-
-1. 先讓 Opus 審一次 OpenAI direct 的安全邊界與 prompt normalization
-2. 實跑 `tests/live-browser/targets.external-ai.single-page.curated.json`
-3. 從 5 個 target 裡切一份更穩定的 smoke subset
-4. 再把 README / INSTALL 的 AI 使用說明全面同步成最新狀態
-
-## 6. 補充說明
-
-目前 worktree 仍是 dirty 狀態，repo 內也有不少同時進行中的修改。因此這份文件的目的是讓審查者快速掌握「本輪新增與目前最值得檢查的區塊」，而不是宣稱整個 repository 已進入可發布狀態。
+# Falcon-Player-Enhance 進度快照
+
+> 更新日期：2026-03-27  
+> 分支：`chore/commit-cleanup-20260327`  
+> 用途：提供目前專案完成度、已落地項目、進行中工作與未完成風險的快速盤點。  
+> 範圍：主程序、品質基礎設施、popup-player 支線、規則化重構、文件與審查輸出。
 
 ---
 
-## 7. 本輪 Copilot 審查紀錄（2026-03-20）
+## 一、目前整體判斷
 
-本輪由 GitHub Copilot CLI (Claude Sonnet 4.6) 完成兩份雙語審查報告，存於 `docs/`：
+目前專案已從「大量混雜變更的開發中 worktree」整理成「可審查、可持續推進」的狀態，但尚未達到整體完成。
 
-| 檔案 | 語言 | 說明 |
-|------|------|------|
-| `docs/PROJECT_REVIEW_REPORT.md` | English | 策略/安全/架構/AI 整合審查 |
-| `docs/PROJECT_REVIEW_REPORT.zh-TW.md` | 繁體中文 | 同上（中文版） |
-| `docs/DESIGN_REVIEW.md` | English | UI/UX 設計 7-Pass 審查 |
-| `docs/DESIGN_REVIEW.zh-TW.md` | 繁體中文 | 同上（中文版） |
+可用一句話總結：
 
-### 7.1 已在本輪前確認修復的問題
+> 核心功能與工程整潔度已經到可審查、可繼續推進的階段；真正還沒完成的是通用化收尾、安全儲存硬化，以及文件國際化。
 
-以下問題在審查報告撰寫時，透過直接比對原始碼確認已修復：
+目前分支狀態：
 
-| 問題 | 原始狀態 | 目前狀態 |
-|------|----------|----------|
-| `declarativeNetRequestFeedback` 多餘權限 | 存在於 manifest | ✅ 已移除 |
-| `inject-blocker.js` 暴露至 `<all_urls>` | 在 web_accessible_resources | ✅ 已移除 |
-| `--text-secondary` 對比度不足（#999） | 對比度 2.85:1 | ✅ 已改為 `#767676`（4.54:1） |
-| Base font 12px 不符無障礙建議 | `12px` | ✅ 已改為 `13px` |
-| 無 DESIGN.md 設計系統文件 | 只存在於 CSS 註解 | ✅ 已建立 `DESIGN.md` |
-
-> 注意：`DESIGN.md` 中的 Component Rules 已明確寫入 shortcuts popover 需鍵盤可達、toggle 須有 aria-label、popup panel 排列順序（Flow → Control → Stats → Level → AI Monitor）等規範。
-
-### 7.2 仍開放的高優先問題（P0）
-
-**安全 / 隱私（立即處理）：**
-
-- 🔴 `tests/bookmarks_2026_3_13.html` 與 `.bak` — 個人書籤已 commit 至 git
-  - 處理方式：`git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths`（需對 .bak 重複執行）
-  - 並將兩個檔案加入 `.gitignore`
-
-- 🔴 `POLICY-GATE.md` 內含開發者本機絕對路徑 `C:\Dev\Projects\...`
-  - 改為相對路徑或 Markdown 相對連結
-
-**品牌命名（短期處理）：**
-
-- 🟡 `inject-blocker.js`、`ai-runtime.js`、`POLICY-GATE.md` 等仍使用 `Falcon-Player-Enhance`
-  - 目標：全部統一為 `Falcon-Player-Enhance`
-
-**CWS 發布風險（若有 CWS 發布計畫）：**
-
-- 🔴 `background.js` 的 `SITE_REGISTRY.domains` 直接列出成人內容網域名稱
-  - 建議：移出原始碼，改為使用者可自行匯入清單
-
-### 7.3 設計層仍開放的決策（P1）
-
-以下為 design review 識別、尚未在程式碼中實作的設計決策：
-
-| 決策 | 若不處理 |
-|------|----------|
-| Player chip list 空狀態設計 | 無玩家時畫面空白，使用者不知下一步 |
-| Stats Grid 初始全零狀態 | 看起來像功能壞掉 |
-| Flow Indicator 完成後的狀態機 | 永遠佔位，擠壓 Control Hub |
-| AI Monitor panel 預設隱藏 | 所有使用者看到「開發中」標籤，影響信任 |
-| 側欄導覽 "Enhanced sites" 標籤說明不清 | 新使用者不懂差異 |
-| 部分 emoji 按鈕缺 `aria-label` | 視障使用者、觸控裝置無法存取 |
-| 仍有硬碼中文字串（如 `白名單保護模式`） | i18n 未完整 |
-
-### 7.4 建議 Opus 在本輪重點審查的新增項目
-
-除原本 section 4 的範圍外，本輪新增建議審查：
-
-1. **`DESIGN.md`** — 確認 Component Rules 是否已真正反映在 popup.html / popup.css / dashboard 中
-2. **`manifest.json`** — 確認 `host_permissions: <all_urls>` 的必要性，是否可縮限
-3. **AI Monitor panel 的預設可見性** — `dashboard.html` 是否有對應的 show/hide 設定
-4. **Shortcut popover 互動** — 確認是否已改為 click/focus 可觸發（DESIGN.md 已規範，但實作未驗證）
+- 已整理成多個可審查 commit
+- 已推送至 GitHub
+- worktree 幾乎乾淨，僅剩未追蹤的 `TODOS.md`
 
 ---
 
-## 8. 2026-03-23 更新：基礎 CI 與外部審查節點
+## 二、完成度評估
 
-### 8.1 已補齊的基礎自動化
+### 2.1 依工作線粗估
 
-- 新增 `npm run check`
-- `check:manifest` 會驗證 `manifest.json` 語法、MV3 必要欄位、service worker / icon / locale 檔案存在性
-- `check:syntax` 會掃描 `extension/`、`scripts/`、`tests/`、`docs/` 內的 JS 語法
-- `test:core` 會執行 `background.js` 與 `inject-blocker.js` 的 smoke 級核心函數測試
-- `check:css` 會執行 CSS safety lint
-- `check:targets` 會驗證 live-browser regression pool 的 JSON 結構
-- `.github/workflows/ci.yml` 已建立，可在 push / pull request 時自動跑基礎檢查
-- `tests/live-browser/test_*.py` 已納入 CI，使用 `python -m unittest discover` 執行
-- `tests/live-browser/README.md` 已補上 `Target Tiers` 規格表，集中說明 `example / curated / filtered / smoke`
+| 工作線 | 完成度 | 說明 |
+|--------|--------|------|
+| 主程序核心功能 | 80-85% | Dashboard、Block Element、獨立 protection toggles、穩定性修正已落地 |
+| 品質基礎設施 | 85-90% | `npm run check`、validator、core smoke tests、CI workflow 已建立 |
+| popup-player / 無干擾播放器 | 70-80% | 已拆成獨立 commit，但仍需要更多真實情境驗證 |
+| site-specific 通用化重構 | 40-50% | 已完成 Phase 1 骨架，但高耦合 runtime 邏輯仍未收斂 |
+| secret storage 硬化 | 10-20% | 文件策略與儲存模型已就位，DPAPI / native host 尚未實作 |
+| 多語說明文件擴充 | 0-10% | 尚未正式開始 |
 
-### 8.2 已完成的本地驗證
+### 2.2 當前結論
 
-已確認:
+- 專案不是半成品，也不是可直接宣稱全部完成
+- 已完成的是核心功能與工程整理
+- 未完成的是中長期收斂工作與安全硬化
 
-- `node scripts/check-js-syntax.js`
-- `node scripts/check-manifest.js`
-- `node scripts/lint-css-safety.js`
-- `node scripts/validate-live-browser-targets.js`
-- `npm run test:core`
-- `python -m unittest discover -s tests/live-browser -p "test_*.py"`
+---
+
+## 三、這輪已落地的主要成果
+
+### 3.1 主程序穩定性與設定流程
+
+已完成：
+
+- 修正 extension 無法載入的 locale placeholder 問題
+- 修正右鍵 action context menu duplicate id 問題
+- 修正 `anti-antiblock.js` 在 MAIN world 直接碰 `chrome.runtime` / `chrome.storage` 的崩潰風險
+- Dashboard provider key 改為每 provider 分開保存
+- API key draft 會保留，不會因切換 provider / mode / endpoint 被立即清空
+- autosave 已補上，且 secret 與一般設定已分流
+
+### 3.2 `Block Element` 已實用化
+
+已完成：
+
+- 使用者確認後立即隱藏目標元素
+- 保存多組 selector candidates
+- `background + cosmetic-filter` 的持久化資料流已接通
+- 重整頁面後仍可持續套用規則
+
+### 3.3 保護功能已可獨立控制
+
+Overview 中原本同步切換的功能，現在已改為各自獨立開關：
+
+- `Auto overlay removal`
+- `Popup blocking`
+- `Fake video removal`
+- `Playback progress sync`
+
+### 3.4 popup-player / 無干擾播放器支線已拆包
+
+已完成：
+
+- `direct-popup-overlay.js`
+- `popup-player.html`
+- `popup-player.js`
+
+這條線已整理成獨立 commit，避免與主程序和文件變更混在一起。
+
+### 3.5 品質檢查與 CI 已接通
+
+已建立：
+
+- `scripts/check-manifest.js`
+- `scripts/check-js-syntax.js`
+- `scripts/validate-site-behaviors.js`
+- `scripts/validate-live-browser-targets.js`
+- `tests/core/run-core-tests.js`
+- `.github/workflows/ci.yml`
+
+`package.json` 已接上：
+
+- `check:manifest`
+- `check:syntax`
+- `check:css`
+- `check:site-behaviors`
+- `check:targets`
+- `test:core`
+- `check`
+
+### 3.6 規則化重構已從文件進入實作
+
+已落地：
+
+- `extension/rules/site-behaviors.json`
+- `extension/content/site-profile.js`
+- `scripts/validate-site-behaviors.js`
+
+已接上第一批 runtime 消費者：
+
+- `background.js`
+- `anti-popup.js`
+- `overlay-remover.js`
+
+這代表目前不是只有文件規劃，而是：
+
+- 規則檔
+- schema validator
+- content-side matcher / helper
+- 第一批讀規則的 runtime 模組
+
+---
+
+## 四、這輪 commit 清理成果
+
+目前分支已整理出以下 commit：
+
+1. `aa6cafe` `chore: ignore local review artifacts`
+2. `6d32542` `test: add quality gates and site behavior core checks`
+3. `5e64a73` `feat: improve dashboard persistence and control toggles`
+4. `a70e19d` `feat: refine distraction-free popup player controls`
+5. `3cd7c4f` `docs: add review snapshots and migration planning`
+6. `a8dfca6` `chore: refresh live-browser assets and branding prompts`
+7. `b93c5b6` `chore: stop tracking generated ruleset metadata`
+
+目前分支狀態比先前明顯改善：
+
+- 不再是大型混雜 worktree
+- 主要工作線已拆成可審查單位
+- generated metadata 已停止追蹤
+
+---
+
+## 五、已完成的驗證
+
+已跑過並通過：
+
 - `npm run check`
+- `npm run check:targets`
+- `node --check extension/content/direct-popup-overlay.js`
+- `node --check extension/popup-player/popup-player.js`
+- `python -m py_compile tests/live-browser/verify_dashboard_provider_autosave.py`
 
-### 8.3 對外審查時最值得看的新節點
+代表目前至少已覆蓋：
 
-建議外部審查者優先看:
+- manifest 結構
+- JS 語法
+- CSS safety lint
+- site behavior schema
+- live-browser target schema
+- core smoke tests
+- Dashboard autosave 驗證腳本語法
 
-1. `.github/workflows/ci.yml`
-2. `scripts/check-manifest.js`
-3. `scripts/check-js-syntax.js`
-4. `tests/core/run-core-tests.js`
-5. `scripts/lint-css-safety.js`
-6. `scripts/validate-live-browser-targets.js`
-7. `tests/live-browser/README.md`
-8. `tests/live-browser/targets.external-ai.single-page.curated.json`
-9. `tests/live-browser/targets.from-bookmarks.smoke.json`
+---
 
-### 8.4 下一步開發方向
+## 六、仍在進行中的項目
 
-接下來會優先整理 live-browser 的 target pool，讓 curated / smoke / example 三種樣本的邊界更清楚，方便外部審查與回歸測試共同使用。
+### 6.1 site-specific runtime 重構尚未收尾
+
+目前仍殘留高耦合 runtime 邏輯的重點模組：
+
+- `extension/content/inject-blocker.js`
+- `extension/content/anti-antiblock.js`
+- `extension/content/player-enhancer.js`
+
+已知仍在 code 中的高風險 / 高耦合項目包括：
+
+- `L3_REDIRECT_TRAP_DOMAINS`
+- `COMPATIBILITY_MODE_SITES`
+- `MALICIOUS_DOMAINS`
+- `handleJavboysPlayer()`
+
+其中：
+
+- `anti-antiblock.js` 的 `handleJavboysPlayer()` 仍是最大單點
+- `MALICIOUS_DOMAINS` 仍採 `String.includes()` 路徑，仍有誤傷風險
+- `inject-blocker.js` 與 `player-enhancer.js` 還沒有完全改成純規則驅動
+
+### 6.2 popup-player 仍需更多真實場景驗證
+
+目前播放器支線已完成拆包與語法檢查，但還不能代表：
+
+- 所有 iframe / remote-control 模式皆已充分驗證
+- 所有站點上的可用性都已穩定
+
+比較準確的狀態是：
+
+- 實作層已明顯前進
+- 但仍需要真實頁面回測與場景回歸
+
+---
+
+## 七、尚未完成的項目
+
+### 7.1 Windows 原生 secret storage
+
+尚未完成：
+
+- Windows `DPAPI`
+- native host secret storage
+
+目前只是先完成：
+
+- 文件策略
+- provider 分離儲存模型
+- Dashboard 的 draft / autosave / 提交流程
+
+### 7.2 多語說明文件擴充
+
+尚未正式開始：
+
+- `zh-TW`
+- `zh-CN`
+- `ja`
+- `de`
+- `fr`
+- `es`
+- `ko`
+- `it`
+
+以及 README 最前方語言入口整合。
+
+### 7.3 backlog / 任務池整理
+
+目前仍有未追蹤 backlog 檔案：
+
+- `TODOS.md`
+
+這份文件要不要納入 repo，仍待決定。
+
+---
+
+## 八、目前最值得優先處理的下一步
+
+建議優先順序：
+
+1. 繼續收斂 `inject-blocker.js` / `anti-antiblock.js` / `player-enhancer.js` 的 site-specific 永久邏輯
+2. 決定 `TODOS.md` 是否納入版本控制
+3. 補強 popup-player 的真實場景驗證
+4. 再決定是否開始做 Windows `DPAPI` / native host
+5. 最後進行正式說明文件的多語擴充
+
+---
+
+## 九、補充參考文件
+
+若要快速掌握目前主程序與重構方向，可先看：
+
+- `docs/EXTERNAL_REVIEW_STATUS_NON_PLAYER_2026-03-24.zh-TW.md`
+- `docs/SITE_RULE_GENERALIZATION_PLAN.zh-TW.md`
+- `docs/SITE_SPECIFIC_LOGIC_INVENTORY.zh-TW.md`
+- `docs/SESSION_RECOVERY_POPUP_PLAYER_AUDIT_2026-03-24.md`
+
