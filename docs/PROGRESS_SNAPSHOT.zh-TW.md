@@ -19,7 +19,7 @@
 
 - 已整理成多個可審查 commit
 - 已推送至 GitHub
-- worktree 幾乎乾淨，僅剩未追蹤的 `TODOS.md`
+- 本輪新增的 work 主要集中在規則化收斂、live-browser 驗證與執行計畫文件
 
 ---
 
@@ -31,8 +31,8 @@
 |--------|--------|------|
 | 主程序核心功能 | 80-85% | Dashboard、Block Element、獨立 protection toggles、穩定性修正已落地 |
 | 品質基礎設施 | 85-90% | `npm run check`、validator、core smoke tests、CI workflow 已建立 |
-| popup-player / 無干擾播放器 | 70-80% | 已拆成獨立 commit，但仍需要更多真實情境驗證 |
-| site-specific 通用化重構 | 40-50% | 已完成 Phase 1 骨架，但高耦合 runtime 邏輯仍未收斂 |
+| popup-player / 無干擾播放器 | 80-85% | 已補上可重跑的 live-browser 驗證路徑，但仍需更多真實站點回歸 |
+| site-specific 通用化重構 | 55-65% | 已從第一批消費者進一步推到 MAIN world runtime，但 `anti-antiblock` 策略仍未完全拆平 |
 | secret storage 硬化 | 10-20% | 文件策略與儲存模型已就位，DPAPI / native host 尚未實作 |
 | 多語說明文件擴充 | 0-10% | 尚未正式開始 |
 
@@ -114,18 +114,32 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - `extension/content/site-profile.js`
 - `scripts/validate-site-behaviors.js`
 
-已接上第一批 runtime 消費者：
+已接上或擴展到下列 runtime 消費者：
 
 - `background.js`
 - `anti-popup.js`
 - `overlay-remover.js`
+- `inject-blocker.js`
+- `player-enhancer.js`
+- `anti-antiblock.js`（目前已改成 profile-driven strategy dispatch，策略實作仍保留在 JS）
 
 這代表目前不是只有文件規劃，而是：
 
 - 規則檔
 - schema validator
 - content-side matcher / helper
-- 第一批讀規則的 runtime 模組
+- MAIN world 也開始讀規則
+- 相容模式與 anti-antiblock strategy 已有共用接點
+
+### 3.7 popup-player 驗證已從人工檢查提升為可重跑 smoke
+
+已新增：
+
+- `tests/live-browser/test_popup_verification.py`
+- `tests/live-browser/fixtures/popup-player-verification.html`
+- `tests/live-browser/fixtures/direct-popup-verification.html`
+
+同時 `browser_judge.py` 已支援 `expectedSignals` 檢查，讓 popup-player / direct-popup 路徑可以透過固定 fixture 重跑，不再只依賴臨時人工巡檢。
 
 ---
 
@@ -158,6 +172,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - `node --check extension/content/direct-popup-overlay.js`
 - `node --check extension/popup-player/popup-player.js`
 - `python -m py_compile tests/live-browser/verify_dashboard_provider_autosave.py`
+- `python -m unittest discover -s tests/live-browser -p "test*.py"`
 
 代表目前至少已覆蓋：
 
@@ -168,6 +183,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - live-browser target schema
 - core smoke tests
 - Dashboard autosave 驗證腳本語法
+- popup-player / direct-popup 的可重跑 fixture 驗證
 
 ---
 
@@ -184,27 +200,27 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 已知仍在 code 中的高風險 / 高耦合項目包括：
 
 - `L3_REDIRECT_TRAP_DOMAINS`
-- `COMPATIBILITY_MODE_SITES`
 - `MALICIOUS_DOMAINS`
 - `handleJavboysPlayer()`
 
 其中：
 
 - `anti-antiblock.js` 的 `handleJavboysPlayer()` 仍是最大單點
-- `MALICIOUS_DOMAINS` 仍採 `String.includes()` 路徑，仍有誤傷風險
-- `inject-blocker.js` 與 `player-enhancer.js` 還沒有完全改成純規則驅動
+- `MALICIOUS_DOMAINS` 的比對精度已改善，但其知識仍未完全搬離 runtime
+- `inject-blocker.js` 與 `player-enhancer.js` 已移除本地 compatibility host list，但尚未完全資料化
+- `anti-antiblock.js` 目前只是先完成 profile-driven dispatch，策略內容仍然偏大
 
-### 6.2 popup-player 仍需更多真實場景驗證
+### 6.2 popup-player 仍需更多真實站點回歸
 
-目前播放器支線已完成拆包與語法檢查，但還不能代表：
+目前播放器支線已從純語法檢查提升到可重跑的 fixture smoke，但還不能代表：
 
-- 所有 iframe / remote-control 模式皆已充分驗證
-- 所有站點上的可用性都已穩定
+- 所有 iframe / remote-control 模式皆已充分覆蓋
+- 所有真實站點上的可用性都已穩定
 
 比較準確的狀態是：
 
-- 實作層已明顯前進
-- 但仍需要真實頁面回測與場景回歸
+- 基礎驗證管線已建立
+- 下一步是把更多真實站點情境拉進回歸池
 
 ---
 
@@ -238,13 +254,9 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 
 以及 README 最前方語言入口整合。
 
-### 7.3 backlog / 任務池整理
+### 7.3 backlog / 任務池仍需持續維護
 
-目前仍有未追蹤 backlog 檔案：
-
-- `TODOS.md`
-
-這份文件要不要納入 repo，仍待決定。
+`TODOS.md` 已可作為 repo 內 backlog 使用，但仍需要持續更新，避免與實際進度脫節。
 
 ---
 
@@ -253,8 +265,8 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 建議優先順序：
 
 1. 繼續收斂 `inject-blocker.js` / `anti-antiblock.js` / `player-enhancer.js` 的 site-specific 永久邏輯
-2. 決定 `TODOS.md` 是否納入版本控制
-3. 補強 popup-player 的真實場景驗證
+2. 補強 popup-player 的真實站點回歸
+3. 把更多 site knowledge 從 runtime 常數移入規則檔
 4. 再決定是否開始做 Windows `DPAPI` / native host
 5. 最後進行正式說明文件的多語擴充
 
