@@ -47,6 +47,34 @@
             overflow: hidden;
         }
 
+        body.topbar-collapsed .topbar {
+            padding: 8px 12px;
+        }
+
+        body.topbar-collapsed .brand {
+            gap: 10px;
+        }
+
+        body.topbar-collapsed .brand-mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+
+        body.topbar-collapsed .eyebrow,
+        body.topbar-collapsed .source-display {
+            display: none;
+        }
+
+        body.topbar-collapsed .toolbar-title {
+            font-size: 14px;
+        }
+
+        body.topbar-collapsed .header-actions {
+            gap: 8px;
+        }
+
         body.auto-fit-enabled {
             overflow: hidden;
         }
@@ -65,11 +93,12 @@
             grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
             gap: 16px;
-            padding: 14px 18px;
+            padding: 10px 14px;
             border: 1px solid var(--line);
             border-radius: 20px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
             box-shadow: var(--shadow);
+            transition: padding 0.18s ease, gap 0.18s ease;
         }
 
         .brand {
@@ -80,14 +109,15 @@
         }
 
         .brand-mark {
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
             display: grid;
             place-items: center;
             background: linear-gradient(145deg, rgba(240, 186, 86, 0.28), rgba(240, 186, 86, 0.08));
             border: 1px solid rgba(240, 186, 86, 0.28);
-            font-size: 20px;
+            font-size: 18px;
+            transition: width 0.18s ease, height 0.18s ease, border-radius 0.18s ease, font-size 0.18s ease;
         }
 
         .brand-copy {
@@ -95,7 +125,7 @@
         }
 
         .eyebrow {
-            font-size: 11px;
+            font-size: 10px;
             letter-spacing: 0.18em;
             text-transform: uppercase;
             color: var(--text-muted);
@@ -110,9 +140,10 @@
 
         .toolbar-title {
             min-width: 0;
-            font-size: clamp(16px, 2vw, 22px);
+            font-size: clamp(15px, 1.6vw, 19px);
             font-weight: 700;
             letter-spacing: 0.02em;
+            transition: font-size 0.18s ease;
         }
 
         .mode-chip {
@@ -130,7 +161,7 @@
 
         .source-display {
             margin-top: 4px;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
             overflow-wrap: anywhere;
             word-break: break-word;
@@ -141,7 +172,7 @@
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
             justify-content: flex-end;
         }
@@ -150,7 +181,7 @@
             appearance: none;
             border: 1px solid transparent;
             border-radius: 999px;
-            padding: 10px 14px;
+            padding: 8px 12px;
             color: var(--text);
             background: rgba(255, 255, 255, 0.06);
             font-size: 12px;
@@ -165,6 +196,16 @@
             transform: translateY(-1px);
             background: rgba(255, 255, 255, 0.1);
             border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn:focus-visible,
+        .control-btn:focus-visible,
+        .select-input:focus-visible,
+        .interaction-shield:focus-visible,
+        details.rail-section > summary:focus-visible,
+        input[type="range"]:focus-visible {
+            outline: 2px solid color-mix(in oklab, var(--accent) 82%, white);
+            outline-offset: 3px;
         }
 
         .btn:disabled {
@@ -294,19 +335,26 @@
         .stage-overlay {
             position: absolute;
             left: 18px;
-            right: 18px;
-            bottom: 18px;
+            right: auto;
+            bottom: clamp(64px, 10%, 108px);
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
             gap: 12px;
             align-items: flex-end;
             pointer-events: none;
             z-index: 3;
+            transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+        }
+
+        .stage-overlay.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(14px);
         }
 
         .overlay-card {
-            max-width: min(420px, 65%);
-            padding: 14px 16px;
+            max-width: min(380px, calc(100% - 36px));
+            padding: 12px 14px;
             border-radius: 18px;
             background: linear-gradient(145deg, rgba(8, 11, 20, 0.84), rgba(12, 17, 26, 0.62));
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -332,7 +380,7 @@
             position: absolute;
             inset: 0;
             z-index: 4;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
@@ -344,10 +392,20 @@
             border: none;
             cursor: not-allowed;
             font: inherit;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, background 0.2s ease, visibility 0.2s ease;
         }
 
         .interaction-shield.visible {
-            display: flex;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .interaction-shield.copy-hidden {
+            background: transparent;
         }
 
         .shield-copy {
@@ -357,6 +415,13 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(9, 13, 22, 0.74);
             box-shadow: var(--shadow);
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        }
+
+        .interaction-shield.copy-hidden .shield-copy {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
         }
 
         .shield-copy strong {
@@ -720,6 +785,10 @@
             line-height: 1;
         }
 
+        .btn-header-toggle {
+            min-width: 84px;
+        }
+
         /* ═══════════════════════════════════════════════════════
            COLLAPSIBLE SECTIONS — details / summary
            ═══════════════════════════════════════════════════════ */
@@ -948,6 +1017,10 @@
                 max-width: 100%;
             }
 
+            .stage-overlay {
+                bottom: 74px;
+            }
+
             .control-rail {
                 flex-direction: column;
                 overflow-y: auto;
@@ -1005,9 +1078,9 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button class="btn btn-header-toggle" id="btn-header-toggle" type="button" data-i18n="popupPlayerCollapseHeader">收合標題</button>
                 <button class="btn btn-accent" id="btn-pin" data-i18n="popupPlayerPin">📌 Pin</button>
-                <button class="btn" id="btn-pip" data-i18n="popupPlayerPip">Picture-in-Picture</button>
-                <button class="btn btn-theme" id="btn-theme" title="切換明亮/黑暗主題">☀</button>
+                <button class="btn btn-theme" id="btn-theme" data-i18n-title="popupPlayerThemeToggleTitle" data-i18n-aria-label="popupPlayerThemeAria" title="Toggle light/dark theme">☀</button>
                 <button class="btn btn-danger" id="btn-close" data-i18n="popupPlayerClose">Close</button>
             </div>
         </header>
@@ -1016,8 +1089,8 @@
             <section class="stage-card">
                 <div class="stage-meta">
                     <div class="stage-status">
-                        <span class="status-pill active" id="playback-state">Ready</span>
-                        <span class="status-pill" id="shield-state">Link Shield Off</span>
+                        <span class="status-pill active" id="playback-state" data-i18n="popupPlayerStatusReady">Ready</span>
+                        <span class="status-pill" id="shield-state" data-i18n="popupPlayerStatusShieldOff">Link Shield Off</span>
                     </div>
                     <div class="time-readout" id="time-readout">00:00 / 00:00</div>
                 </div>
@@ -1028,14 +1101,14 @@
                     </div>
                     <button class="interaction-shield" id="interaction-shield" type="button">
                         <span class="shield-copy">
-                            <strong>Link Shield Active</strong>
-                            <p>Cross-site clicks are blocked in this mode. Disable the shield from the control rail only if you need to interact with the embedded page.</p>
+                            <strong data-i18n="popupPlayerShieldActiveTitle">Link Shield Active</strong>
+                            <p data-i18n="popupPlayerShieldActiveDesc">Cross-site clicks are blocked in this mode. Disable the shield from the control rail only if you need to interact with the embedded page.</p>
                         </span>
                     </button>
-                    <div class="stage-overlay">
+                    <div class="stage-overlay" id="stage-overlay">
                         <div class="overlay-card">
-                            <strong>Playback Deck</strong>
-                            <span>All transport, playback, and visual tuning controls live in the side rail, so the stage stays clean.</span>
+                            <strong data-i18n="popupPlayerOverlayTitle">Playback Deck</strong>
+                            <span data-i18n="popupPlayerOverlayDesc">All transport, playback, and visual tuning controls live in the side rail, so the stage stays clean.</span>
                         </div>
                     </div>
                 </div>
@@ -1047,8 +1120,8 @@
                 <details class="rail-section" open>
                     <summary class="section-header">
                         <div class="summary-left">
-                            <span class="section-title">播放控制</span>
-                            <span class="section-note" id="transport-note">Transport · Timeline · Audio</span>
+                            <span class="section-title" data-i18n="popupPlayerSectionPlayback">Playback</span>
+                            <span class="section-note" id="transport-note" data-i18n="popupPlayerSectionPlaybackNote">Transport · Timeline · Audio</span>
                         </div>
                         <span class="summary-arrow">▾</span>
                     </summary>
@@ -1056,44 +1129,44 @@
                         <div class="transport-compact">
                             <button class="control-btn" id="btn-backward" type="button">
                                 <strong>-10s</strong>
-                                <span>後退</span>
+                                <span data-i18n="popupPlayerButtonBackDesc">Rewind</span>
                             </button>
                             <button class="control-btn" id="btn-mute-toggle" type="button">
-                                <strong id="btn-mute-label">Mute</strong>
-                                <span>音量</span>
+                                <strong id="btn-mute-label" data-i18n="popupPlayerControlMute">Mute</strong>
+                                <span data-i18n="popupPlayerButtonMuteDesc">Volume</span>
                             </button>
-                            <button class="control-btn active" id="btn-play-toggle" type="button">
-                                <strong id="btn-play-label">Play</strong>
-                                <span>播放</span>
+                            <button class="control-btn" id="btn-play-toggle" type="button">
+                                <strong id="btn-play-label" data-i18n="popupPlayerControlPlayPause">Play / Pause</strong>
+                                <span data-i18n="popupPlayerButtonPlayDesc">Toggle</span>
                             </button>
                             <button class="control-btn" id="btn-loop-toggle" type="button">
-                                <strong>Loop</strong>
-                                <span>循環</span>
+                                <strong data-i18n="popupPlayerControlLoop">Loop</strong>
+                                <span data-i18n="popupPlayerButtonLoopDesc">Loop</span>
                             </button>
                             <button class="control-btn" id="btn-forward" type="button">
                                 <strong>+10s</strong>
-                                <span>快進</span>
+                                <span data-i18n="popupPlayerButtonForwardDesc">Forward</span>
                             </button>
                             <button class="control-btn" id="btn-fullscreen" type="button">
-                                <strong>Full</strong>
-                                <span>全螢幕</span>
+                                <strong data-i18n="popupPlayerButtonFullscreenLabel">Full</strong>
+                                <span data-i18n="popupPlayerButtonFullscreenDesc">Fullscreen</span>
                             </button>
                         </div>
                         <div class="timeline-group">
-                            <input type="range" id="timeline-slider" min="0" max="1000" value="0">
+                            <input type="range" id="timeline-slider" min="0" max="1000" value="0" data-i18n-aria-label="popupPlayerTimelineAria">
                             <div class="time-grid">
                                 <span id="time-current">00:00</span>
-                                <span class="section-note" id="timeline-note">拖曳定位</span>
+                                <span class="section-note" id="timeline-note" data-i18n="popupPlayerTimelineDrag">Drag to seek</span>
                                 <span id="time-duration">00:00</span>
                             </div>
                         </div>
                         <div class="compact-vol-row">
-                            <span class="compact-label">Vol</span>
-                            <input type="range" id="volume-slider" min="0" max="100" value="100">
+                            <span class="compact-label" data-i18n="popupPlayerVolumeShort">Vol</span>
+                            <input type="range" id="volume-slider" min="0" max="100" value="100" data-i18n-aria-label="popupPlayerVolumeAria">
                             <span class="slider-value" id="volume-value">100%</span>
                         </div>
                         <div class="speed-fit-row">
-                            <select class="select-input" id="speed-select">
+                            <select class="select-input" id="speed-select" data-i18n-aria-label="popupPlayerSpeedAria">
                                 <option value="0.5">0.5×</option>
                                 <option value="0.75">0.75×</option>
                                 <option value="1" selected>1.0×</option>
@@ -1101,7 +1174,7 @@
                                 <option value="1.5">1.5×</option>
                                 <option value="2">2.0×</option>
                             </select>
-                            <button class="btn" id="btn-fit-toggle" type="button">Auto Fit</button>
+                            <button class="btn" id="btn-fit-toggle" type="button" data-i18n="popupPlayerAutoFitOn">Auto Fit On</button>
                         </div>
                     </div>
                 </details>
@@ -1110,63 +1183,63 @@
                 <details class="rail-section" open>
                     <summary class="section-header">
                         <div class="summary-left">
-                            <span class="section-title">畫面調整</span>
-                            <span class="section-note">亮度 · 對比 · 色調 · 色溫</span>
+                            <span class="section-title" data-i18n="popupPlayerSectionImage">Image</span>
+                            <span class="section-note" data-i18n="popupPlayerSectionImageNote">Brightness · Contrast · Tint · Temperature</span>
                         </div>
                         <span class="summary-arrow">▾</span>
                     </summary>
                     <div class="section-body">
                         <div class="slider-group">
-                            <span class="slider-group-label">光影 Luminance</span>
+                            <span class="slider-group-label" data-i18n="popupPlayerSliderGroupLuminance">Luminance</span>
                             <div class="slider-stack">
                                 <label class="slider-label" for="brightness-slider">
-                                    <strong>Brightness</strong>
+                                    <strong data-i18n="popupPlayerBrightness">Brightness</strong>
                                     <span class="slider-value" id="brightness-value">100%</span>
                                 </label>
                                 <input type="range" id="brightness-slider" min="50" max="200" value="100">
                             </div>
                             <div class="slider-stack">
                                 <label class="slider-label" for="contrast-slider">
-                                    <strong>Contrast</strong>
+                                    <strong data-i18n="popupPlayerContrast">Contrast</strong>
                                     <span class="slider-value" id="contrast-value">100%</span>
                                 </label>
                                 <input type="range" id="contrast-slider" min="50" max="200" value="100">
                             </div>
                             <div class="slider-stack">
                                 <label class="slider-label" for="sharpness-slider">
-                                    <strong>Sharpness</strong>
+                                    <strong data-i18n="popupPlayerSharpness">Sharpness</strong>
                                     <span class="slider-value" id="sharpness-value">0%</span>
                                 </label>
                                 <input type="range" id="sharpness-slider" min="0" max="100" value="0">
                             </div>
                         </div>
                         <div class="slider-group">
-                            <span class="slider-group-label">色彩 Color</span>
+                            <span class="slider-group-label" data-i18n="popupPlayerSliderGroupColor">Color</span>
                             <div class="slider-stack">
                                 <label class="slider-label" for="saturation-slider">
-                                    <strong>Saturation</strong>
+                                    <strong data-i18n="popupPlayerSaturation">Saturation</strong>
                                     <span class="slider-value" id="saturation-value">100%</span>
                                 </label>
                                 <input type="range" id="saturation-slider" min="0" max="200" value="100">
                             </div>
                             <div class="slider-stack">
                                 <label class="slider-label" for="hue-slider">
-                                    <strong>色調 Tint</strong>
+                                    <strong data-i18n="popupPlayerHueTint">Tint</strong>
                                     <span class="slider-value" id="hue-value">0°</span>
                                 </label>
-                                <div class="slider-axis-labels"><span>洋紅 M</span><span>綠 G</span></div>
+                                <div class="slider-axis-labels"><span data-i18n="popupPlayerHueAxisLeft">Magenta</span><span data-i18n="popupPlayerHueAxisRight">Green</span></div>
                                 <input type="range" id="hue-slider" min="-20" max="20" value="0" step="1">
                             </div>
                             <div class="slider-stack">
                                 <label class="slider-label" for="temperature-slider">
-                                    <strong>色溫 Temp</strong>
-                                    <span class="slider-value" id="temperature-value">中性</span>
+                                    <strong data-i18n="popupPlayerTemperature">Temperature</strong>
+                                    <span class="slider-value" id="temperature-value" data-i18n="popupPlayerTemperatureNeutral">Neutral</span>
                                 </label>
-                                <div class="slider-axis-labels"><span>冷 Cool</span><span>暖 Warm</span></div>
+                                <div class="slider-axis-labels"><span data-i18n="popupPlayerTempAxisCool">Cool</span><span data-i18n="popupPlayerTempAxisWarm">Warm</span></div>
                                 <input type="range" id="temperature-slider" min="-50" max="50" value="0" step="1">
                             </div>
                         </div>
-                        <button class="btn" id="btn-reset-image" type="button">Reset Image</button>
+                        <button class="btn" id="btn-reset-image" type="button" data-i18n="popupPlayerResetImage">Reset Image</button>
                     </div>
                 </details>
 
@@ -1174,24 +1247,24 @@
                 <details class="rail-section">
                     <summary class="section-header">
                         <div class="summary-left">
-                            <span class="section-title">防護設定</span>
-                            <span class="section-note">Link Shield · 嵌入保護</span>
+                            <span class="section-title" data-i18n="popupPlayerSectionProtection">Protection</span>
+                            <span class="section-note" data-i18n="popupPlayerSectionProtectionNote">Link Shield · Embed protection</span>
                         </div>
                         <span class="summary-arrow">▾</span>
                     </summary>
                     <div class="section-body">
                         <div class="action-grid">
                             <button class="control-btn active" id="btn-link-shield" type="button">
-                                <strong>Shield On</strong>
-                                <span>封鎖嵌入連結</span>
+                                <strong data-i18n="popupPlayerButtonShieldOn">Shield On</strong>
+                                <span data-i18n="popupPlayerButtonShieldBlock">Block embedded links</span>
                             </button>
                             <button class="control-btn" id="btn-reset-stage" type="button">
-                                <strong>Reset</strong>
-                                <span>舞台重置</span>
+                                <strong data-i18n="popupPlayerReset">Reset</strong>
+                                <span data-i18n="popupPlayerResetStageDesc">Reset stage</span>
                             </button>
                         </div>
-                        <div class="hint-box" id="iframe-hint">
-                            在 iframe 模式下，防護層覆蓋嵌入頁面，防止意外廣告點擊與外部跳轉。僅在需要直接與頁面互動時停用。
+                        <div class="hint-box" id="iframe-hint" data-i18n="popupPlayerIframeHint">
+                            In iframe mode, the protection layer covers the embedded page to prevent accidental ad clicks and outbound redirects. Disable it only when you need direct page interaction.
                         </div>
                     </div>
                 </details>

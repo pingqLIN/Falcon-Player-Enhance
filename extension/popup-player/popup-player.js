@@ -1,8 +1,9 @@
 (function() {
   'use strict';
 
-  const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
+  const t = (key, substitutions) => window.FalconI18n?.t?.(key, substitutions) || chrome.i18n.getMessage(key, substitutions) || key;
   const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
+  const POPUP_HEADER_COLLAPSED_KEY = 'popupPlayerHeaderCollapsed';
   const SHARPEN_FILTER_IDS = [
     '',
     'popup-player-sharpen-1',
@@ -14,7 +15,9 @@
   const playerContainer = document.getElementById('player-container');
   const mediaShell = document.getElementById('media-shell');
   const stageFrame = document.getElementById('stage-frame');
+  const stageOverlay = document.getElementById('stage-overlay');
   const interactionShield = document.getElementById('interaction-shield');
+  const shieldCopy = interactionShield?.querySelector('.shield-copy') || null;
   const modeChip = document.getElementById('mode-chip');
   const playbackState = document.getElementById('playback-state');
   const shieldState = document.getElementById('shield-state');
@@ -22,15 +25,13 @@
   const transportNote = document.getElementById('transport-note');
   const timelineNote = document.getElementById('timeline-note');
   const iframeHint = document.getElementById('iframe-hint');
+  const btnHeaderToggle = document.getElementById('btn-header-toggle');
   const btnPin = document.getElementById('btn-pin');
-  const btnPip = document.getElementById('btn-pip');
   const btnClose = document.getElementById('btn-close');
   const btnBackward = document.getElementById('btn-backward');
   const btnPlayToggle = document.getElementById('btn-play-toggle');
-  const btnPlayLabel = document.getElementById('btn-play-label');
   const btnForward = document.getElementById('btn-forward');
   const btnMuteToggle = document.getElementById('btn-mute-toggle');
-  const btnMuteLabel = document.getElementById('btn-mute-label');
   const btnLoopToggle = document.getElementById('btn-loop-toggle');
   const btnFullscreen = document.getElementById('btn-fullscreen');
   const timelineSlider = document.getElementById('timeline-slider');
@@ -68,8 +69,9 @@
   let linkShieldEnabled = false;
   let timelineScrubbing = false;
   let currentMode = 'idle';
-  let remoteSyncInterval = null;
-  let remotePlayerState = null;
+  let topbarCollapsed = false;
+  let stageOverlayHideTimer = null;
+  let shieldPromptHideTimer = null;
 
   const visualState = {
     brightness: 100,
@@ -103,7 +105,7 @@
         <p>${message}</p>
       </div>
     `;
-    playbackState.textContent = 'Error';
+    playbackState.textContent = t('popupPlayerStatusError');
     playbackState.classList.remove('active');
   }
 
@@ -119,6 +121,13 @@
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
+  function clearUiTimer(timerId) {
+    if (timerId) {
+      window.clearTimeout(timerId);
+    }
+    return null;
+  }
+
   function setControlButtonState(button, active, strongText, detailText) {
     if (!button) return;
     button.classList.toggle('active', Boolean(active));
@@ -129,6 +138,157 @@
     }
     if (detail && detailText) {
       detail.textContent = detailText;
+    }
+  }
+
+  function updateHeaderToggleButton() {
+    if (!btnHeaderToggle) return;
+    const collapsed = topbarCollapsed === true;
+    const label = collapsed ? t('popupPlayerExpandHeader') : t('popupPlayerCollapseHeader');
+    btnHeaderToggle.textContent = label;
+    btnHeaderToggle.setAttribute('aria-label', label);
+    btnHeaderToggle.title = label;
+  }
+
+  function setHeaderCollapsed(collapsed, options = {}) {
+    topbarCollapsed = collapsed === true;
+    document.body.classList.toggle('topbar-collapsed', topbarCollapsed);
+    updateHeaderToggleButton();
+    if (options.persist === false) return;
+    try {
+      localStorage.setItem(POPUP_HEADER_COLLAPSED_KEY, topbarCollapsed ? '1' : '0');
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  function loadHeaderCollapsedPreference() {
+    try {
+      setHeaderCollapsed(localStorage.getItem(POPUP_HEADER_COLLAPSED_KEY) === '1', { persist: false });
+    } catch (_) {
+      setHeaderCollapsed(false, { persist: false });
+    }
+  }
+
+  function applyTransportCommandLayout() {
+    setControlButtonState(btnPlayToggle, false, t('popupPlayerControlPlayPause'), t('popupPlayerButtonPlayDesc'));
+    setControlButtonState(btnMuteToggle, false, t('popupPlayerControlMute'), t('popupPlayerButtonMuteDesc'));
+    setControlButtonState(btnLoopToggle, false, t('popupPlayerControlLoop'), t('popupPlayerButtonLoopDesc'));
+  }
+
+  function getIframeShortcutDescriptor(action) {
+    switch (action) {
+      case 'seekBackLong':
+        return { key: 'j', code: 'KeyJ' };
+      case 'togglePlay':
+        return { key: 'k', code: 'KeyK' };
+      case 'seekForwardLong':
+        return { key: 'l', code: 'KeyL' };
+      case 'toggleMute':
+        return { key: 'm', code: 'KeyM' };
+      case 'toggleFullscreen':
+        return { key: 'f', code: 'KeyF' };
+      default:
+        return null;
+    }
+  }
+
+  function focusIframeSurface() {
+    if (!currentIframe) return;
+    try {
+      currentIframe.focus({ preventScroll: true });
+    } catch (_) {
+      try {
+        currentIframe.focus();
+      } catch (_) {
+        // no-op
+      }
+    }
+    try {
+      currentIframe.contentWindow?.focus?.();
+    } catch (_) {
+      // cross-origin access is expected here
+    }
+  }
+
+  function dispatchShortcutToTarget(target, descriptor) {
+    if (!target || !descriptor) return false;
+    try {
+      const common = {
+        key: descriptor.key,
+        code: descriptor.code,
+        bubbles: true,
+        cancelable: true
+      };
+      target.dispatchEvent(new KeyboardEvent('keydown', common));
+      target.dispatchEvent(new KeyboardEvent('keyup', common));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function sendIframeShortcut(action) {
+    const descriptor = getIframeShortcutDescriptor(action);
+    if (!currentIframe || !descriptor) return false;
+
+    focusIframeSurface();
+
+    let handled = false;
+    handled = dispatchShortcutToTarget(currentIframe, descriptor) || handled;
+    handled = dispatchShortcutToTarget(window, descriptor) || handled;
+    handled = dispatchShortcutToTarget(document, descriptor) || handled;
+
+    try {
+      const iframeWindow = currentIframe.contentWindow;
+      if (iframeWindow) {
+        handled = dispatchShortcutToTarget(iframeWindow, descriptor) || handled;
+        if (iframeWindow.document) {
+          handled = dispatchShortcutToTarget(iframeWindow.document, descriptor) || handled;
+          handled = dispatchShortcutToTarget(iframeWindow.document.body, descriptor) || handled;
+        }
+      }
+    } catch (_) {
+      // cross-origin iframe; best effort focus + outer dispatch only
+    }
+
+    handlePlaybackStart({ hideShieldPrompt: true });
+    return handled;
+  }
+
+  function setStageOverlayVisible(visible) {
+    if (!stageOverlay) return;
+    stageOverlay.classList.toggle('is-hidden', visible === false);
+  }
+
+  function scheduleStageOverlayHide(delayMs = 1000) {
+    setStageOverlayVisible(true);
+    stageOverlayHideTimer = clearUiTimer(stageOverlayHideTimer);
+    stageOverlayHideTimer = window.setTimeout(() => {
+      setStageOverlayVisible(false);
+      stageOverlayHideTimer = null;
+    }, delayMs);
+  }
+
+  function setShieldPromptVisible(visible) {
+    if (!interactionShield || !shieldCopy) return;
+    interactionShield.classList.toggle('copy-hidden', visible === false);
+  }
+
+  function scheduleShieldPromptHide(delayMs = 1000) {
+    if (!interactionShield || !shieldCopy || !linkShieldEnabled || currentMode !== 'iframe') return;
+    setShieldPromptVisible(true);
+    shieldPromptHideTimer = clearUiTimer(shieldPromptHideTimer);
+    shieldPromptHideTimer = window.setTimeout(() => {
+      setShieldPromptVisible(false);
+      shieldPromptHideTimer = null;
+    }, delayMs);
+  }
+
+  function handlePlaybackStart(options = {}) {
+    scheduleStageOverlayHide(options.overlayDelayMs || 1000);
+    if (options.hideShieldPrompt === true) {
+      scheduleShieldPromptHide(options.shieldDelayMs || 1000);
     }
   }
 
@@ -177,11 +337,22 @@
     btnPin.title = isPinned ? t('popupPlayerPinTitlePinned') : t('popupPlayerPinTitleUnpinned');
   }
 
+  function updateThemeButtonState(theme) {
+    if (!btnTheme) return;
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    const title = t('popupPlayerThemeToggleTitle');
+    const ariaLabel = t('popupPlayerThemeAria') || title;
+    btnTheme.textContent = theme === 'light' ? '🌙' : '☀';
+    btnTheme.title = title;
+    btnTheme.setAttribute('aria-label', ariaLabel);
+    btnTheme.dataset.nextTheme = nextTheme;
+  }
+
   function applyAutoFitWindow(enabled) {
     autoFitWindow = enabled !== false;
     document.body.classList.toggle('auto-fit-enabled', autoFitWindow);
     btnFitToggle.classList.toggle('active', autoFitWindow);
-    btnFitToggle.textContent = autoFitWindow ? 'Auto Fit On' : 'Auto Fit Off';
+    btnFitToggle.textContent = autoFitWindow ? t('popupPlayerAutoFitOn') : t('popupPlayerAutoFitOff');
   }
 
   async function persistAutoFitWindow() {
@@ -206,23 +377,33 @@
     const isVideo = mode === 'video';
     const isIframe = mode === 'iframe';
     const isRemote = mode === 'remote';
-    modeChip.textContent = isVideo ? 'Video' : isIframe ? 'Embed' : isRemote ? 'Remote' : 'Unknown';
+    applyTransportCommandLayout();
+    modeChip.textContent = isVideo
+      ? t('popupPlayerModeVideo')
+      : isIframe
+        ? t('popupPlayerModeEmbed')
+        : isRemote
+          ? t('popupPlayerModeRemote')
+          : t('popupPlayerModeUnknown');
     transportNote.textContent = isVideo
-      ? 'Direct video controls'
+      ? t('popupPlayerTransportNoteVideo')
       : isRemote
-        ? 'Remote control original page video'
-        : 'External embed transport limited';
-    timelineNote.textContent = isVideo || isRemote ? 'Scrub active media' : 'Timeline unavailable for embeds';
+        ? t('popupPlayerTransportNoteRemote')
+        : t('popupPlayerTransportNoteEmbed');
+    timelineNote.textContent = isVideo
+      ? t('popupPlayerTimelineNoteActive')
+      : isRemote
+        ? t('popupPlayerTimelineNoteRemote')
+        : t('popupPlayerTimelineNoteUnavailable');
     iframeHint.style.display = isIframe ? 'block' : 'none';
 
     [btnBackward, btnPlayToggle, btnForward, btnMuteToggle, btnLoopToggle, btnFullscreen].forEach((control) => {
-      control.disabled = !(isVideo || isRemote);
+      control.disabled = !(isVideo || isRemote || isIframe);
     });
-    timelineSlider.disabled = !(isVideo || isRemote);
+    timelineSlider.disabled = !isVideo;
     volumeSlider.disabled = !(isVideo || isRemote);
     speedSelect.disabled = !(isVideo || isRemote);
-    btnFitToggle.disabled = isRemote;
-    btnPip.disabled = !isVideo;
+    btnFitToggle.disabled = !isVideo;
     [brightnessSlider, contrastSlider, saturationSlider, sharpnessSlider, hueSlider, temperatureSlider, btnResetImage].forEach((control) => {
       if (control) control.disabled = isRemote;
     });
@@ -235,15 +416,15 @@
     card.className = 'error-message';
 
     const title = document.createElement('h2');
-    title.textContent = 'Remote Control Mode';
+    title.textContent = t('popupPlayerRemoteModeTitle');
     title.style.color = 'var(--accent)';
 
     const copy = document.createElement('p');
-    copy.textContent = 'The original page keeps the locked playing video. This window acts as a remote deck when direct distraction-free playback is not reliable.';
+    copy.textContent = t('popupPlayerRemoteModeDesc');
 
     const source = document.createElement('p');
     source.style.marginTop = '12px';
-    source.textContent = currentParams?.sourceTabUrl || currentParams?.title || 'Source tab';
+    source.textContent = currentParams?.sourceTabUrl || currentParams?.title || t('popupPlayerRemoteModeSourceFallback');
 
     card.appendChild(title);
     card.appendChild(copy);
@@ -266,71 +447,26 @@
     }
   }
 
-  function applyRemoteState(state) {
-    remotePlayerState = state && state.found ? state : null;
-
-    if (!remotePlayerState) {
-      playbackState.textContent = 'Remote Offline';
-      playbackState.classList.remove('active');
-      timeCurrent.textContent = '--:--';
-      timeDuration.textContent = '--:--';
-      timeReadout.textContent = '--:-- / --:--';
-      setControlButtonState(btnPlayToggle, false, 'Play', 'Remote');
-      setControlButtonState(btnMuteToggle, false, 'Mute', 'Remote');
-      setControlButtonState(btnLoopToggle, false, 'Loop', 'Remote');
-      volumeValue.textContent = '--';
-      return;
-    }
-
-    const current = formatTime(Number(remotePlayerState.currentTime || 0));
-    const duration = Number.isFinite(remotePlayerState.duration) ? formatTime(remotePlayerState.duration) : '00:00';
-    timeCurrent.textContent = current;
-    timeDuration.textContent = duration;
-    timeReadout.textContent = `${current} / ${duration}`;
-    playbackState.textContent = remotePlayerState.paused ? 'Remote Paused' : 'Remote Playing';
-    playbackState.classList.toggle('active', !remotePlayerState.paused);
-    setControlButtonState(btnPlayToggle, !remotePlayerState.paused, remotePlayerState.paused ? 'Play' : 'Pause', 'Remote');
-    setControlButtonState(
-      btnMuteToggle,
-      remotePlayerState.muted || Number(remotePlayerState.volume || 0) === 0,
-      remotePlayerState.muted || Number(remotePlayerState.volume || 0) === 0 ? 'Muted' : 'Mute',
-      `${Math.round(Number(remotePlayerState.volume || 0) * 100)}%`
-    );
-    setControlButtonState(btnLoopToggle, remotePlayerState.loop, 'Loop', remotePlayerState.loop ? 'Repeat on' : 'Repeat off');
-    if (!timelineScrubbing && Number.isFinite(remotePlayerState.duration) && remotePlayerState.duration > 0) {
-      timelineSlider.value = String(
-        Math.round((Number(remotePlayerState.currentTime || 0) / Number(remotePlayerState.duration || 1)) * 1000)
-      );
-    }
-    volumeSlider.value = String(Math.round(Number(remotePlayerState.volume || 0) * 100));
-    volumeValue.textContent = `${Math.round(Number(remotePlayerState.volume || 0) * 100)}%`;
-    speedSelect.value = String(remotePlayerState.playbackRate || 1);
-    shieldState.textContent = 'Remote Link Shield';
+  function initializeRemoteControlUi() {
+    playbackState.textContent = t('popupPlayerStatusRemoteControl');
+    playbackState.classList.add('active');
+    shieldState.textContent = t('popupPlayerStatusRemoteShield');
     shieldState.classList.remove('active');
-  }
-
-  async function refreshRemoteState() {
-    const response = await sendRemotePlayerMessage({ action: 'getPlayerState' });
-    applyRemoteState(response);
-  }
-
-  function startRemoteSync() {
-    if (remoteSyncInterval) {
-      clearInterval(remoteSyncInterval);
-    }
-    refreshRemoteState().catch(() => {});
-    remoteSyncInterval = window.setInterval(() => {
-      refreshRemoteState().catch(() => {});
-    }, 1200);
+    timeCurrent.textContent = '--:--';
+    timeDuration.textContent = '--:--';
+    timeReadout.textContent = '--:-- / --:--';
+    timelineSlider.value = '0';
+    volumeSlider.value = '100';
+    volumeValue.textContent = '100%';
+    speedSelect.value = '1';
   }
 
   async function sendRemoteControl(command, value) {
-    const response = await sendRemotePlayerMessage({
+    await sendRemotePlayerMessage({
       action: 'playerControl',
       command,
       value
     });
-    applyRemoteState(response);
   }
 
   function getSharpnessFilterId(sharpness) {
@@ -375,7 +511,11 @@
     }
     if (temperatureValue) {
       const tmp = visualState.temperature;
-      temperatureValue.textContent = tmp === 0 ? '中性' : tmp > 0 ? `+${tmp} 暖` : `${tmp} 冷`;
+      temperatureValue.textContent = tmp === 0
+        ? t('popupPlayerTemperatureNeutral')
+        : tmp > 0
+          ? t('popupPlayerTemperatureWarm', [String(tmp)])
+          : t('popupPlayerTemperatureCool', [String(tmp)]);
     }
   }
 
@@ -398,19 +538,25 @@
   function updateShieldUI() {
     const visible = linkShieldEnabled && currentMode === 'iframe';
     interactionShield.classList.toggle('visible', visible);
-    shieldState.textContent = visible ? 'Link Shield On' : currentMode === 'iframe' ? 'Link Shield Off' : 'Native Video';
+    setShieldPromptVisible(visible);
+    shieldState.textContent = visible
+      ? t('popupPlayerStatusShieldOn')
+      : currentMode === 'iframe'
+        ? t('popupPlayerStatusShieldOff')
+        : t('popupPlayerStatusNativeVideo');
     shieldState.classList.toggle('active', visible);
     setControlButtonState(
       btnLinkShield,
       visible,
-      visible ? 'Shield On' : 'Shield Off',
-      visible ? 'Block embedded links' : 'Allow embedded links'
+      visible ? t('popupPlayerButtonShieldOn') : t('popupPlayerButtonShieldOff'),
+      visible ? t('popupPlayerButtonShieldBlock') : t('popupPlayerButtonShieldAllow')
     );
   }
 
   function setLinkShield(enabled) {
     linkShieldEnabled = enabled === true;
     updateShieldUI();
+    shieldPromptHideTimer = clearUiTimer(shieldPromptHideTimer);
   }
 
   function createVideoPlayer(src, poster) {
@@ -438,21 +584,10 @@
       timeCurrent.textContent = current;
       timeDuration.textContent = duration;
       timeReadout.textContent = `${current} / ${duration}`;
-      const playLabel = video.paused ? 'Play' : 'Pause';
-      btnPlayLabel.textContent = playLabel;
-      setControlButtonState(btnPlayToggle, !video.paused, playLabel, video.paused ? 'Toggle' : 'Live');
-      btnMuteLabel.textContent = video.muted || video.volume === 0 ? 'Unmute' : 'Mute';
-      setControlButtonState(
-        btnMuteToggle,
-        video.muted || video.volume === 0,
-        video.muted || video.volume === 0 ? 'Muted' : 'Audio',
-        `${Math.round((video.muted ? 0 : video.volume) * 100)}%`
-      );
-      setControlButtonState(btnLoopToggle, video.loop, 'Loop', video.loop ? 'Repeat on' : 'Repeat off');
       volumeSlider.value = String(Math.round((video.muted ? 0 : video.volume) * 100));
       volumeValue.textContent = `${Math.round((video.muted ? 0 : video.volume) * 100)}%`;
       speedSelect.value = String(video.playbackRate);
-      playbackState.textContent = video.paused ? 'Paused' : 'Playing';
+      playbackState.textContent = video.paused ? t('popupPlayerStatusPaused') : t('popupPlayerStatusPlaying');
       playbackState.classList.toggle('active', !video.paused);
     };
 
@@ -464,18 +599,15 @@
     });
     video.addEventListener('durationchange', syncPlaybackUI);
     video.addEventListener('timeupdate', syncPlaybackUI);
-    video.addEventListener('play', syncPlaybackUI);
+    video.addEventListener('play', () => {
+      syncPlaybackUI();
+      handlePlaybackStart();
+    });
     video.addEventListener('pause', syncPlaybackUI);
     video.addEventListener('volumechange', syncPlaybackUI);
     video.addEventListener('ratechange', syncPlaybackUI);
-    video.addEventListener('enterpictureinpicture', () => {
-      btnPip.textContent = t('popupPlayerExitPip');
-    });
-    video.addEventListener('leavepictureinpicture', () => {
-      btnPip.textContent = t('popupPlayerPip');
-    });
     video.addEventListener('error', () => {
-      playbackState.textContent = 'Error';
+      playbackState.textContent = t('popupPlayerStatusError');
       playbackState.classList.remove('active');
     });
 
@@ -494,12 +626,14 @@
     iframe.referrerPolicy = 'no-referrer-when-downgrade';
     iframe.style.width = '100%';
     iframe.style.height = '100%';
-    playbackState.textContent = 'Embed Ready';
+    playbackState.textContent = t('popupPlayerStatusEmbedReady');
     playbackState.classList.add('active');
     timeCurrent.textContent = '--:--';
     timeDuration.textContent = '--:--';
     timeReadout.textContent = '--:-- / --:--';
-    btnPip.textContent = t('popupPlayerPip');
+    iframe.addEventListener('load', () => {
+      handlePlaybackStart({ hideShieldPrompt: true });
+    }, { once: true });
     return iframe;
   }
 
@@ -509,7 +643,7 @@
     const screenHeight = window.screen?.availHeight || 900;
     const controlsWidth = 360;
     const chromeWidth = 72;
-    const chromeHeight = 170;
+    const chromeHeight = topbarCollapsed ? 120 : 144;
     const maxStageWidth = Math.min(Math.round(screenWidth * 0.8), 1480);
     const maxStageHeight = Math.min(Math.round(screenHeight * 0.76), 900);
     let stageWidth = maxStageWidth;
@@ -530,10 +664,8 @@
   }
 
   function cleanupPlayer() {
-    if (remoteSyncInterval) {
-      clearInterval(remoteSyncInterval);
-      remoteSyncInterval = null;
-    }
+    stageOverlayHideTimer = clearUiTimer(stageOverlayHideTimer);
+    shieldPromptHideTimer = clearUiTimer(shieldPromptHideTimer);
     if (currentVideo) {
       currentVideo.pause();
       currentVideo.removeAttribute('src');
@@ -589,7 +721,6 @@
 
     btnLoopToggle.addEventListener('click', () => {
       video.loop = !video.loop;
-      setControlButtonState(btnLoopToggle, video.loop, 'Loop', video.loop ? 'Repeat on' : 'Repeat off');
     });
 
     timelineSlider.addEventListener('input', () => {
@@ -618,18 +749,6 @@
         video.playbackRate = nextRate;
       }
     });
-
-    btnPip.addEventListener('click', async () => {
-      try {
-        if (document.pictureInPictureElement) {
-          await document.exitPictureInPicture();
-          return;
-        }
-        await video.requestPictureInPicture();
-      } catch (_) {
-        alert(t('popupPlayerAlertPipUnsupported'));
-      }
-    });
   }
 
   function bindRemoteControls() {
@@ -653,20 +772,8 @@
       sendRemoteControl('toggleLoop').catch(() => {});
     });
 
-    timelineSlider.addEventListener('input', () => {
-      timelineScrubbing = true;
-      if (!remotePlayerState || !Number.isFinite(remotePlayerState.duration) || remotePlayerState.duration <= 0) return;
-      const nextTime = (Number(timelineSlider.value) / 1000) * Number(remotePlayerState.duration);
-      timeCurrent.textContent = formatTime(nextTime);
-      timeReadout.textContent = `${formatTime(nextTime)} / ${formatTime(remotePlayerState.duration)}`;
-    });
-
-    timelineSlider.addEventListener('change', () => {
-      timelineScrubbing = false;
-      sendRemoteControl('seekToRatio', Number(timelineSlider.value) / 1000).catch(() => {});
-    });
-
     volumeSlider.addEventListener('input', () => {
+      volumeValue.textContent = `${Math.round(Number(volumeSlider.value || 0))}%`;
       sendRemoteControl('setVolume', Number(volumeSlider.value) / 100).catch(() => {});
     });
 
@@ -675,7 +782,37 @@
     });
   }
 
+  function bindIframeControls() {
+    btnBackward.addEventListener('click', () => {
+      sendIframeShortcut('seekBackLong');
+    });
+
+    btnPlayToggle.addEventListener('click', () => {
+      sendIframeShortcut('togglePlay');
+    });
+
+    btnForward.addEventListener('click', () => {
+      sendIframeShortcut('seekForwardLong');
+    });
+
+    btnMuteToggle.addEventListener('click', () => {
+      sendIframeShortcut('toggleMute');
+    });
+
+    btnLoopToggle.disabled = true;
+
+    btnFullscreen.addEventListener('click', () => {
+      sendIframeShortcut('toggleFullscreen');
+    });
+  }
+
   function bindSharedControls() {
+    if (btnHeaderToggle) {
+      btnHeaderToggle.addEventListener('click', () => {
+        setHeaderCollapsed(!topbarCollapsed);
+      });
+    }
+
     btnClose.addEventListener('click', () => {
       cleanupAndClose();
     });
@@ -748,7 +885,11 @@
 
     btnLinkShield.addEventListener('click', () => {
       if (currentMode !== 'iframe') return;
-      setLinkShield(!linkShieldEnabled);
+      const nextEnabled = !linkShieldEnabled;
+      setLinkShield(nextEnabled);
+      if (nextEnabled) {
+        scheduleShieldPromptHide(1000);
+      }
     });
 
     btnResetStage.addEventListener('click', () => {
@@ -764,12 +905,12 @@
       if (currentMode === 'remote') {
         sendRemoteControl('setSpeed', 1).catch(() => {});
         sendRemoteControl('setVolume', 1).catch(() => {});
-        sendRemoteControl('seekToRatio', 0).catch(() => {});
-        if (remotePlayerState?.loop) {
-          sendRemoteControl('toggleLoop').catch(() => {});
-        }
+        volumeSlider.value = '100';
+        volumeValue.textContent = '100%';
+        speedSelect.value = '1';
       }
       setLinkShield(currentMode === 'iframe');
+      setStageOverlayVisible(true);
     });
 
     interactionShield.addEventListener('click', (event) => {
@@ -823,6 +964,35 @@
         return;
       }
 
+      if (currentMode === 'iframe') {
+        if (event.key === ' ' || event.code === 'Space' || event.key === 'k' || event.key === 'K') {
+          event.preventDefault();
+          sendIframeShortcut('togglePlay');
+          return;
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'j' || event.key === 'J') {
+          event.preventDefault();
+          sendIframeShortcut('seekBackLong');
+          return;
+        }
+        if (event.key === 'ArrowRight' || event.key === 'l' || event.key === 'L') {
+          event.preventDefault();
+          sendIframeShortcut('seekForwardLong');
+          return;
+        }
+        if (event.key === 'm' || event.key === 'M') {
+          event.preventDefault();
+          sendIframeShortcut('toggleMute');
+          return;
+        }
+        if (event.key === 'f' || event.key === 'F') {
+          event.preventDefault();
+          sendIframeShortcut('toggleFullscreen');
+          return;
+        }
+        return;
+      }
+
       if (!currentVideo) return;
 
       if (event.key === ' ' || event.code === 'Space') {
@@ -869,17 +1039,20 @@
       btnTheme.addEventListener('click', () => {
         const next = document.body.dataset.theme === 'light' ? 'dark' : 'light';
         document.body.dataset.theme = next;
-        btnTheme.textContent = next === 'light' ? '🌙' : '☀';
+        updateThemeButtonState(next);
         localStorage.setItem('player-theme', next);
       });
     }
   }
 
   async function init() {
+    await (window.FalconI18n?.ready || Promise.resolve());
     // Restore theme before anything renders to avoid flash
     const savedTheme = localStorage.getItem('player-theme') || 'dark';
     document.body.dataset.theme = savedTheme;
-    if (btnTheme) btnTheme.textContent = savedTheme === 'light' ? '🌙' : '☀';
+    updateThemeButtonState(savedTheme);
+    loadHeaderCollapsedPreference();
+    applyTransportCommandLayout();
 
     bindSharedControls();
     await loadPopupPlayerSettings();
@@ -908,9 +1081,10 @@
     if ((params.remoteControlPreferred || (!params.videoSrc && !params.iframeSrc)) && params.sourceTabId > 0) {
       setMode('remote');
       setLinkShield(false);
+      initializeRemoteControlUi();
       playerContainer.appendChild(createRemoteControllerStage());
       bindRemoteControls();
-      startRemoteSync();
+      handlePlaybackStart();
       return;
     }
 
@@ -928,6 +1102,7 @@
       setLinkShield(true);
       currentIframe = createIframePlayer(params.iframeSrc);
       playerContainer.appendChild(currentIframe);
+      bindIframeControls();
       updateShieldUI();
       return;
     }

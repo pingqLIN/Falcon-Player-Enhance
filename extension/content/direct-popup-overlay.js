@@ -14,12 +14,14 @@
   const SHARPEN_FILTER_ID = 'falcon-direct-popup-sharpen';
   const PANEL_WIDTH = 336;
   const originalVideoStyles = new WeakMap();
+  const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
 
   const state = {
     root: null,
     launcher: null,
     panel: null,
     shield: null,
+    toast: null,
     targetVideo: null,
     targetAbortController: null,
     expanded: true,
@@ -32,14 +34,33 @@
     gamma: 100,
     temperature: 0,
     sharpness: 0,
+    blockingLevel: 0,
+    lastActiveBlockingLevel: 2,
+    aiMonitorEnabled: true,
+    pickerActive: false,
+    aiProviderStatus: '',
+    aiProviderModel: '',
     monitorInterval: null,
     monitorObserver: null,
     layoutRaf: 0,
+    toastTimer: 0,
     refs: {}
   };
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function runtimeMessage(message) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+        resolve(response || null);
+      });
+    });
   }
 
   function formatTime(seconds) {
@@ -109,9 +130,9 @@
           bottom: 12px;
           display: flex;
           flex-direction: column;
-          gap: 12px;
-          padding: 16px;
-          border-radius: 24px;
+          gap: 10px;
+          padding: 12px;
+          border-radius: 22px;
           border: 1px solid rgba(255, 255, 255, 0.1);
           background:
             radial-gradient(circle at top left, rgba(247, 202, 120, 0.12), transparent 26%),
@@ -125,26 +146,27 @@
         }
         .falcon-popup-head {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: space-between;
           gap: 12px;
         }
         .falcon-popup-kicker {
-          font-size: 11px;
-          letter-spacing: 0.16em;
+          font-size: 10px;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           color: rgba(238, 226, 206, 0.66);
         }
         .falcon-popup-title {
-          margin-top: 2px;
-          font-size: 18px;
+          margin-top: 1px;
+          font-size: 15px;
+          line-height: 1.1;
           font-weight: 800;
           color: #fcf7ef;
         }
         .falcon-popup-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
-          line-height: 1.45;
+          margin-top: 3px;
+          font-size: 11px;
+          line-height: 1.3;
           color: rgba(238, 226, 206, 0.7);
         }
         .falcon-popup-head-actions {
@@ -165,17 +187,28 @@
           width: 34px;
           height: 34px;
           border-radius: 999px;
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 700;
         }
         .falcon-popup-block {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          padding: 12px;
-          border-radius: 18px;
+          gap: 8px;
+          padding: 10px;
+          border-radius: 16px;
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .falcon-popup-block.is-tight {
+          gap: 7px;
+        }
+        .falcon-popup-duo {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .falcon-popup-duo > .falcon-popup-block {
+          height: 100%;
         }
         .falcon-popup-row {
           display: flex;
@@ -208,14 +241,14 @@
         .falcon-popup-btn,
         .falcon-popup-chip {
           border-radius: 16px;
-          min-height: 48px;
-          padding: 10px 12px;
+          min-height: 42px;
+          padding: 9px 10px;
           text-align: left;
         }
         .falcon-popup-btn strong,
         .falcon-popup-chip strong {
           display: block;
-          font-size: 14px;
+          font-size: 13px;
           line-height: 1.1;
         }
         .falcon-popup-btn span,
@@ -240,11 +273,11 @@
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          font-size: 12px;
+          font-size: 11px;
           color: rgba(238, 226, 206, 0.76);
         }
         .falcon-popup-slider-head strong {
-          font-size: 12px;
+          font-size: 11px;
           letter-spacing: 0.08em;
           text-transform: uppercase;
           color: #fcf7ef;
@@ -284,9 +317,12 @@
         }
         .falcon-popup-inline {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 88px;
+          grid-template-columns: minmax(0, 1fr) 94px;
           gap: 8px;
           align-items: center;
+        }
+        .falcon-popup-inline.is-tight {
+          grid-template-columns: minmax(0, 1fr) auto;
         }
         .falcon-popup-select {
           width: 100%;
@@ -297,6 +333,54 @@
           padding: 11px 12px;
           color: #f6efe4;
           font: inherit;
+        }
+        .falcon-popup-select.is-compact {
+          min-height: 40px;
+          padding: 9px 10px;
+        }
+        .falcon-popup-toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          min-height: 40px;
+          padding: 8px 10px;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.04);
+        }
+        .falcon-popup-toggle-row strong {
+          display: block;
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #fcf7ef;
+        }
+        .falcon-popup-toggle-row span {
+          display: block;
+          margin-top: 2px;
+          font-size: 11px;
+          line-height: 1.2;
+          color: rgba(238, 226, 206, 0.66);
+        }
+        .falcon-popup-status-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 64px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(247, 202, 120, 0.14);
+          color: #f7ca78;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          font-variant-numeric: tabular-nums;
+        }
+        .falcon-popup-status-pill.is-muted {
+          background: rgba(255, 255, 255, 0.06);
+          color: rgba(238, 226, 206, 0.76);
         }
         .falcon-popup-hint {
           font-size: 12px;
@@ -310,35 +394,45 @@
           justify-content: center;
           text-align: center;
           padding: 24px;
-          background:
-            linear-gradient(180deg, rgba(11, 14, 24, 0.18), rgba(11, 14, 24, 0.62)),
-            repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 10px, transparent 10px, transparent 20px);
+          background: rgba(0, 0, 0, 0);
           border: none;
-          cursor: not-allowed;
+          cursor: pointer;
         }
         .falcon-popup-shield.is-visible {
           display: flex;
         }
         .falcon-popup-shield-box {
-          max-width: 320px;
-          padding: 18px 20px;
-          border-radius: 20px;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          background: rgba(10, 12, 20, 0.76);
-          box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+          display: none;
         }
-        .falcon-popup-shield-box strong {
+        .falcon-popup-toast {
+          position: fixed;
+          z-index: 2147483645;
+          max-width: min(420px, calc(100vw - 32px));
+          padding: 12px 14px;
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          background: rgba(10, 12, 20, 0.84);
+          color: #fff;
+          box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+          backdrop-filter: blur(14px);
+          font-size: 12px;
+          line-height: 1.45;
+          pointer-events: none;
+          display: none;
+        }
+        .falcon-popup-toast.is-visible {
           display: block;
-          margin-bottom: 8px;
-          font-size: 12px;
-          color: #f7ca78;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
         }
-        .falcon-popup-shield-box span {
-          font-size: 12px;
-          line-height: 1.5;
-          color: rgba(238, 226, 206, 0.72);
+        .falcon-popup-toast.is-center {
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          text-align: center;
+        }
+        .falcon-popup-toast.is-bottom-left {
+          left: 16px;
+          bottom: 16px;
+          max-width: min(360px, calc(100vw - 32px));
         }
         @media (max-width: 860px) {
           .falcon-popup-panel {
@@ -347,7 +441,13 @@
             right: 9px;
             bottom: 9px;
           }
+          .falcon-popup-duo {
+            grid-template-columns: 1fr;
+          }
           .falcon-popup-inline {
+            grid-template-columns: 1fr;
+          }
+          .falcon-popup-inline.is-tight {
             grid-template-columns: 1fr;
           }
           .falcon-popup-grid,
@@ -389,6 +489,21 @@
     }
   }
 
+  function setSharpenStrength(strength) {
+    const node = document.querySelector(`#${CSS.escape(SHARPEN_FILTER_ID)} feConvolveMatrix`);
+    if (!node) return;
+
+    const amount = clamp(strength, 0, 100) / 100;
+    const side = -(1 + amount * 0.75);
+    const center = 5.8 + amount * 4.6;
+    const divisor = 1.8 + amount * 4.2;
+    node.setAttribute(
+      'kernelMatrix',
+      `0 ${side.toFixed(3)} 0 ${side.toFixed(3)} ${center.toFixed(3)} ${side.toFixed(3)} 0 ${side.toFixed(3)} 0`
+    );
+    node.setAttribute('divisor', divisor.toFixed(3));
+  }
+
   function createRoot() {
     ensureStyles();
     const existing = document.getElementById(ROOT_ID);
@@ -412,40 +527,68 @@
             <button class="falcon-popup-mini-btn" type="button" data-action="collapse" title="Collapse panel">−</button>
           </div>
         </div>
-        <section class="falcon-popup-block">
+        <div class="falcon-popup-duo">
+          <section class="falcon-popup-block">
+            <div class="falcon-popup-row">
+              <div class="falcon-popup-label">Transport</div>
+              <div class="falcon-popup-stat" data-role="time-readout">00:00 / 00:00</div>
+            </div>
+            <div class="falcon-popup-grid">
+              <button class="falcon-popup-btn" type="button" data-action="rewind"><strong>-10s</strong><span>Rewind</span></button>
+              <button class="falcon-popup-btn is-active" type="button" data-action="play"><strong>Play</strong><span>Toggle</span></button>
+              <button class="falcon-popup-btn" type="button" data-action="forward"><strong>+10s</strong><span>Skip</span></button>
+              <button class="falcon-popup-btn" type="button" data-action="mute"><strong>Mute</strong><span>Audio</span></button>
+              <button class="falcon-popup-btn" type="button" data-action="pip"><strong>PiP</strong><span>Float</span></button>
+              <button class="falcon-popup-btn" type="button" data-action="fullscreen"><strong>Full</strong><span>Stage</span></button>
+            </div>
+          </section>
+          <section class="falcon-popup-block">
+            <div class="falcon-popup-row">
+              <div class="falcon-popup-label">Playback</div>
+              <div class="falcon-popup-stat" data-role="playback-status">Idle</div>
+            </div>
+            <div class="falcon-popup-slider-wrap">
+              <div class="falcon-popup-slider-head"><strong>Volume</strong><span class="falcon-popup-slider-value" data-role="volume-value">100%</span></div>
+              <input class="falcon-popup-slider" type="range" min="0" max="100" value="100" data-setting="volume">
+            </div>
+            <div class="falcon-popup-inline">
+              <select class="falcon-popup-select" data-setting="speed">
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1.0x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2.0x</option>
+              </select>
+              <button class="falcon-popup-chip" type="button" data-action="reset-playback"><strong>Reset</strong><span>Playback</span></button>
+            </div>
+          </section>
+        </div>
+        <section class="falcon-popup-block is-tight">
           <div class="falcon-popup-row">
-            <div class="falcon-popup-label">Transport</div>
-            <div class="falcon-popup-stat" data-role="time-readout">00:00 / 00:00</div>
+            <div class="falcon-popup-label">Protection</div>
+            <div class="falcon-popup-stat" data-role="blocking-level-value">L2</div>
           </div>
-          <div class="falcon-popup-grid">
-            <button class="falcon-popup-btn" type="button" data-action="rewind"><strong>-10s</strong><span>Rewind</span></button>
-            <button class="falcon-popup-btn is-active" type="button" data-action="play"><strong>Play</strong><span>Toggle</span></button>
-            <button class="falcon-popup-btn" type="button" data-action="forward"><strong>+10s</strong><span>Skip</span></button>
-            <button class="falcon-popup-btn" type="button" data-action="mute"><strong>Mute</strong><span>Audio</span></button>
-            <button class="falcon-popup-btn" type="button" data-action="pip"><strong>PiP</strong><span>Float</span></button>
-            <button class="falcon-popup-btn" type="button" data-action="fullscreen"><strong>Full</strong><span>Stage</span></button>
+          <div class="falcon-popup-grid-2">
+            <button class="falcon-popup-chip" type="button" data-action="pick-element"><strong>Block Element</strong><span>Select target</span></button>
+            <button class="falcon-popup-chip is-active" type="button" data-action="shield"><strong>Shield</strong><span>Block clicks</span></button>
           </div>
-        </section>
-        <section class="falcon-popup-block">
-          <div class="falcon-popup-row">
-            <div class="falcon-popup-label">Playback</div>
-            <div class="falcon-popup-stat" data-role="playback-status">Idle</div>
-          </div>
-          <div class="falcon-popup-slider-wrap">
-            <div class="falcon-popup-slider-head"><strong>Volume</strong><span class="falcon-popup-slider-value" data-role="volume-value">100%</span></div>
-            <input class="falcon-popup-slider" type="range" min="0" max="100" value="100" data-setting="volume">
-          </div>
-          <div class="falcon-popup-inline">
-            <select class="falcon-popup-select" data-setting="speed">
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1" selected>1.0x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2.0x</option>
+          <div class="falcon-popup-inline is-tight">
+            <div class="falcon-popup-toggle-row">
+              <div>
+                <strong>AI Monitor</strong>
+                <span data-role="ai-status">AI offline · -</span>
+              </div>
+              <button class="falcon-popup-status-pill" type="button" data-action="toggle-ai-monitor">ON</button>
+            </div>
+            <select class="falcon-popup-select is-compact" data-setting="blocking-level">
+              <option value="0">Off</option>
+              <option value="1">L1</option>
+              <option value="2" selected>L2</option>
+              <option value="3">L3</option>
             </select>
-            <button class="falcon-popup-chip" type="button" data-action="reset-playback"><strong>Reset</strong><span>Playback</span></button>
           </div>
+          <div class="falcon-popup-hint" data-role="blocking-level-hint">Protection enabled</div>
         </section>
         <section class="falcon-popup-block">
           <div class="falcon-popup-row">
@@ -474,12 +617,11 @@
           </div>
           <div class="falcon-popup-slider-wrap">
             <div class="falcon-popup-slider-head"><strong>Sharpness</strong><span class="falcon-popup-slider-value" data-role="sharpness-value">0%</span></div>
-            <input class="falcon-popup-slider" type="range" min="0" max="100" value="0" data-setting="sharpness">
+            <input class="falcon-popup-slider" type="range" min="-100" max="100" value="0" data-setting="sharpness">
           </div>
           <div class="falcon-popup-grid-2">
             <button class="falcon-popup-chip" type="button" data-action="mirror"><strong>Mirror</strong><span>Flip X</span></button>
             <button class="falcon-popup-chip" type="button" data-action="crop"><strong>Crop</strong><span>Cover</span></button>
-            <button class="falcon-popup-chip is-active" type="button" data-action="shield"><strong>Shield</strong><span>Block clicks</span></button>
             <button class="falcon-popup-chip" type="button" data-action="reset-image"><strong>Reset</strong><span>Image</span></button>
           </div>
         </section>
@@ -491,6 +633,7 @@
           <span>Clicks on the video area are blocked to reduce accidental ads or outbound navigation. Disable Shield only when you need the page's native controls.</span>
         </span>
       </button>
+      <div class="falcon-popup-toast" hidden data-role="toast" aria-live="polite"></div>
     `;
 
     document.documentElement.appendChild(root);
@@ -498,6 +641,7 @@
     state.launcher = root.querySelector('.falcon-popup-launcher');
     state.panel = root.querySelector('.falcon-popup-panel');
     state.shield = root.querySelector('.falcon-popup-shield');
+    state.toast = root.querySelector('[data-role="toast"]');
     state.refs = {
       summary: root.querySelector('[data-role="video-summary"]'),
       timeReadout: root.querySelector('[data-role="time-readout"]'),
@@ -517,11 +661,17 @@
       temperature: root.querySelector('[data-setting="temperature"]'),
       gamma: root.querySelector('[data-setting="gamma"]'),
       sharpness: root.querySelector('[data-setting="sharpness"]'),
+      blockingLevel: root.querySelector('[data-setting="blocking-level"]'),
       playButton: root.querySelector('[data-action="play"]'),
       muteButton: root.querySelector('[data-action="mute"]'),
       shieldButton: root.querySelector('[data-action="shield"]'),
       mirrorButton: root.querySelector('[data-action="mirror"]'),
-      cropButton: root.querySelector('[data-action="crop"]')
+      cropButton: root.querySelector('[data-action="crop"]'),
+      pickElementButton: root.querySelector('[data-action="pick-element"]'),
+      aiMonitorButton: root.querySelector('[data-action="toggle-ai-monitor"]'),
+      blockingLevelValue: root.querySelector('[data-role="blocking-level-value"]'),
+      blockingLevelHint: root.querySelector('[data-role="blocking-level-hint"]'),
+      aiStatus: root.querySelector('[data-role="ai-status"]')
     };
   }
 
@@ -608,7 +758,11 @@
     const saturateBoost = warmAmount > 0 ? 100 + warmAmount * 0.12 : 100 + coolAmount * 0.05;
     const brightnessBias = coolAmount > 0 ? 100 + coolAmount * 0.04 : 100;
     const filters = [`url(#${GAMMA_FILTER_ID})`];
-    if (state.sharpness >= 20) {
+    if (state.sharpness < 0) {
+      const amount = clamp(Math.abs(state.sharpness) / 100, 0, 1);
+      filters.push(`blur(${(0.16 + amount * 0.82).toFixed(2)}px)`);
+    } else if (state.sharpness > 0) {
+      setSharpenStrength(state.sharpness);
       filters.push(`url(#${SHARPEN_FILTER_ID})`);
     }
     filters.push(
@@ -667,13 +821,128 @@
     });
   }
 
+  function showToast(text, placement = 'center', duration = 3000) {
+    if (!state.toast) return;
+    clearTimeout(state.toastTimer);
+    state.toast.textContent = text;
+    state.toast.hidden = false;
+    state.toast.className = `falcon-popup-toast is-visible ${placement === 'bottom-left' ? 'is-bottom-left' : 'is-center'}`;
+    state.toastTimer = window.setTimeout(() => {
+      if (!state.toast) return;
+      state.toast.hidden = true;
+      state.toast.className = 'falcon-popup-toast';
+      state.toast.textContent = '';
+    }, duration);
+  }
+
+  function getShieldTarget(x, y) {
+    if (!state.shield) return document.elementFromPoint(x, y);
+    const previousDisplay = state.shield.style.display;
+    const previousVisibility = state.shield.style.visibility;
+    const previousPointerEvents = state.shield.style.pointerEvents;
+    state.shield.style.visibility = 'hidden';
+    state.shield.style.pointerEvents = 'none';
+    const target = document.elementFromPoint(x, y);
+    state.shield.style.display = previousDisplay;
+    state.shield.style.visibility = previousVisibility;
+    state.shield.style.pointerEvents = previousPointerEvents;
+    return target;
+  }
+
+  function replayMouseEvent(type, originalEvent) {
+    const target = getShieldTarget(originalEvent.clientX, originalEvent.clientY);
+    if (!target) return;
+
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      detail: originalEvent.detail || 1,
+      screenX: originalEvent.screenX,
+      screenY: originalEvent.screenY,
+      clientX: originalEvent.clientX,
+      clientY: originalEvent.clientY,
+      button: originalEvent.button,
+      buttons: originalEvent.buttons,
+      ctrlKey: originalEvent.ctrlKey,
+      shiftKey: originalEvent.shiftKey,
+      altKey: originalEvent.altKey,
+      metaKey: originalEvent.metaKey
+    };
+
+    target.dispatchEvent(new MouseEvent(type, init));
+
+    if (type !== 'click' || !(target instanceof HTMLVideoElement)) return;
+    if (target.paused || target.ended) {
+      target.play().catch(() => {});
+      return;
+    }
+    target.pause();
+  }
+
   function updateTextValues() {
     state.refs.brightnessValue.textContent = `${state.brightness}%`;
     state.refs.contrastValue.textContent = `${state.contrast}%`;
     state.refs.saturationValue.textContent = `${state.saturation}%`;
     state.refs.temperatureValue.textContent = String(state.temperature);
     state.refs.gammaValue.textContent = (state.gamma / 100).toFixed(2);
-    state.refs.sharpnessValue.textContent = `${state.sharpness}%`;
+    state.refs.sharpnessValue.textContent = state.sharpness > 0 ? `+${state.sharpness}%` : `${state.sharpness}%`;
+  }
+
+  function updateProtectionState() {
+    const level = clamp(Number(state.blockingLevel || 0), 0, 3);
+    if (state.refs.blockingLevel) {
+      state.refs.blockingLevel.value = String(level);
+    }
+    if (state.refs.blockingLevelValue) {
+      state.refs.blockingLevelValue.textContent = level > 0 ? `L${level}` : 'Off';
+    }
+    if (state.refs.blockingLevelHint) {
+      state.refs.blockingLevelHint.textContent = level > 0 ? `Protection level ${level}` : 'Protection off';
+    }
+    if (state.refs.pickElementButton) {
+      state.refs.pickElementButton.classList.toggle('is-active', state.pickerActive);
+      state.refs.pickElementButton.querySelector('strong').textContent = state.pickerActive ? 'Stop Picker' : 'Block Element';
+      state.refs.pickElementButton.querySelector('span').textContent = state.pickerActive ? 'Click to exit' : 'Select target';
+    }
+    if (state.refs.shieldButton) {
+      state.refs.shieldButton.classList.toggle('is-active', state.shieldEnabled);
+      state.refs.shieldButton.querySelector('strong').textContent = state.shieldEnabled ? 'Shield On' : 'Shield Off';
+      state.refs.shieldButton.querySelector('span').textContent = state.shieldEnabled ? 'Transparent cover' : 'Show controls';
+    }
+    if (state.refs.aiMonitorButton) {
+      state.refs.aiMonitorButton.classList.toggle('is-active', state.aiMonitorEnabled);
+      state.refs.aiMonitorButton.classList.toggle('is-muted', !state.aiMonitorEnabled);
+      state.refs.aiMonitorButton.textContent = state.aiMonitorEnabled ? 'ON' : 'OFF';
+    }
+    if (state.refs.aiStatus) {
+      const provider = state.aiProviderModel || '-';
+      state.refs.aiStatus.textContent = `${state.aiProviderStatus || 'AI offline'} · ${provider}`;
+    }
+  }
+
+  async function loadProtectionState() {
+    const [blockingRes, aiRes, pickerRes] = await Promise.all([
+      runtimeMessage({ action: 'getBlockingLevel' }),
+      runtimeMessage({ action: 'getAiInsights' }),
+      runtimeMessage({ action: 'getPickerState' })
+    ]);
+
+    if (blockingRes?.success) {
+      state.blockingLevel = clamp(Number(blockingRes.blockingLevel || 0), 0, 3);
+      state.lastActiveBlockingLevel = clamp(Number(blockingRes.lastActiveBlockingLevel || 2), 1, 3);
+    }
+
+    if (aiRes?.success && aiRes.snapshot) {
+      state.aiMonitorEnabled = aiRes.snapshot.enabled !== false;
+      state.aiProviderStatus = aiRes.snapshot.provider?.state?.lastHealthOk === true ? 'AI online' : 'AI offline';
+      state.aiProviderModel = aiRes.snapshot.provider?.state?.lastResolvedModel || '-';
+    }
+
+    state.pickerActive = pickerRes?.active === true;
+
+    updateProtectionState();
   }
 
   function syncPlaybackUI() {
@@ -780,6 +1049,40 @@
     syncPlaybackUI();
   }
 
+  async function toggleBlockElement() {
+    const response = await runtimeMessage(
+      state.pickerActive ? { action: 'deactivateElementPicker' } : { action: 'injectElementPicker' }
+    );
+    if (!response?.success) {
+      await loadProtectionState();
+      return;
+    }
+    state.pickerActive = !state.pickerActive;
+    updateProtectionState();
+  }
+
+  async function setBlockingLevel(level) {
+    const response = await runtimeMessage({ action: 'setBlockingLevel', level });
+    if (!response?.success) {
+      await loadProtectionState();
+      return;
+    }
+    state.blockingLevel = clamp(Number(response.blockingLevel || level || 0), 0, 3);
+    state.lastActiveBlockingLevel = clamp(Number(response.lastActiveBlockingLevel || state.lastActiveBlockingLevel || 2), 1, 3);
+    updateProtectionState();
+  }
+
+  async function toggleAiMonitor() {
+    const next = !state.aiMonitorEnabled;
+    const response = await runtimeMessage({ action: 'setAiMonitorEnabled', enabled: next });
+    if (!response?.success) {
+      await loadProtectionState();
+      return;
+    }
+    state.aiMonitorEnabled = response.enabled !== false;
+    await loadProtectionState();
+  }
+
   function handleAction(action) {
     const video = state.targetVideo;
     switch (action) {
@@ -857,9 +1160,22 @@
         state.shieldEnabled = !state.shieldEnabled;
         syncPlaybackUI();
         updateLauncherAndPanelPosition();
+        showToast(
+          state.shieldEnabled
+            ? t('overlayShieldToastOn')
+            : t('overlayShieldToastOff'),
+          state.shieldEnabled ? 'center' : 'bottom-left',
+          state.shieldEnabled ? 3000 : 2000
+        );
         return;
       case 'reset-image':
         resetImage();
+        return;
+      case 'pick-element':
+        toggleBlockElement();
+        return;
+      case 'toggle-ai-monitor':
+        toggleAiMonitor();
         return;
       default:
         return;
@@ -878,6 +1194,12 @@
       if (!trigger) return;
       handleAction(trigger.getAttribute('data-action'));
     });
+
+    if (state.refs.blockingLevel) {
+      state.refs.blockingLevel.addEventListener('change', () => {
+        setBlockingLevel(Number(state.refs.blockingLevel.value));
+      });
+    }
 
     state.refs.volume.addEventListener('input', () => {
       const video = state.targetVideo;
@@ -906,9 +1228,32 @@
       });
     });
 
-    state.shield.addEventListener('click', (event) => {
+    state.shield.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
+      replayMouseEvent('mousedown', event);
+    });
+
+    state.shield.addEventListener('pointerup', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      replayMouseEvent('mouseup', event);
+    });
+
+    state.shield.addEventListener('click', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      replayMouseEvent('click', event);
+    });
+
+    state.shield.addEventListener('dblclick', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      replayMouseEvent('dblclick', event);
     });
 
     window.addEventListener('resize', updateLauncherAndPanelPosition, { passive: true });
@@ -974,10 +1319,41 @@
     }
   }
 
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message || typeof message.action !== 'string') return;
+    if (
+      message.action === 'activateElementPicker' ||
+      message.action === 'applyBlockingLevel' ||
+      message.action === 'disableBlocking' ||
+      message.action === 'deactivateElementPicker' ||
+      message.action === 'disableAiMonitor'
+    ) {
+      loadProtectionState();
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    if (
+      changes.blockingLevel ||
+      changes.lastActiveBlockingLevel ||
+      changes.aiMonitorEnabled ||
+      changes.aiProviderSettings ||
+      changes.aiProviderState ||
+      changes.aiProfiles ||
+      changes.aiTelemetryLog ||
+      changes.aiPolicyCache ||
+      changes.aiHostFallbacks
+    ) {
+      loadProtectionState();
+    }
+  });
+
   function init() {
     createRoot();
     bindControls();
     updateTextValues();
+    loadProtectionState();
     refreshTarget();
     startMonitoring();
   }
