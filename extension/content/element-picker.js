@@ -4,12 +4,19 @@
 (function () {
   'use strict';
 
+  if (window.__falconElementPickerInitialized) {
+    return;
+  }
+  window.__falconElementPickerInitialized = true;
+
   let isPickerActive = false;
   let highlightedElement = null;
   let overlay = null;
   let tooltip = null;
   let confirmDialog = null;
+  let statusToast = null;
   let pickerAutoOffTimer = null;
+  const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
 
   const HIGHLIGHT_BORDER = '2px solid #58a6ff';
   const HIGHLIGHT_OUTLINE = '1px solid rgba(255, 255, 255, 0.75)';
@@ -17,6 +24,7 @@
     '0 0 0 2px rgba(88, 166, 255, 0.45), 0 0 20px 8px rgba(88, 166, 255, 0.75), inset 0 0 0 1px rgba(255,255,255,0.55), 0 0 0 200vmax rgba(2, 10, 20, 0.22)';
   const PICKER_AUTO_OFF_MS = 2 * 60 * 1000;
   const PICKER_TARGET_CLASS = '__falcon_picker_target__';
+  const SELECTOR_CANDIDATE_LIMIT = 8;
 
   function clearPickerAutoOffTimer() {
     if (!pickerAutoOffTimer) return;
@@ -84,6 +92,35 @@
     if (confirmDialog?.isConnected) return confirmDialog;
     createConfirmDialog();
     return confirmDialog;
+  }
+
+  function ensureStatusToast() {
+    if (statusToast?.isConnected) return statusToast;
+
+    statusToast = document.createElement('div');
+    statusToast.id = '__element_picker_status__';
+    statusToast.style.cssText = `
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      z-index: 2147483649;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(20, 20, 24, 0.94);
+      color: #fff;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+      display: none;
+      pointer-events: none;
+      max-width: min(90vw, 420px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    `;
+    getPickerParent().appendChild(statusToast);
+    return statusToast;
   }
 
   function setPickerCursor(value) {
@@ -196,53 +233,143 @@
 
     confirmDialog.innerHTML = `
       <div style="margin-bottom: 14px;">
-        <div style="font-size: 18px; font-weight: 650; color: #222; margin-bottom: 8px;">🚫 確認封鎖元件</div>
-        <div style="font-size: 14px; color: #666; line-height: 1.5;">確認後將儲存規則並重新載入頁面</div>
+        <div style="font-size: 18px; font-weight: 650; color: #222; margin-bottom: 8px;">🚫 ${t('pickerConfirmTitle')}</div>
+        <div style="font-size: 14px; color: #666; line-height: 1.5;">${t('pickerConfirmDesc')}</div>
         <div id="__element_picker_confirm_selector__" style="font-size: 12px; color: #8c8c8c; margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; word-break: break-all;"></div>
       </div>
       <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="__element_picker_cancel__" style="padding: 8px 14px; border: 1px solid #ddd; border-radius: 7px; background: #fff; color: #666; cursor: pointer;">取消</button>
-        <button id="__element_picker_confirm_btn__" style="padding: 8px 14px; border: 0; border-radius: 7px; background: #ff3b30; color: #fff; font-weight: 600; cursor: pointer;">確認封鎖</button>
+        <button id="__element_picker_cancel__" style="padding: 8px 14px; border: 1px solid #ddd; border-radius: 7px; background: #fff; color: #666; cursor: pointer;">${t('pickerCancel')}</button>
+        <button id="__element_picker_confirm_btn__" style="padding: 8px 14px; border: 0; border-radius: 7px; background: #ff3b30; color: #fff; font-weight: 600; cursor: pointer;">${t('pickerConfirmAction')}</button>
       </div>
     `;
     getPickerParent().appendChild(confirmDialog);
   }
 
-  function generateSelector(element) {
+  function isStableClassName(name) {
+    const value = String(name || '').trim();
+    if (!value) return false;
+    if (value.startsWith('__')) return false;
+    if (/^(active|selected|hover|focus|open|show|hide|visible|hidden|current)$/i.test(value)) return false;
+    if (/\d{4,}/.test(value)) return false;
+    return true;
+  }
+
+  function buildClassSelector(element) {
+    if (!element?.classList?.length) return '';
+    const classes = Array.from(element.classList)
+      .filter(isStableClassName)
+      .slice(0, 3)
+      .map((name) => `.${CSS.escape(name)}`)
+      .join('');
+    if (!classes) return '';
+    return `${element.tagName.toLowerCase()}${classes}`;
+  }
+
+  function buildAttributeSelectors(element) {
+    const selectors = [];
+    const tagName = element?.tagName?.toLowerCase?.();
+    if (!tagName || !element?.getAttribute) return selectors;
+
+    const attributes = ['data-testid', 'data-id', 'aria-label', 'title', 'name', 'alt', 'src', 'href'];
+    attributes.forEach((name) => {
+      const value = String(element.getAttribute(name) || '').trim();
+      if (!value || value.length > 160) return;
+      selectors.push(`${tagName}[${name}="${CSS.escape(value)}"]`);
+    });
+    return selectors;
+  }
+
+  function buildNthOfTypeSelector(element) {
     if (!element || element === document.body || element === document.documentElement) {
-      return null;
+      return '';
     }
+
+    const segments = [];
+    let current = element;
+    let depth = 0;
+    while (current && current !== document.body && current !== document.documentElement && depth < 5) {
+      const tagName = current.tagName?.toLowerCase?.();
+      if (!tagName) break;
+
+      if (current.id) {
+        segments.unshift(`#${CSS.escape(current.id)}`);
+        break;
+      }
+
+      const classSelector = buildClassSelector(current);
+      if (classSelector && document.querySelectorAll(classSelector).length === 1) {
+        segments.unshift(classSelector);
+        break;
+      }
+
+      const siblings = Array.from(current.parentElement?.children || []).filter(
+        (node) => node.tagName === current.tagName
+      );
+      const index = siblings.indexOf(current) + 1;
+      segments.unshift(`${tagName}:nth-of-type(${Math.max(index, 1)})`);
+      current = current.parentElement;
+      depth += 1;
+    }
+
+    return segments.join(' > ');
+  }
+
+  function generateSelectorCandidates(element) {
+    if (!element || element === document.body || element === document.documentElement) {
+      return [];
+    }
+
+    const selectors = [];
+    const tagName = element.tagName?.toLowerCase?.();
+    if (!tagName) return selectors;
 
     if (element.id) {
-      return `#${CSS.escape(element.id)}`;
+      selectors.push(`#${CSS.escape(element.id)}`);
     }
 
-    if (element.classList.length > 0) {
-      const classes = Array.from(element.classList)
-        .filter((name) => !name.startsWith('__'))
-        .slice(0, 3)
-        .map((name) => `.${CSS.escape(name)}`)
-        .join('');
+    const classSelector = buildClassSelector(element);
+    if (classSelector) {
+      selectors.push(classSelector);
+    }
 
-      if (classes) {
-        const selector = `${element.tagName.toLowerCase()}${classes}`;
-        if (document.querySelectorAll(selector).length === 1) {
-          return selector;
+    selectors.push(...buildAttributeSelectors(element));
+
+    let ancestor = element.parentElement;
+    let depth = 0;
+    while (ancestor && ancestor !== document.body && depth < 3) {
+      const ancestorSelector = ancestor.id
+        ? `#${CSS.escape(ancestor.id)}`
+        : buildClassSelector(ancestor);
+      if (ancestorSelector) {
+        if (classSelector) {
+          selectors.push(`${ancestorSelector} > ${classSelector}`);
+          selectors.push(`${ancestorSelector} ${classSelector}`);
         }
+        selectors.push(...buildAttributeSelectors(element).map((selector) => `${ancestorSelector} ${selector}`));
+        break;
       }
+      ancestor = ancestor.parentElement;
+      depth += 1;
     }
 
-    const parent = element.parentElement;
-    if (parent) {
-      const siblings = Array.from(parent.children);
-      const index = siblings.indexOf(element) + 1;
-      const parentSelector = generateSelector(parent);
-      if (parentSelector) {
-        return `${parentSelector} > ${element.tagName.toLowerCase()}:nth-child(${index})`;
-      }
+    const nthOfTypeSelector = buildNthOfTypeSelector(element);
+    if (nthOfTypeSelector) {
+      selectors.push(nthOfTypeSelector);
     }
 
-    return element.tagName.toLowerCase();
+    return [...new Set(selectors.map((selector) => String(selector || '').trim()).filter(Boolean))]
+      .filter((selector) => {
+        try {
+          return document.querySelectorAll(selector).length >= 1;
+        } catch {
+          return false;
+        }
+      })
+      .slice(0, SELECTOR_CANDIDATE_LIMIT);
+  }
+
+  function generateSelector(element) {
+    return generateSelectorCandidates(element)[0] || null;
   }
 
   function updateHighlight(element) {
@@ -297,7 +424,7 @@
     const selector = generateSelector(target);
     const selectorNode = dialog.querySelector('#__element_picker_confirm_selector__');
     if (selectorNode) {
-      selectorNode.textContent = selector || '(無法生成選擇器)';
+      selectorNode.textContent = selector || t('pickerSelectorUnavailable');
     }
 
     const cancelBtn = dialog.querySelector('#__element_picker_cancel__');
@@ -323,40 +450,92 @@
     }
   }
 
-  function saveHiddenElement(selector, callback) {
+  function showStatusToast(message) {
+    const toast = ensureStatusToast();
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.style.display = 'block';
+    clearTimeout(toast.__hideTimer);
+    toast.__hideTimer = setTimeout(() => {
+      if (toast.isConnected) {
+        toast.style.display = 'none';
+      }
+    }, 1600);
+  }
+
+  function saveHiddenElement(selectors, callback) {
+    const selectorList = [...new Set((Array.isArray(selectors) ? selectors : [selectors]).map((value) => String(value || '').trim()).filter(Boolean))];
+    const primarySelector = selectorList[0] || '';
+    if (!primarySelector) {
+      if (callback) callback(false);
+      return;
+    }
+
     try {
       chrome.runtime.sendMessage(
         {
           action: 'hideElement',
-          selector,
+          selector: primarySelector,
+          selectors: selectorList,
           hostname: window.location.hostname
         },
-        () => {
-          if (callback) callback();
+        (response) => {
+          if (callback) callback(response?.success !== false);
         }
       );
     } catch {
       const rules = JSON.parse(localStorage.getItem('__hidden_elements__') || '[]');
       rules.push({
-        selector,
+        selector: primarySelector,
+        selectors: selectorList,
         hostname: window.location.hostname,
         timestamp: Date.now()
       });
       localStorage.setItem('__hidden_elements__', JSON.stringify(rules));
-      if (callback) callback();
+      if (callback) callback(true);
     }
   }
 
+  function hideBlockedElements(selectors, target) {
+    const hidden = new Set();
+    const markHidden = (node) => {
+      if (!(node instanceof HTMLElement) || hidden.has(node)) return;
+      node.style.setProperty('display', 'none', 'important');
+      node.style.setProperty('visibility', 'hidden', 'important');
+      node.style.setProperty('pointer-events', 'none', 'important');
+      hidden.add(node);
+    };
+
+    if (target instanceof HTMLElement) {
+      markHidden(target);
+    }
+
+    selectors.forEach((selector) => {
+      try {
+        document.querySelectorAll(selector).forEach((node) => markHidden(node));
+      } catch {}
+    });
+  }
+
   function blockElement(target) {
-    const selector = generateSelector(target);
-    if (!selector) {
+    const selectors = generateSelectorCandidates(target);
+    if (selectors.length === 0) {
       target.remove();
+      showStatusToast(t('pickerToastRemoved'));
       deactivatePicker();
       return;
     }
 
-    saveHiddenElement(selector, () => {
-      window.location.reload();
+    hideBlockedElements(selectors, target);
+    saveHiddenElement(selectors, (success) => {
+      if (!success) {
+        showStatusToast(t('pickerToastRemoved'));
+        deactivatePicker();
+        return;
+      }
+      showStatusToast(t('pickerToastBlockedSaved'));
+      deactivatePicker();
     });
   }
 

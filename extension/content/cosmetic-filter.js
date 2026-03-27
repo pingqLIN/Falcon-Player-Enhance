@@ -88,7 +88,10 @@
 
         for (const rule of customRules) {
             if (!rule.hostname || hostname.includes(rule.hostname)) {
-                selectors.push(rule.selector);
+                const ruleSelectors = Array.isArray(rule.selectors) && rule.selectors.length > 0
+                    ? rule.selectors
+                    : [rule.selector];
+                selectors = selectors.concat(ruleSelectors.filter(Boolean));
             }
         }
 

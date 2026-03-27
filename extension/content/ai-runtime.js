@@ -14,6 +14,7 @@
   const FLUSH_INTERVAL_MS = 1200;
   const DOM_HEALTH_INTERVAL_MS = 4000;
   const MAX_BATCH_SIZE = 12;
+  const POPUP_FEATURE_KEY = 'popupBlockingEnabled';
 
   const OUTBOUND_RISK_PATTERNS = [
     'exoclick',
@@ -74,6 +75,24 @@
   let domPulseTimer = null;
   let mutationObserver = null;
   let mutationSamples = { added: 0, suspicious: 0 };
+
+  function publishPopupBlockingSetting(enabled, source = 'storage') {
+    try {
+      window.postMessage({
+        type: '__SHIELD_FEATURE_SETTINGS__',
+        settings: {
+          popupBlockingEnabled: enabled === true
+        },
+        source
+      }, '*');
+    } catch (_) {}
+  }
+
+  function loadPopupBlockingSetting() {
+    chrome.storage.local.get([POPUP_FEATURE_KEY], (result) => {
+      publishPopupBlockingSetting(result[POPUP_FEATURE_KEY] !== false, 'storage_init');
+    });
+  }
 
   function hasGateAction(policy, action) {
     return Boolean(
@@ -524,6 +543,7 @@
     startDomPulse();
     requestCurrentPolicy();
     requestCurrentBlockingLevel();
+    loadPopupBlockingSetting();
 
     queueTelemetry('runtime_bootstrap', {
       severity: 0.2,
@@ -565,6 +585,11 @@
     }
 
     return false;
+  });
+
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace !== 'local' || !changes[POPUP_FEATURE_KEY]) return;
+    publishPopupBlockingSetting(changes[POPUP_FEATURE_KEY].newValue !== false, 'storage_change');
   });
 
   initRuntime();

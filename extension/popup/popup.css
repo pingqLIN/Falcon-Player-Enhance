@@ -544,6 +544,85 @@ main::-webkit-scrollbar {
     padding-top: 10px;
 }
 
+body.compact-mode main {
+    padding: 8px;
+}
+
+body.compact-mode .flow-indicator.flow-guide {
+    padding: 8px 10px 6px;
+    margin-bottom: 8px;
+}
+
+body.compact-mode .flow-indicator.flow-collapsed {
+    padding-top: 8px;
+}
+
+body.compact-mode .flow-step-card {
+    width: auto;
+    padding: 0;
+    gap: 0;
+}
+
+body.compact-mode .flow-step-num,
+body.compact-mode .flow-step-illust,
+body.compact-mode .flow-guide .flow-wire,
+body.compact-mode .flow-step-card .flow-sublabel {
+    display: none;
+}
+
+body.compact-mode .flow-pipeline {
+    justify-content: space-between;
+    gap: 6px;
+}
+
+body.compact-mode .flow-step-card .flow-label {
+    font-size: 10px;
+    letter-spacing: 0.8px;
+}
+
+body.compact-mode .flow-step-card.active {
+    border-color: transparent;
+    background-color: transparent;
+    animation: none;
+}
+
+body.compact-mode .flow-status {
+    margin-top: 4px;
+}
+
+body.compact-mode .stats-grid-section,
+body.compact-mode .level-panel,
+body.compact-mode .ai-monitor-panel {
+    display: none;
+}
+
+body.compact-mode .control-hub-body {
+    padding: 6px 8px 8px;
+}
+
+body.compact-mode .target-status-row {
+    margin-bottom: 6px;
+}
+
+body.compact-mode .player-chip-list {
+    margin-bottom: 8px;
+}
+
+body.compact-mode .playback-controls {
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+body.compact-mode .ctrl-btn {
+    width: 36px;
+    height: 36px;
+}
+
+body.compact-mode .ctrl-btn-sm {
+    width: 30px;
+    height: 30px;
+}
+
 /* ===== Blocking Level ===== */
 .level-panel {
     padding: 8px 10px;

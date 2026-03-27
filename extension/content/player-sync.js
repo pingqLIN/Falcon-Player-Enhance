@@ -8,6 +8,7 @@
     function log(...args) { if (DEV_MODE) console.log(...args); }
 
     const STORAGE_KEY = 'shieldPlayerSync';
+    const SYNC_ENABLED_KEY = 'playerSyncEnabled';
     const SYNC_INTERVAL = 2000; // 同步間隔 (ms)
     const POSITION_SAVE_THRESHOLD = 5; // 至少播放 5 秒才儲存位置
 
@@ -44,6 +45,18 @@
         if (activeObserver) {
             activeObserver.disconnect();
             activeObserver = null;
+        }
+    }
+
+    async function loadSyncPreference() {
+        if (!isContextValid()) return;
+        try {
+            const result = await chrome.storage.local.get([SYNC_ENABLED_KEY]);
+            syncEnabled = result[SYNC_ENABLED_KEY] !== false;
+        } catch (e) {
+            if (isContextError(e) || !isContextValid()) {
+                invalidateContext();
+            }
         }
     }
 
@@ -154,6 +167,7 @@
      * 恢復播放位置
      */
     async function restorePosition(video, videoId) {
+        if (!syncEnabled) return false;
         const saved = await loadPosition(videoId);
         
         if (!saved) return false;
@@ -408,11 +422,13 @@
     /**
      * 初始化
      */
-    function init() {
+    async function init() {
         log('🚀 Player Sync v4.0 已載入');
-        
+        await loadSyncPreference();
         injectStyles();
-        processPendingSync();
+        if (syncEnabled) {
+            await processPendingSync();
+        }
         
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {
@@ -453,7 +469,12 @@
         }
     }
 
-    init();
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[SYNC_ENABLED_KEY]) return;
+        syncEnabled = changes[SYNC_ENABLED_KEY].newValue !== false;
+    });
+
+    init().catch(() => {});
 
     // 暴露 API
     window.__ShieldPlayerSync = {

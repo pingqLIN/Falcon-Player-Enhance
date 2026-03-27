@@ -31,6 +31,7 @@
             '.gif-video' // GIF 轉 video 的情況
         ]
     };
+    const FAKE_VIDEO_FEATURE_KEY = 'fakeVideoRemovalEnabled';
     let blockingEnabled = false;
 
     function normalizeHostname(hostname) {
@@ -43,15 +44,23 @@
 
     function resolveBlockingMode() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
+            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', FAKE_VIDEO_FEATURE_KEY], (result) => {
                 const hostname = normalizeHostname(window.location.hostname);
                 const whitelist = Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [];
                 const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
                 const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-                blockingEnabled = !(onWhitelist && whitelistEnhanceOnly);
+                const featureEnabled = result[FAKE_VIDEO_FEATURE_KEY] !== false;
+                blockingEnabled = featureEnabled && !(onWhitelist && whitelistEnhanceOnly);
                 resolve(blockingEnabled);
             });
         });
+    }
+
+    function applyFeatureToggle(enabled) {
+        blockingEnabled = enabled === true;
+        if (blockingEnabled) {
+            setTimeout(scanAllVideos, 120);
+        }
     }
 
     // 統計
@@ -425,6 +434,11 @@
             sendResponse({ success: true, stats });
             return true;
         }
+    });
+
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[FAKE_VIDEO_FEATURE_KEY]) return;
+        applyFeatureToggle(changes[FAKE_VIDEO_FEATURE_KEY].newValue !== false);
     });
 
     // 暴露 API

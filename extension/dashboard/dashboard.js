@@ -1,11 +1,18 @@
 // Falcon-Player-Enhance Dashboard - Settings & Management
 // v4.4 - Player Protection Focus
 
-document.addEventListener('DOMContentLoaded', () => {
-    const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
-    const locale = chrome.i18n.getUILanguage?.() || navigator.language || 'en-US';
+document.addEventListener('DOMContentLoaded', async () => {
+    await (window.FalconI18n?.ready || Promise.resolve());
+    const t = (key, substitutions) => window.FalconI18n?.t?.(key, substitutions) || chrome.i18n.getMessage(key, substitutions) || key;
+    let locale = window.FalconI18n?.locale || chrome.i18n.getUILanguage?.() || navigator.language || 'en-US';
     const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
+    const FEATURE_SETTING_KEYS = {
+        overlay: 'removeOverlays',
+        popup: 'popupBlockingEnabled',
+        fakeVideo: 'fakeVideoRemovalEnabled',
+        sync: 'playerSyncEnabled'
+    };
     const AI_PROVIDER_ENDPOINTS = {
         openai: 'https://api.openai.com/v1/responses',
         gemini: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
@@ -23,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
     const themeLabel = document.getElementById('theme-label');
+    const uiLanguageSelect = document.getElementById('ui-language-select');
     const policyOverviewVersion = document.getElementById('policy-overview-version');
     const policyGateVersion = document.getElementById('policy-gate-version');
     const policyHighRiskCount = document.getElementById('policy-high-risk-count');
@@ -56,6 +64,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const enhancedSitesMergedDisplay = document.getElementById('enhanced-sites-merged-display');
     let lastSelectedProvider = 'openai';
     let hasStoredCredential = false;
+    let providerKeyStates = { openai: false, gemini: false, lmstudio: false, gateway: false };
+    let stagedApiKeys = {};
+    let isApiKeyEditorVisible = false;
+    let isHydratingProviderForm = false;
+    let aiProviderAutosaveTimer = null;
+    let extensionEnabled = true;
+    let featureStates = {
+        overlay: true,
+        popup: true,
+        fakeVideo: true,
+        sync: true
+    };
 
     async function initTheme() {
         const result = await chrome.storage.local.get(['theme']);
@@ -82,6 +102,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initTheme();
+
+    function normalizeUiLanguage(value) {
+        const text = String(value || '').trim();
+        if (!text || text === 'auto') return 'auto';
+        if (text.toLowerCase().startsWith('zh')) return 'zh_TW';
+        if (text.toLowerCase().startsWith('en')) return 'en';
+        return 'auto';
+    }
+
+    function applyUiLanguage(value) {
+        if (!uiLanguageSelect) return;
+        uiLanguageSelect.value = normalizeUiLanguage(value);
+    }
+
+    async function loadUiLanguage() {
+        const result = await chrome.storage.local.get(['uiLanguage']);
+        applyUiLanguage(result.uiLanguage);
+    }
+
+    if (uiLanguageSelect) {
+        uiLanguageSelect.addEventListener('change', async () => {
+            const next = normalizeUiLanguage(uiLanguageSelect.value);
+            uiLanguageSelect.value = next;
+            await chrome.storage.local.set({ uiLanguage: next });
+        });
+    }
+
+    loadUiLanguage().catch(() => {});
 
     // ========== Tab Navigation ==========
     const tabItems = document.querySelectorAll('.menu-item');
@@ -121,23 +169,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Overview Status Bar ==========
     async function loadStatusBar() {
-        const result = await chrome.storage.local.get(['stats', 'aiProviderSettings', 'customSites']);
+        const result = await chrome.storage.local.get(['stats', 'aiProviderSettings', 'customSites', 'extensionEnabled']);
         const settings = result.aiProviderSettings || {};
         const stats = result.stats || {};
         const statusDot = document.getElementById('status-active-dot');
         const statusAiMode = document.getElementById('status-ai-mode');
         const statusEnhancedCount = document.getElementById('status-enhanced-count');
+        extensionEnabled = result.extensionEnabled !== false;
 
-        if (statusDot) statusDot.classList.toggle('inactive', false);
+        if (statusDot) statusDot.classList.toggle('inactive', !extensionEnabled);
         if (statusAiMode) {
             const mode = settings.mode || 'off';
             const provider = settings.provider || '';
-            statusAiMode.textContent = `AI: ${mode}${provider && mode !== 'off' ? ' · ' + provider : ''}`;
+            const modeText = formatPolicyGateMode(mode);
+            statusAiMode.textContent = extensionEnabled
+                ? t('dashboardStatusAiSummary', [
+                    modeText,
+                    provider && mode !== 'off'
+                        ? t('dashboardStatusProviderSuffix', [getProviderLabel(provider)])
+                        : ''
+                ])
+                : t('dashboardStatusAiOff');
         }
         if (statusEnhancedCount) {
             const customCount = Array.isArray(result.customSites) ? result.customSites.length : 0;
-            statusEnhancedCount.textContent = `${customCount} enhanced site${customCount !== 1 ? 's' : ''}`;
+            statusEnhancedCount.textContent = t('dashboardStatusEnhancedCount', [String(customCount)]);
         }
+        syncProtectionButtons();
     }
 
     loadStatusBar();
@@ -146,6 +204,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return num.toLocaleString();
+    }
+
+    function getProtectionText(enabled) {
+        return enabled ? t('dashboardEnabled') : t('dashboardDisabled');
+    }
+
+    function normalizeFeatureStates(result = {}) {
+        return {
+            overlay: result[FEATURE_SETTING_KEYS.overlay] !== false,
+            popup: result[FEATURE_SETTING_KEYS.popup] !== false,
+            fakeVideo: result[FEATURE_SETTING_KEYS.fakeVideo] !== false,
+            sync: result[FEATURE_SETTING_KEYS.sync] !== false
+        };
+    }
+
+    function syncProtectionButtons() {
+        document.querySelectorAll('.protection-toggle').forEach((button) => {
+            const feature = String(button.dataset.feature || '');
+            const enabled = featureStates[feature] !== false;
+            button.textContent = getProtectionText(enabled);
+            button.setAttribute('aria-label', enabled ? t('dashboardProtectionDisableTooltip') : t('dashboardProtectionEnableTooltip'));
+            button.title = enabled ? t('dashboardProtectionDisableTooltip') : t('dashboardProtectionEnableTooltip');
+            button.dataset.enabled = String(enabled);
+            button.classList.toggle('is-off', !enabled);
+        });
+    }
+
+    async function loadFeatureSettings() {
+        const result = await chrome.storage.local.get(Object.values(FEATURE_SETTING_KEYS));
+        featureStates = normalizeFeatureStates(result);
+        syncProtectionButtons();
     }
 
     loadStats();
@@ -162,14 +251,70 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    async function toggleFeatureProtection(feature) {
+        const key = FEATURE_SETTING_KEYS[feature];
+        if (!key) return;
+        const next = featureStates[feature] === false;
+        featureStates = {
+            ...featureStates,
+            [feature]: next
+        };
+        syncProtectionButtons();
+        await chrome.storage.local.set({ [key]: next });
+    }
+
+    document.querySelectorAll('.protection-toggle').forEach((button) => {
+        button.addEventListener('click', () => toggleFeatureProtection(String(button.dataset.feature || '')));
+    });
+
+    loadFeatureSettings().catch(() => {});
+
     function formatPolicyGateAction(action) {
-        return String(action || '')
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, (char) => char.toUpperCase());
+        const value = String(action || '').trim();
+        const map = {
+            tighten_popup_guard: t('dashboardPolicyActionTightenPopupGuard'),
+            tune_overlay_scan: t('dashboardPolicyActionTuneOverlayScan'),
+            guard_external_navigation: t('dashboardPolicyActionGuardExternalNavigation'),
+            apply_extra_blocked_domains: t('dashboardPolicyActionApplyExtraBlockedDomains')
+        };
+        if (map[value]) return map[value];
+        return value.replace(/_/g, ' ');
     }
 
     function formatPolicyGateReason(reason) {
-        return String(reason || 'runtime_default').replace(/_/g, ' ');
+        const value = String(reason || 'runtime_default').trim();
+        const map = {
+            runtime_default: t('dashboardPolicyReasonRuntimeDefault'),
+            ai_profile: t('dashboardPolicyReasonAiProfile'),
+            ai_disabled: t('dashboardPolicyReasonAiDisabled'),
+            user_override: t('dashboardPolicyReasonUserOverride'),
+            provider_fallback: t('dashboardPolicyReasonProviderFallback'),
+            model_unavailable: t('dashboardPolicyReasonModelUnavailable')
+        };
+        if (map[value]) return map[value];
+        return value.replace(/_/g, ' ');
+    }
+
+    function formatRiskTier(value) {
+        const text = String(value || 'low').trim().toLowerCase();
+        const map = {
+            low: t('dashboardRiskLow'),
+            medium: t('dashboardRiskMedium'),
+            high: t('dashboardRiskHigh'),
+            critical: t('dashboardRiskCritical')
+        };
+        return map[text] || text;
+    }
+
+    function formatPolicyGateMode(value) {
+        const text = String(value || 'advisory-only').trim().toLowerCase();
+        const map = {
+            'advisory-only': t('dashboardModeAdvisoryOnly'),
+            advisory: t('dashboardModeAdvisory'),
+            hybrid: t('dashboardModeHybrid'),
+            off: t('dashboardModeOff')
+        };
+        return map[text] || text.replace(/_/g, ' ');
     }
 
     function formatEvidenceSignal(signal) {
@@ -189,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const list = Array.isArray(hosts) ? hosts : [];
         if (list.length === 0) {
-            policyHostList.innerHTML = '<div class="empty-state">No high-risk hosts yet</div>';
+            policyHostList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardNoHighRiskHosts'))}</div>`;
             return;
         }
 
@@ -206,10 +351,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 : [];
             const chips = actions.length > 0
                 ? actions.map((action) => `<span class="policy-action-chip">${escapeHtml(formatPolicyGateAction(action))}</span>`).join('')
-                : '<span class="policy-action-chip">No reversible actions</span>';
+                : `<span class="policy-action-chip">${escapeHtml(t('dashboardNoReversibleActions'))}</span>`;
             const evidenceChips = evidenceSignals.length > 0
                 ? evidenceSignals.map((signal) => `<span class="policy-action-chip">${escapeHtml(formatEvidenceSignal(signal))}</span>`).join('')
-                : '<span class="policy-action-chip">No recent signals</span>';
+                : `<span class="policy-action-chip">${escapeHtml(t('dashboardNoRecentSignals'))}</span>`;
 
             item.innerHTML = `
                 <div class="policy-host-main">
@@ -217,16 +362,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="policy-chip ${escapeHtml(gateTier.toLowerCase())}">${escapeHtml(gateTier)}</span>
                 </div>
                 <div class="policy-host-meta">
-                    <span class="policy-chip">${escapeHtml(String(host.riskTier || 'low').toUpperCase())} · ${Number(host.riskScore || 0).toFixed(2)}</span>
-                    <span class="policy-chip">${escapeHtml(String(host.policyGateMode || 'advisory-only'))}</span>
-                    ${host.fallbackActive ? '<span class="policy-chip fallback">Fallback active</span>' : ''}
+                    <span class="policy-chip">${escapeHtml(t('dashboardRiskSummary', [formatRiskTier(host.riskTier), Number(host.riskScore || 0).toFixed(2)]))}</span>
+                    <span class="policy-chip">${escapeHtml(formatPolicyGateMode(host.policyGateMode))}</span>
+                    ${host.fallbackActive ? `<span class="policy-chip fallback">${escapeHtml(t('dashboardFallbackActive'))}</span>` : ''}
                 </div>
                 <div class="policy-host-meta">
-                    <span>Reason: ${escapeHtml(formatPolicyGateReason(host.policyGateReason))}</span>
+                    <span>${escapeHtml(t('dashboardReasonPrefix', [formatPolicyGateReason(host.policyGateReason)]))}</span>
                 </div>
                 <div class="policy-actions-row">${chips}</div>
                 <div class="policy-host-meta">
-                    <span>Evidence</span>
+                    <span>${escapeHtml(t('dashboardEvidenceHeading'))}</span>
                 </div>
                 <div class="policy-actions-row">${evidenceChips}</div>
             `;
@@ -248,10 +393,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProviderLabel(provider) {
-        if (provider === 'openai') return 'OpenAI direct';
-        if (provider === 'gemini') return 'Gemini 2.5 Flash';
-        if (provider === 'gateway') return 'Gateway service';
-        return 'LM Studio';
+        if (provider === 'openai') return t('dashboardProviderOpenai');
+        if (provider === 'gemini') return t('dashboardProviderGemini');
+        if (provider === 'gateway') return t('dashboardProviderGateway');
+        return t('dashboardProviderLmstudio');
+    }
+
+    function normalizeProviderKeyStates(input = {}) {
+        return {
+            openai: input.openai === true,
+            gemini: input.gemini === true,
+            lmstudio: input.lmstudio === true,
+            gateway: input.gateway === true
+        };
+    }
+
+    function getProviderDraftKey(provider) {
+        return String(provider || lastSelectedProvider || 'openai');
+    }
+
+    function getStagedApiKey(provider) {
+        return String(stagedApiKeys[getProviderDraftKey(provider)] || '');
+    }
+
+    function stashCurrentApiKeyDraft() {
+        const provider = getProviderDraftKey(lastSelectedProvider);
+        const value = String(aiProviderToken?.value || '');
+        if (!value.trim()) {
+            delete stagedApiKeys[provider];
+            return;
+        }
+        stagedApiKeys[provider] = value;
+    }
+
+    function clearStagedApiKey(provider) {
+        delete stagedApiKeys[getProviderDraftKey(provider)];
+    }
+
+    function setApiKeyEditorVisible(visible) {
+        isApiKeyEditorVisible = visible === true;
+        if (aiKeyEditRow) {
+            aiKeyEditRow.style.display = isApiKeyEditorVisible ? 'flex' : 'none';
+        }
+    }
+
+    function updateCurrentApiKeyState() {
+        const provider = getProviderDraftKey(lastSelectedProvider);
+        const hasStagedCredential = Boolean(getStagedApiKey(provider).trim());
+        hasStoredCredential = providerKeyStates[provider] === true;
+        renderApiKeyState(hasStoredCredential, hasStagedCredential);
+        setApiKeyEditorVisible(isApiKeyEditorVisible || hasStagedCredential);
     }
 
     function getProviderDefaultEndpoint(provider) {
@@ -288,16 +479,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderApiKeyState(hasCredential, hasStagedCredential = false) {
         if (aiKeyDisplay) {
             aiKeyDisplay.value = hasStagedCredential
-                ? '•••••••• staged'
+                ? t('dashboardAiApiKeyStaged')
                 : hasCredential
-                ? '•••••••• stored'
-                : 'Not stored';
-        }
-        if (aiKeyEditRow) {
-            aiKeyEditRow.style.display = 'none';
+                ? t('dashboardAiApiKeyStored')
+                : t('dashboardAiApiKeyUnset');
         }
         if (btnUpdateApiKey) {
-            btnUpdateApiKey.textContent = hasCredential ? 'Update' : 'Add';
+            btnUpdateApiKey.textContent = hasCredential ? t('dashboardAiUpdateKey') : t('dashboardAiAddKey');
         }
     }
 
@@ -320,15 +508,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!enabled) {
-            aiStatusTitle.textContent = 'AI disabled';
-            aiStatusSub.textContent = `${providerLabel} · mode=${mode}`;
+            aiStatusTitle.textContent = t('dashboardAiDisabledTitle');
+            aiStatusSub.textContent = t('dashboardAiModeSummary', [providerLabel, formatPolicyGateMode(mode)]);
             return;
         }
 
         aiStatusTitle.textContent = providerLabel;
         aiStatusSub.textContent = error
             ? `${model} · ${error}`
-            : `${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
+            : t('dashboardAiModeHealthSummary', [
+                model,
+                formatPolicyGateMode(mode),
+                lastHealthOk ? t('dashboardAiModeHealthSuffix') : ''
+            ]);
     }
 
     function syncProviderDefaults(nextProvider) {
@@ -353,9 +545,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectProvider(nextProvider) {
+        stashCurrentApiKeyDraft();
         syncProviderDefaults(nextProvider);
+        if (aiProvider) aiProvider.value = nextProvider;
+        lastSelectedProvider = nextProvider;
         setSelectedProviderCard(nextProvider);
-        renderApiKeyState(hasStoredCredential, Boolean(aiProviderToken?.value.trim()));
+        if (aiProviderToken) {
+            aiProviderToken.value = getStagedApiKey(nextProvider);
+        }
+        updateCurrentApiKeyState();
         if (aiConfigurePanel) {
             aiConfigurePanel.style.display = 'block';
         }
@@ -372,7 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lmstudioCandidateList.innerHTML = '';
 
         if (!Array.isArray(candidateList) || candidateList.length === 0) {
-            lmstudioCandidateList.innerHTML = '<div class="empty-state">No generated rule candidates yet.</div>';
+            lmstudioCandidateList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardAiNoCandidates'))}</div>`;
             return;
         }
 
@@ -387,11 +585,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="policy-host-meta">
                     <span class="policy-chip">${escapeHtml(providerLabel)}</span>
-                    <span class="policy-chip">Selectors · ${Number(candidate.selectorCount || 0)}</span>
-                    <span class="policy-chip">Domains · ${Number(candidate.domainCount || 0)}</span>
+                    <span class="policy-chip">${escapeHtml(t('dashboardAiCandidateSelectorCount', [String(Number(candidate.selectorCount || 0))]))}</span>
+                    <span class="policy-chip">${escapeHtml(t('dashboardAiCandidateDomainCount', [String(Number(candidate.domainCount || 0))]))}</span>
                 </div>
                 <div class="policy-host-meta">
-                    <span>${escapeHtml(candidate.summary || 'No summary')}</span>
+                    <span>${escapeHtml(candidate.summary || t('dashboardAiCandidateNoSummary'))}</span>
                 </div>
             `;
             lmstudioCandidateList.appendChild(item);
@@ -403,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const snapshot = response?.success ? response.snapshot : null;
         if (!snapshot) {
             if (policyHostList) {
-                policyHostList.innerHTML = '<div class="empty-state">Unable to load runtime policy gate</div>';
+                policyHostList.innerHTML = `<div class="empty-state">${escapeHtml(t('dashboardHighRiskLoadFailed'))}</div>`;
             }
             return;
         }
@@ -427,12 +625,15 @@ document.addEventListener('DOMContentLoaded', () => {
             : [];
         if (lmstudioCandidateSummary) {
             if (candidateList.length === 0) {
-                lmstudioCandidateSummary.textContent = 'No generated rule candidates yet.';
+                lmstudioCandidateSummary.textContent = t('dashboardAiSummaryNone');
             } else {
                 const top = candidateList[0];
-                lmstudioCandidateSummary.textContent =
-                    `Generated ${candidateList.length} host candidate set(s). Latest: ${top.hostname} ` +
-                    `(selectors=${top.selectorCount || 0}, domains=${top.domainCount || 0})`;
+                lmstudioCandidateSummary.textContent = t('dashboardAiSummaryLatest', [
+                    String(candidateList.length),
+                    String(top.hostname || 'unknown-host'),
+                    String(top.selectorCount || 0),
+                    String(top.domainCount || 0)
+                ]);
             }
         }
         renderLmStudioCandidates(candidateList);
@@ -446,19 +647,21 @@ document.addEventListener('DOMContentLoaded', () => {
         lmstudioStatus.style.color = isError ? 'var(--danger, #b42318)' : '';
     }
 
-    function hydrateProviderForm(settings, state) {
+    function hydrateProviderForm(settings, state, keyStates) {
+        isHydratingProviderForm = true;
         const provider = String(settings?.provider || 'openai');
-        const hasStoredApiKey = settings?.hasApiKey === true;
+        providerKeyStates = normalizeProviderKeyStates(keyStates || providerKeyStates);
+        const hasStoredApiKey = providerKeyStates[provider] === true;
         hasStoredCredential = hasStoredApiKey;
         lastSelectedProvider = provider;
         if (aiProvider) aiProvider.value = provider;
         if (aiProviderToken) {
-            aiProviderToken.value = '';
+            aiProviderToken.value = getStagedApiKey(provider);
             aiProviderToken.placeholder = hasStoredApiKey
-                ? 'Stored session credential configured. Enter a new key to replace it.'
-                : 'OpenAI API key, Gemini API key, or gateway bearer token';
+                ? t('dashboardAiApiKeyPlaceholder')
+                : t('dashboardAiApiKeyPlaceholder');
         }
-        renderApiKeyState(hasStoredApiKey, false);
+        renderApiKeyState(hasStoredApiKey, Boolean(getStagedApiKey(provider).trim()));
         if (lmstudioEnabled) lmstudioEnabled.checked = settings?.enabled === true;
         if (lmstudioEndpoint) lmstudioEndpoint.value = settings?.endpoint || getProviderDefaultEndpoint(provider);
         if (lmstudioModel) {
@@ -473,21 +676,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiConfigurePanel) {
             aiConfigurePanel.style.display = 'block';
         }
+        setApiKeyEditorVisible(isApiKeyEditorVisible || Boolean(getStagedApiKey(provider).trim()));
         renderAiStatusCard(settings, state);
 
         if (state) {
             const providerLabel = getProviderLabel(String(state.lastProvider || provider));
-            const health = state.lastHealthOk ? 'healthy' : 'not checked';
+            const health = state.lastHealthOk ? t('dashboardAiHealthStatusHealthy') : t('dashboardAiHealthStatusUnchecked');
             const latency = Number(state.lastLatencyMs || 0);
-            const modelInfo = state.lastResolvedModel ? ` model=${state.lastResolvedModel}` : '';
-            const error = state.lastError ? ` error=${state.lastError}` : '';
-            const credentialInfo = hasStoredApiKey ? ' credential=session' : ' credential=empty';
-            setLmStudioStatus(`${providerLabel} ${health}.${modelInfo}${latency > 0 ? ` latency=${latency}ms` : ''}${credentialInfo}${error}`);
+            const modelInfo = state.lastResolvedModel ? t('dashboardAiHealthModel', [state.lastResolvedModel]) : '';
+            const error = state.lastError ? t('dashboardAiHealthError', [state.lastError]) : '';
+            const credentialInfo = hasStoredApiKey ? t('dashboardAiHealthCredentialStored') : t('dashboardAiHealthCredentialUnset');
+            const latencyInfo = latency > 0 ? t('dashboardAiHealthLatency', [String(latency)]) : '';
+            setLmStudioStatus(`${providerLabel} ${health}${modelInfo}${latencyInfo}${credentialInfo}${error}`);
         }
+        isHydratingProviderForm = false;
     }
 
-    function collectProviderSettings() {
+    function collectProviderSettings(options = {}) {
         const provider = lastSelectedProvider || aiProvider?.value || 'openai';
+        const includeApiKey = options.includeApiKey === true;
         return {
             provider,
             enabled: lmstudioEnabled?.checked === true,
@@ -495,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
             model: lmstudioModel?.value || (
                 getProviderDefaultModel(provider)
             ),
-            apiKey: aiProviderToken?.value || '',
+            apiKey: includeApiKey ? aiProviderToken?.value || '' : '',
             mode: lmstudioMode?.value || 'hybrid',
             timeoutMs: Number(lmstudioTimeout?.value || getProviderDefaultTimeout(provider)),
             cooldownMs: Number(lmstudioCooldown?.value || 25000),
@@ -506,55 +713,84 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAiProviderSettings() {
         const response = await runtimeMessage({ action: 'getAiProviderSettings' });
         if (!response?.success) {
-            setLmStudioStatus('Unable to load AI provider settings.', true);
+            setLmStudioStatus(t('dashboardAiSettingsLoadFailed'), true);
             return;
         }
-        hydrateProviderForm(response.settings, response.state);
+        hydrateProviderForm(response.settings, response.state, response.keyStates);
     }
 
-    async function saveAiProviderSettings() {
-        const settings = collectProviderSettings();
+    async function saveAiProviderSettings(options = {}) {
+        const settings = collectProviderSettings({
+            includeApiKey: options.includeApiKey === true
+        });
         const providerLabel = getProviderLabel(settings.provider);
         const response = await runtimeMessage({
             action: 'setAiProviderSettings',
             settings
         });
         if (!response?.success) {
-            setLmStudioStatus(response?.error || `Failed to save ${providerLabel} settings.`, true);
+            setLmStudioStatus(response?.error || t('dashboardAiSettingsSaveFailed', [providerLabel]), true);
             return;
         }
-        hydrateProviderForm(response.settings, response.state);
+        providerKeyStates = normalizeProviderKeyStates(response.keyStates || providerKeyStates);
+        if (String(settings.apiKey || '').trim()) {
+            clearStagedApiKey(settings.provider);
+            if (aiProviderToken && getProviderDraftKey(settings.provider) === getProviderDraftKey(lastSelectedProvider)) {
+                aiProviderToken.value = '';
+            }
+        }
+        if (options.keepEditorOpen !== true) {
+            setApiKeyEditorVisible(false);
+        }
+        hydrateProviderForm(response.settings, response.state, response.keyStates);
         loadStatusBar();
-        setLmStudioStatus(`${providerLabel} provider settings saved.`);
+        setLmStudioStatus(t('dashboardAiSettingsSaved', [providerLabel]));
     }
 
     async function runAiProviderHealthCheck() {
         const settings = collectProviderSettings();
         const providerLabel = getProviderLabel(settings.provider);
-        setLmStudioStatus(`Checking ${providerLabel}...`);
+        setLmStudioStatus(t('dashboardAiHealthChecking', [providerLabel]));
         const response = await runtimeMessage({
             action: 'runAiProviderHealthCheck',
             settings
         });
         if (!response?.success) {
-            setLmStudioStatus(response?.error || `${providerLabel} health check failed.`, true);
+            setLmStudioStatus(response?.error || t('dashboardAiHealthCheckFailed', [providerLabel]), true);
             return;
         }
         const modelCount = Number(response.modelCount || 0);
-        const resolvedModel = response.resolvedModel ? ` active=${response.resolvedModel}` : '';
-        const serviceInfo = response.service ? ` service=${response.service}` : '';
-        setLmStudioStatus(`${providerLabel} ready. models=${modelCount}${resolvedModel}${serviceInfo}`);
+        const resolvedModel = response.resolvedModel ? t('dashboardAiHealthActiveModel', [response.resolvedModel]) : '';
+        const serviceInfo = response.service ? t('dashboardAiHealthService', [response.service]) : '';
+        setLmStudioStatus(t('dashboardAiHealthReady', [providerLabel, String(modelCount), resolvedModel, serviceInfo]));
         await loadAiProviderSettings();
+    }
+
+    function scheduleAiProviderAutosave(delay = 500, options = {}) {
+        if (isHydratingProviderForm) return;
+        clearTimeout(aiProviderAutosaveTimer);
+        aiProviderAutosaveTimer = setTimeout(() => {
+            saveAiProviderSettings({
+                keepEditorOpen: options.keepEditorOpen !== false,
+                includeApiKey: false
+            }).catch((error) => {
+                setLmStudioStatus(String(error?.message || error || t('dashboardAiSettingsSaveFailed', [getProviderLabel(lastSelectedProvider)])), true);
+            });
+        }, Math.max(0, Number(delay || 0)));
     }
 
     if (aiProvider) {
         aiProvider.addEventListener('change', () => {
             selectProvider(aiProvider.value);
+            scheduleAiProviderAutosave(0, { keepEditorOpen: true });
         });
     }
 
     providerCards.forEach((card) => {
-        const activate = () => selectProvider(card.dataset.provider || 'openai');
+        const activate = () => {
+            selectProvider(card.dataset.provider || 'openai');
+            scheduleAiProviderAutosave(0, { keepEditorOpen: true });
+        };
         card.addEventListener('click', activate);
         card.addEventListener('keydown', (event) => {
             if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -576,6 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 mode,
                 model: lmstudioModel?.value || getProviderDefaultModel(lastSelectedProvider)
             });
+            scheduleAiProviderAutosave(250, { keepEditorOpen: true });
         };
         card.addEventListener('click', activate);
         card.addEventListener('keydown', (event) => {
@@ -587,9 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnUpdateApiKey) {
         btnUpdateApiKey.addEventListener('click', () => {
-            if (aiKeyEditRow) {
-                aiKeyEditRow.style.display = 'flex';
-            }
+            setApiKeyEditorVisible(true);
             if (aiProviderToken) {
                 aiProviderToken.focus();
                 aiProviderToken.select();
@@ -598,9 +833,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnConfirmApiKey) {
-        btnConfirmApiKey.addEventListener('click', () => {
-            const hasStagedCredential = Boolean(aiProviderToken?.value.trim());
-            renderApiKeyState(hasStoredCredential || hasStagedCredential, hasStagedCredential);
+        btnConfirmApiKey.addEventListener('click', async () => {
+            stashCurrentApiKeyDraft();
+            updateCurrentApiKeyState();
+            await saveAiProviderSettings({ keepEditorOpen: false, includeApiKey: true });
+        });
+    }
+
+    if (aiProviderToken) {
+        aiProviderToken.addEventListener('input', () => {
+            stashCurrentApiKeyDraft();
+            updateCurrentApiKeyState();
+        });
+        aiProviderToken.addEventListener('keydown', async (event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            stashCurrentApiKeyDraft();
+            updateCurrentApiKeyState();
+            await saveAiProviderSettings({ keepEditorOpen: false, includeApiKey: true });
         });
     }
 
@@ -612,6 +862,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 mode: lmstudioMode?.value || 'off',
                 model: lmstudioModel?.value || getProviderDefaultModel(lastSelectedProvider)
             });
+            scheduleAiProviderAutosave(250, { keepEditorOpen: true });
+        });
+    }
+
+    [lmstudioEndpoint, lmstudioModel, lmstudioTimeout, lmstudioCooldown].forEach((input) => {
+        if (!input) return;
+        input.addEventListener('input', () => {
+            scheduleAiProviderAutosave(500, { keepEditorOpen: true });
+        });
+        input.addEventListener('change', () => {
+            scheduleAiProviderAutosave(250, { keepEditorOpen: true });
+        });
+    });
+
+    if (lmstudioDynamicRules) {
+        lmstudioDynamicRules.addEventListener('change', () => {
+            scheduleAiProviderAutosave(250, { keepEditorOpen: true });
         });
     }
 
@@ -625,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnExportLmstudioCandidates.addEventListener('click', async () => {
             const response = await runtimeMessage({ action: 'getAiRuleCandidates' });
             if (!response?.success) {
-                setLmStudioStatus('Failed to load generated rule candidates.', true);
+                setLmStudioStatus(t('dashboardAiCandidatesLoadFailed'), true);
                 return;
             }
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -925,7 +1192,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========== Listen for storage changes ==========
     chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'local') {
+            if (changes.uiLanguage) {
+                window.location.reload();
+                return;
+            }
             if (changes.stats) loadStats();
+            if (changes.removeOverlays || changes.popupBlockingEnabled || changes.fakeVideoRemovalEnabled || changes.playerSyncEnabled) {
+                loadFeatureSettings();
+            }
             if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
                 loadPolicyGateOverview();
             }

@@ -1,5 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
+document.addEventListener('DOMContentLoaded', async () => {
+    await (window.FalconI18n?.ready || Promise.resolve());
+    const t = (key, substitutions) => window.FalconI18n?.t?.(key, substitutions) || chrome.i18n.getMessage(key, substitutions) || key;
 
     const masterToggle = document.getElementById('master-toggle');
     const targetLockBadge = document.getElementById('target-lock-badge');
@@ -81,7 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
         await initTheme();
         await loadSettings();
         await getCurrentTab();
-        await syncPinnedControlState();
+        if (isSidecarContext || isPinnedWindowMode) {
+            await syncPinnedControlState();
+        }
 
         // 如果側面板已開啟且目前是普通 popup 視窗模式，直接關閉避免重複顯示
         if (!isSidecarContext && isPinnedWindowMode) {
@@ -187,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setFlowGuideCollapsed(collapsed) {
         if (!flowIndicator) return;
-        flowIndicator.classList.toggle('flow-collapsed', Boolean(collapsed));
+        flowIndicator.classList.toggle('flow-collapsed', Boolean(collapsed) || !isPinnedWindowMode);
     }
 
     // ========== Playback Controls ==========
@@ -402,11 +405,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function applyPinnedUiState() {
         document.body.classList.toggle('pinned-mode', isPinnedWindowMode);
+        document.body.classList.toggle('compact-mode', !isPinnedWindowMode);
         popupContainer?.classList.toggle('pinned-mode', isPinnedWindowMode);
         clearTimeout(aiPanelShowTimer);
         clearTimeout(aiPanelHideTimer);
         clearTimeout(shortcutsShowTimer);
         clearTimeout(shortcutsHideTimer);
+        setFlowGuideCollapsed(!isPinnedWindowMode);
         setAiPanelExpanded(isPinnedWindowMode);
         setShortcutsExpanded(isPinnedWindowMode);
     }
@@ -547,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getCurrentTab() {
         try {
-            if (isPinnedWindowMode && Number.isFinite(pinnedTabId) && pinnedTabId > 0) {
+            if (Number.isFinite(pinnedTabId) && pinnedTabId > 0) {
                 const tab = await chrome.tabs.get(pinnedTabId);
                 if (tab?.id) {
                     currentTabId = tab.id;
@@ -708,6 +713,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (meta.isSuspectedAd) score -= 100000;
 
         return score;
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     function renderPlayerChips(players) {
@@ -1211,10 +1225,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentTabId || masterToggle.checked === false) return;
 
         if (pickerActive) {
-            // 停用：直接發送到 content script
-            chrome.tabs.sendMessage(currentTabId, { action: 'deactivateElementPicker' }, (response) => {
+            // 停用：交給 background 廣播到所有 frame
+            chrome.runtime.sendMessage({ action: 'deactivateElementPicker', tabId: currentTabId }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error('Failed to deactivate element picker:', chrome.runtime.lastError.message);
+                    return;
+                }
+                if (!response?.success) {
+                    syncPickerState();
                     return;
                 }
                 updatePickerButtonState(false);
@@ -1522,6 +1540,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName !== 'local') return;
+        if (changes.uiLanguage) {
+            window.location.reload();
+            return;
+        }
         if (changes.stats) {
             loadStats();
         }

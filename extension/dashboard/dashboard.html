@@ -36,6 +36,15 @@
                     <span id="theme-icon">☀</span>
                     <span id="theme-label" data-i18n="dashboardThemeLight">Light mode</span>
                 </button>
+                <div class="language-switcher">
+                    <label class="language-label" for="ui-language-select" data-i18n="dashboardLanguageLabel">Language</label>
+                    <select id="ui-language-select" class="language-select" data-i18n-title="dashboardLanguageLabel" title="Language">
+                        <option value="auto" data-i18n="dashboardLanguageAuto">Auto</option>
+                        <option value="zh_TW" data-i18n="dashboardLanguageZhTw">繁體中文</option>
+                        <option value="en" data-i18n="dashboardLanguageEn">English</option>
+                    </select>
+                    <div class="language-note" data-i18n="dashboardLanguageNote">Changes apply immediately.</div>
+                </div>
             </div>
         </nav>
 
@@ -86,28 +95,28 @@
                                 <div class="setting-title" data-i18n="dashboardFeatureOverlayTitle">Auto overlay removal</div>
                                 <div class="setting-desc" data-i18n="dashboardFeatureOverlayDesc">Automatically detect and remove ad overlays above players</div>
                             </div>
-                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                            <button class="status-badge enabled-badge protection-toggle" type="button" data-feature="overlay" data-i18n="dashboardEnabled">啟用</button>
                         </div>
                         <div class="setting-item">
                             <div class="setting-info">
                                 <div class="setting-title" data-i18n="dashboardFeaturePopupTitle">Popup blocking</div>
                                 <div class="setting-desc" data-i18n="dashboardFeaturePopupDesc">Block malicious popups and redirects triggered by clicks</div>
                             </div>
-                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                            <button class="status-badge enabled-badge protection-toggle" type="button" data-feature="popup" data-i18n="dashboardEnabled">啟用</button>
                         </div>
                         <div class="setting-item">
                             <div class="setting-info">
                                 <div class="setting-title" data-i18n="dashboardFeatureFakeVideoTitle">Fake video removal</div>
                                 <div class="setting-desc" data-i18n="dashboardFeatureFakeVideoDesc">Automatically remove fake videos</div>
                             </div>
-                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                            <button class="status-badge enabled-badge protection-toggle" type="button" data-feature="fakeVideo" data-i18n="dashboardEnabled">啟用</button>
                         </div>
                         <div class="setting-item">
                             <div class="setting-info">
                                 <div class="setting-title" data-i18n="dashboardFeatureSyncTitle">Playback progress sync</div>
                                 <div class="setting-desc" data-i18n="dashboardFeatureSyncDesc">Remember your watch progress</div>
                             </div>
-                            <span class="status-badge enabled-badge" data-i18n="dashboardEnabled">Enabled</span>
+                            <button class="status-badge enabled-badge protection-toggle" type="button" data-feature="sync" data-i18n="dashboardEnabled">啟用</button>
                         </div>
                     </div>
                 </div>
@@ -236,8 +245,8 @@
                                 <div class="ai-status-sub" id="ai-status-sub">–</div>
                             </div>
                         </div>
-                        <label class="toggle-switch" title="Enable AI policy control">
-                            <input type="checkbox" id="lmstudio-enabled" aria-label="Enable AI policy control" title="Enable AI policy control">
+                        <label class="toggle-switch" data-i18n-title="dashboardAiEnableToggleTitle" title="Enable AI policy control">
+                            <input type="checkbox" id="lmstudio-enabled" data-i18n-aria-label="dashboardAiEnableToggleTitle" aria-label="Enable AI policy control" data-i18n-title="dashboardAiEnableToggleTitle" title="Enable AI policy control">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -250,22 +259,22 @@
                         <div class="provider-card" data-provider="openai" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🤖</div>
                             <div class="provider-card-name">OpenAI</div>
-                            <div class="provider-card-sub">GPT-5.4-mini</div>
+                            <div class="provider-card-sub" data-i18n="dashboardAiProviderOpenaiSub">Direct OpenAI access</div>
                         </div>
                         <div class="provider-card" data-provider="gemini" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">✨</div>
                             <div class="provider-card-name">Gemini</div>
-                            <div class="provider-card-sub">Google AI</div>
+                            <div class="provider-card-sub" data-i18n="dashboardAiProviderGeminiSub">Google AI service</div>
                         </div>
                         <div class="provider-card" data-provider="lmstudio" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🖥️</div>
                             <div class="provider-card-name">LM Studio</div>
-                            <div class="provider-card-sub">Local model</div>
+                            <div class="provider-card-sub" data-i18n="dashboardAiProviderLmstudioSub">Local model</div>
                         </div>
                         <div class="provider-card" data-provider="gateway" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🔗</div>
                             <div class="provider-card-name">Gateway</div>
-                            <div class="provider-card-sub">Custom endpoint</div>
+                            <div class="provider-card-sub" data-i18n="dashboardAiProviderGatewaySub">Custom endpoint</div>
                         </div>
                     </div>
                 </div>
@@ -282,27 +291,27 @@
                     </div>
                     <div class="input-row ai-key-edit-row" id="ai-key-edit-row" style="display:none">
                         <label class="ai-field-label" for="ai-provider-token" data-i18n="dashboardAiApiKeyLabel">API Key</label>
-                        <input type="password" id="ai-provider-token" class="text-input" placeholder="Paste new key here" aria-label="New API key">
+                        <input type="password" id="ai-provider-token" class="text-input" data-i18n-placeholder="dashboardAiApiKeyPlaceholder" placeholder="Paste a new API key" aria-label="New API key">
                         <button class="btn-primary" id="btn-confirm-api-key" data-i18n="dashboardAiConfirmKey">Confirm</button>
                     </div>
 
                     <!-- Model -->
                     <div class="input-row" id="ai-model-row">
                         <label class="ai-field-label" for="lmstudio-model" data-i18n="dashboardAiModelLabel">Model</label>
-                        <input type="text" id="lmstudio-model" class="text-input" placeholder="e.g. gpt-5.4-mini">
+                        <input type="text" id="lmstudio-model" class="text-input" data-i18n-placeholder="dashboardAiModelPlaceholder" placeholder="Example: gpt-5.4-mini">
                     </div>
 
                     <!-- Endpoint -->
                     <div class="input-row" id="ai-endpoint-row">
                         <label class="ai-field-label" for="lmstudio-endpoint" data-i18n="dashboardAiEndpointLabel">Endpoint</label>
-                        <input type="text" id="lmstudio-endpoint" class="text-input" placeholder="https://api.openai.com/v1/responses">
+                        <input type="text" id="lmstudio-endpoint" class="text-input" data-i18n-placeholder="dashboardAiEndpointPlaceholder" placeholder="Example: https://api.openai.com/v1/responses">
                     </div>
                 </div>
 
                 <!-- Mode selection (radio cards) -->
                 <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardAiModeHeader">Mode</div>
-                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" aria-label="AI mode">
+                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" data-i18n-aria-label="dashboardAiModeGroupLabel" aria-label="AI mode">
                         <div class="mode-card" data-mode="off" role="radio" tabindex="0" aria-checked="true">
                             <div class="mode-card-radio"></div>
                             <div>
@@ -347,11 +356,11 @@
                         </div>
                         <div class="setting-item" style="border-top:1px solid var(--separator);padding-top:12px;margin-top:4px">
                             <div class="setting-info">
-                                <div class="setting-title" data-i18n="dashboardAiCandidatesTitle">Generate candidate rules</div>
-                                <div class="setting-desc" data-i18n="dashboardAiCandidatesDesc">Store selector/domain candidates from the selected provider for later review.</div>
+                                <div class="setting-title" data-i18n="dashboardAiCandidatesTitle">產生候選規則</div>
+                                <div class="setting-desc" data-i18n="dashboardAiCandidatesDesc">把目前 provider 產生的 selector / domain 候選規則暫存起來，方便之後人工檢查與套用。</div>
                             </div>
-                            <label class="toggle-switch" title="Generate candidate rules">
-                                <input type="checkbox" id="lmstudio-dynamic-rules" aria-label="Generate candidate rules" title="Generate candidate rules">
+                            <label class="toggle-switch" data-i18n-title="dashboardAiCandidatesToggleTitle" title="Generate candidates">
+                                <input type="checkbox" id="lmstudio-dynamic-rules" data-i18n-aria-label="dashboardAiCandidatesToggleAria" aria-label="Generate candidates" data-i18n-title="dashboardAiCandidatesToggleTitle" title="Generate candidates">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -366,16 +375,16 @@
                             <button class="btn-secondary" id="btn-check-lmstudio" data-i18n="dashboardAiHealthCheck">Health check</button>
                             <button class="btn-secondary" id="btn-export-lmstudio-candidates" data-i18n="dashboardAiExportCandidates">Export candidates</button>
                         </div>
-                        <div class="info-text" id="lmstudio-status" data-i18n="dashboardAiNotConfigured">AI provider is not configured yet.</div>
+                        <div class="info-text" id="lmstudio-status" data-i18n="dashboardAiNotConfigured">AI provider 尚未完成設定。</div>
                     </div>
                 </div>
 
                 <!-- Generated candidates -->
                 <div class="settings-group">
-                    <div class="settings-header" data-i18n="dashboardAiCandidatesListHeader">Generated candidates</div>
-                    <div class="info-text" id="lmstudio-candidate-summary">No generated rule candidates yet.</div>
+                    <div class="settings-header" data-i18n="dashboardAiCandidatesListHeader">已產生的候選規則</div>
+                    <div class="info-text" id="lmstudio-candidate-summary" data-i18n="dashboardGeneratedCandidatesSummary">已產生的候選規則會顯示 AI 產生的 selector / domain 規則，建議先檢查後再正式啟用。</div>
                     <div class="policy-host-list" id="lmstudio-candidate-list">
-                        <div class="empty-state" data-i18n="dashboardAiNoCandidates">No generated rule candidates yet.</div>
+                        <div class="empty-state" data-i18n="dashboardAiNoCandidates">目前還沒有候選規則。</div>
                     </div>
                 </div>
             </section>
@@ -399,7 +408,7 @@
                             <strong id="policy-gate-version">-</strong>
                         </div>
                         <div class="policy-overview-row">
-                            <span class="policy-overview-label" data-i18n="dashboardHighRiskLabel">High-risk hosts</span>
+                            <span class="policy-overview-label" data-i18n="dashboardHighRiskLabel">高風險站點</span>
                             <strong id="policy-high-risk-count">0</strong>
                         </div>
                         <div class="policy-overview-row">
@@ -411,10 +420,11 @@
 
                 <!-- High-risk hosts (collapsible) -->
                 <details class="collapsible-section">
-                    <summary class="collapsible-summary" data-i18n="dashboardHighRiskHostsHeader">High-risk host details</summary>
+                    <summary class="collapsible-summary" data-i18n="dashboardHighRiskHostsHeader">高風險站點詳情</summary>
                     <div class="collapsible-body">
+                        <div class="info-text" style="margin-bottom:10px" data-i18n="dashboardHighRiskHostsIntro">High-risk hosts list the sites currently assessed as risky, together with the policy gate mode, reason, and supporting evidence so you can understand the decision.</div>
                         <div class="policy-host-list" id="policy-host-list">
-                            <div class="empty-state" data-i18n="dashboardNoHighRiskHosts">No high-risk hosts yet</div>
+                            <div class="empty-state" data-i18n="dashboardNoHighRiskHosts">目前沒有高風險站點。</div>
                         </div>
                     </div>
                 </details>
@@ -428,8 +438,8 @@
                                 <div class="setting-title" data-i18n="dashboardSandboxTitle">Sandbox protection</div>
                                 <div class="setting-desc" data-i18n="dashboardSandboxDesc">Open suspicious sites in a restricted environment to prevent sensitive data access.</div>
                             </div>
-                            <label class="toggle-switch" title="Enable or disable sandbox protection">
-                                <input type="checkbox" id="toggle-sandbox" checked aria-label="Enable or disable sandbox protection" title="Enable or disable sandbox protection">
+                            <label class="toggle-switch" data-i18n-title="dashboardSandboxTitle" title="Enable or disable sandbox protection">
+                                <input type="checkbox" id="toggle-sandbox" checked data-i18n-aria-label="dashboardSandboxTitle" aria-label="Enable or disable sandbox protection" data-i18n-title="dashboardSandboxTitle" title="Enable or disable sandbox protection">
                                 <span class="slider"></span>
                             </label>
                         </div>
