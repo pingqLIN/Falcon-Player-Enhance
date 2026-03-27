@@ -1,4 +1,4 @@
-Design a distinctive, premium SVG app icon for a browser extension named "Shield Pro"
+Design a distinctive, premium SVG app icon for a browser extension named "Falcon-Player-Enhance"
 
 Hard requirements
 - Output raw SVG only

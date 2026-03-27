@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
         description="Run the browser judge, review failures, execute regressions, and optionally patch in a retry loop."
     )
     parser.add_argument("--targets", required=True, help="Path to reviewed targets JSON.")
-    parser.add_argument("--extension-dir", default=str(REPO_ROOT / "extension"), help="Shield Pro unpacked extension path.")
+    parser.add_argument("--extension-dir", default=str(REPO_ROOT / "extension"), help="Falcon-Player-Enhance unpacked extension path.")
     parser.add_argument("--ublock-extension-dir", help="Optional unpacked uBlock directory.")
     parser.add_argument("--browser-profile-dir", help="Optional persistent Chromium profile directory.")
     parser.add_argument("--browser-channel", default="chromium")
@@ -152,7 +152,7 @@ def build_codex_exec_command(
 
 def build_patch_agent_prompt(brief_path: Path, report_path: Path, review_path: Path | None) -> str:
     lines = [
-        "You are updating the Shield Pro browser extension repository.",
+        "You are updating the Falcon-Player-Enhance browser extension repository.",
         f"Read the patch brief at: {brief_path}",
         f"Read the browser report at: {report_path}",
     ]
@@ -284,7 +284,7 @@ def build_review_context(
 def build_review_prompt(review_context_path: Path, report_path: Path) -> str:
     return "\n".join(
         [
-            "You are the Codex reviewer for Shield Pro live-browser validation.",
+            "You are the Codex reviewer for Falcon-Player-Enhance live-browser validation.",
             f"Read the browser report JSON at: {report_path}",
             f"Read the review context JSON at: {review_context_path}",
             "",

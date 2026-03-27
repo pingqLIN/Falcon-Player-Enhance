@@ -36,7 +36,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a Gemini Nano Prompt API feasibility probe for Shield Pro advisory use."
+        description="Run a Gemini Nano Prompt API feasibility probe for Falcon-Player-Enhance advisory use."
     )
     parser.add_argument("--model-source-dir", help="Explicit OptGuide model version directory.")
     parser.add_argument("--browser-channel", default="chrome", help="Playwright browser channel. Default: chrome")

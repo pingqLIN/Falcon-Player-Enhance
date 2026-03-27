@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-03-19T07:16:58.125Z",
   "provider": "lmstudio-mock",
-  "source": "/mnt/q/Projects/ad-blocker-player-enhancer/tests/ai-eval/scenarios.lmstudio.json",
+  "source": "/mnt/q/Projects/Falcon-Player-Enhance/tests/ai-eval/scenarios.lmstudio.json",
   "candidates": [
     {
       "name": "overlay_lure_with_redirect_cta",

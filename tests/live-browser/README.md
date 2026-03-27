@@ -12,6 +12,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 - `targets.external-ai.single-page.smoke.json`: reduced smoke subset for faster live-browser validation, updated to keep only validated lower-noise seeds after the first smoke pass.
 - `discovery-queries.example.json`: generic query templates for building new targets outside the repo.
 - `scripts/run-bookmark-self-learning.ps1`: one-command PowerShell entrypoint from bookmarks to self-learning loop.
+- `scripts/validate-live-browser-targets.js`: validates target JSON shape, tier-specific metadata, URL format, and blocks absolute local source paths.
 
 ## Quick Start
 
@@ -21,6 +22,24 @@ python tests/live-browser/browser_judge.py --help
 python tests/live-browser/self_learning_loop.py --help
 pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 ```
+
+## Target Tiers
+
+| Tier | Purpose | Required fields | Typical source |
+|------|---------|-----------------|----------------|
+| `example` | Format reference only, not a regression pool | `name`, `url`, `tags`, `requiresManualReview` | Hand-written sample |
+| `curated` | Full reviewed regression corpus with context for replay and manual review | example fields + `generatedFrom`, `source`; `reproSteps` strongly recommended | External AI review or manual curation |
+| `filtered` | Intermediate bookmark-derived set after heuristic pruning and scoring | curated fields + `source.playbackLikelihood`; `selectionPolicy` or `filterCriteria` recommended | `import_bookmarks.py` output after ranking / pruning |
+| `smoke` | Small fast-running subset chosen from a larger reviewed set | example fields + `generatedFrom`; `selectionPolicy` recommended | Reduced subset from `curated` or `filtered` |
+
+Current file mapping:
+
+- `targets.example.json` -> `example`
+- `targets.external-ai.single-page.curated.json` -> `curated`
+- `targets.external-ai.single-page.smoke.json` -> `smoke`
+- `targets.from-bookmarks.json` -> bookmark import baseline set
+- `targets.from-bookmarks.filtered.json` -> `filtered`
+- `targets.from-bookmarks.smoke.json` -> `smoke`
 
 ## Notes
 

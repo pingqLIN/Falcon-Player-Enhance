@@ -257,6 +257,13 @@ def build_target(item: dict[str, Any], extra_tags: list[str], manual_review: boo
     }
 
 
+def describe_generated_from(input_path: Path, output_path: Path) -> str:
+    try:
+        return str(input_path.relative_to(output_path.parent))
+    except ValueError:
+        return input_path.name
+
+
 def run() -> int:
     args = parse_args()
     input_path = Path(args.input).resolve()
@@ -338,7 +345,7 @@ def run() -> int:
     out_path = Path(args.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "generatedFrom": str(input_path),
+        "generatedFrom": describe_generated_from(input_path, out_path),
         "targets": accepted
     }
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

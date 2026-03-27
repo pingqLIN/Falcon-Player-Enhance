@@ -128,7 +128,7 @@
     const payload = JSON.stringify(scenario.payload);
     if (scenario.type === "page_type") {
       return [
-        "You are a Shield Pro browser-safety classifier.",
+        "You are a Falcon-Player-Enhance browser-safety classifier.",
         "Decide whether the page is a valid playback page or an invalid target for player-protection testing.",
         "Return compact JSON only with keys: label, confidence, rationale.",
         "Allowed labels: valid_playback_page, invalid_target, uncertain.",

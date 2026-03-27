@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "Q:\\Projects\\ad-blocker-player-enhancer\\tests\\live-browser\\targets.external-ai.single-page.curated.json",
+  "generatedFrom": "targets.external-ai.single-page.curated.json",
   "selectionPolicy": "Three validated lower-noise regression seeds chosen after the first live-browser smoke pass on 2026-03-20",
   "targets": [
     {
