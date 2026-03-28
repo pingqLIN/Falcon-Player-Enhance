@@ -1358,9 +1358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ========== Promote current site to enhanced protection ==========
-    // The quick-add path is intentionally disabled until the popup actions
-    // are backed by real background handlers.
-    const QUICK_ADD_SITE_ENABLED = false;
+    const QUICK_ADD_SITE_ENABLED = true;
     const btnAddCurrentSite = document.getElementById('btn-add-current-site');
 
     async function checkQuickAddVisibility() {

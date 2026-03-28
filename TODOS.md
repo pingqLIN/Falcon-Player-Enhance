@@ -86,17 +86,17 @@
 **Priority:** P2
 **Depends on:** Stable `site-profile.js` / rule-loading conventions and the current player-detector regression behavior
 
-### Re-enable popup quick-add only after background support exists
+### Add end-to-end verification for custom-site management and popup quick-add
 
-**What:** Keep the popup quick-add site promotion path hidden until `getCustomSites` / `addCustomSite` are implemented in `background.js`, then reintroduce it with end-to-end coverage.
+**What:** Add real verification for `getCustomSites` / `addCustomSite` / `removeCustomSite` and the popup quick-add path now that background handlers exist.
 
-**Why:** The UI path exists, but the current popup flow does not have matching background handlers, which turns the button into a dead feature if exposed.
+**Why:** The feature is now wired end-to-end, but it still lacks dedicated automated coverage. Without that, future refactors could silently break dashboard custom-site management or popup quick-add again.
 
-**Context:** The safest short-term behavior is to keep the button hidden. The real follow-up is either implementing the background route cleanly or removing the feature entirely if it no longer fits the product direction.
+**Context:** The next safe step is not more UX work; it is verification. Prefer one focused background/core test for the domain-management flow and one UI/browser check for popup quick-add visibility and add/remove behavior.
 
-**Effort:** S
+**Effort:** M
 **Priority:** P2
-**Depends on:** Final decision on site promotion UX and background message API shape
+**Depends on:** Current background custom-site handlers, popup quick-add UI, and stable test harnesses
 
 ### Roll out formal documentation i18n entry points
 

@@ -73,6 +73,19 @@
 
 這代表目前 `npm run check` 不再只是 JS / rules / targets 的 gate，而是開始覆蓋 Python-side live-browser 工具鏈。
 
+### 2.5 custom-site 管理與 popup quick-add 已接通 background handler
+
+已完成：
+
+- `background.js` 新增：
+  - `getCustomSites`
+  - `addCustomSite`
+  - `removeCustomSite`
+- custom-site 變更會同步更新 storage，並在 extension 啟用時重註冊 enhanced-site content scripts
+- popup quick-add 已從暫時隱藏改回可用狀態
+
+這代表先前的 custom-site dead flow 已不再只是 UI 外觀，而是具備真正的背景處理與資料流。
+
 ---
 
 ## 三、這輪確認出的高優先問題
