@@ -7,6 +7,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 - `browser_judge.py`: opens targets in Chromium, scores each page, saves evidence.
 - `import_bookmarks.py`: converts a Netscape bookmarks export into reviewed target candidates.
 - `self_learning_loop.py`: orchestrates judge -> regressions -> structured Codex review -> optional patch agent -> retry.
+- `test_popup_reliability.py`: headless popup smoke for popup-open-local-video and runtime-state-restore-on-reopen.
 - `targets.example.json`: reviewed target format.
 - `targets.external-ai.single-page.curated.json`: curated single-page regression targets imported from an external AI review pass.
 - `targets.external-ai.single-page.smoke.json`: reduced smoke subset for faster live-browser validation, updated to keep only validated lower-noise seeds after the first smoke pass.
@@ -19,6 +20,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 python tests/live-browser/import_bookmarks.py --help
 python tests/live-browser/browser_judge.py --help
 python tests/live-browser/self_learning_loop.py --help
+python -m unittest tests/live-browser/test_popup_reliability.py
 pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 ```
 
@@ -31,6 +33,7 @@ pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 - For reliable uBlock coverage, prefer either:
   - an unpacked uBlock directory via `--ublock-extension-dir`
   - an existing Chromium profile via `--browser-profile-dir`
+- `test_popup_reliability.py` intentionally validates popup creation via the extension service worker's `chrome.windows.getAll({ populate: true })` view instead of only Playwright page events; this is more stable for headless popup windows created by `chrome.windows.create()`.
 
 ## Built-In Patch Agents
 
