@@ -98,6 +98,27 @@ function getActiveAntiAntiBlockProfile() {
     return String(profile || '').trim().toLowerCase();
 }
 
+function getActiveAntiAntiBlockConfig() {
+    const api = getSiteProfilesApi();
+    if (!api?.getAntiAntiBlock) {
+        return {
+            fakeGlobals: [],
+            suppressErrors: false,
+            errorSelectors: []
+        };
+    }
+
+    return {
+        fakeGlobals: Array.isArray(api.getAntiAntiBlock('fakeGlobals', []))
+            ? api.getAntiAntiBlock('fakeGlobals', [])
+            : [],
+        suppressErrors: api.getAntiAntiBlock('suppressErrors', false) === true,
+        errorSelectors: Array.isArray(api.getAntiAntiBlock('errorSelectors', []))
+            ? api.getAntiAntiBlock('errorSelectors', [])
+            : []
+    };
+}
+
 function isLegacyJavboysHost(hostname) {
     const host = normalizeHostname(hostname);
     if (!host) return false;
@@ -116,6 +137,50 @@ function shouldUseJavboysAntiAntiBlockStrategy() {
     const profile = getActiveAntiAntiBlockProfile();
     if (profile) return profile === 'javboys-cvp';
     return isLegacyJavboysHost(window.location.hostname);
+}
+
+function resolveAntiAntiBlockStrategyName() {
+    if (shouldUseJavboysAntiAntiBlockStrategy()) {
+        return 'javboys-cvp';
+    }
+
+    return '';
+}
+
+function getJavboysFrameErrorSelectors(config = {}) {
+    const defaults = [
+        '.player-error', '.error-message', '.adblock-message',
+        '.cvp-error', '.video-error', '.player-message',
+        '[class*="error"]', '[class*="adblock"]', '[class*="blocker"]',
+        '[class*="blocked"]', '[class*="warning"]', '[class*="overlay"]',
+        '[class*="modal"]', '[class*="popup"]', '[class*="notice"]'
+    ];
+
+    const extras = Array.isArray(config.errorSelectors)
+        ? config.errorSelectors.map((selector) => String(selector || '').trim()).filter(Boolean)
+        : [];
+
+    return [...new Set([...defaults, ...extras])];
+}
+
+function getJavboysPageIframeSelector() {
+    return [
+        'iframe[src*="javboys"]',
+        'iframe[src*="player.javboys"]',
+        'iframe[src*="myvidplay"]',
+        'iframe[src*="upn.one"]',
+        'iframe[src*="luluvdoo"]'
+    ].join(', ');
+}
+
+function runAntiAntiBlockStrategy() {
+    const strategyName = resolveAntiAntiBlockStrategyName();
+    if (strategyName !== 'javboys-cvp') {
+        return false;
+    }
+
+    handleJavboysPlayer(getActiveAntiAntiBlockConfig());
+    return true;
 }
 
 const extensionRuntime = typeof chrome === 'object' && chrome?.runtime ? chrome.runtime : null;
@@ -455,14 +520,16 @@ function removeAdblockMessages() {
 // ============================================================================
 // 8. 專門針對 javboys 播放器的處理 (增強版 v2)
 // ============================================================================
-function handleJavboysPlayer() {
-    if (!shouldUseJavboysAntiAntiBlockStrategy()) {
-        return;
-    }
-
+function handleJavboysPlayer(config = getActiveAntiAntiBlockConfig()) {
     const host = window.location.hostname;
     const isJavboysSite = isLegacyJavboysHost(host);
     const isPlayerIframe = isLegacyJavboysPlayerFrame(host);
+    const fakeGlobals = new Set(
+        (Array.isArray(config.fakeGlobals) ? config.fakeGlobals : [])
+            .map((name) => String(name || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
+    const suppressErrors = config.suppressErrors === true;
 
     
     if (!isJavboysSite && !isPlayerIframe) {
@@ -476,55 +543,56 @@ function handleJavboysPlayer() {
         log('在播放器 iframe 內部執行 anti-adblock bypass...');
         
         // 1. 偽造 CVP (Core Video Player) 相關 API
-        window.CVP = window.CVP || {};
+        if (fakeGlobals.size === 0 || fakeGlobals.has('cvp')) {
+            window.CVP = window.CVP || {};
+        }
         window.cvp_player = window.cvp_player || {};
         window.player_error = false;
-        window.adblock_detected = false;
+        if (fakeGlobals.size === 0 || fakeGlobals.has('adblock_detected')) {
+            window.adblock_detected = false;
+        }
         window.ads_loaded = true;
         window.ad_init_success = true;
         
         // 2. 偽造 ExoLoader 完整 API
-        window.ExoLoader = {
-            loaded: true,
-            ready: true,
-            serve: function() { return true; },
-            addZone: function() { return this; },
-            zones: [{ id: 'fake-zone', loaded: true }],
-            init: function() { return this; },
-            showAd: function() { return true; },
-            load: function() { return Promise.resolve(); },
-            onReady: function(cb) { if (typeof cb === 'function') cb(); }
-        };
+        if (fakeGlobals.size === 0 || fakeGlobals.has('exoloader')) {
+            window.ExoLoader = {
+                loaded: true,
+                ready: true,
+                serve: function() { return true; },
+                addZone: function() { return this; },
+                zones: [{ id: 'fake-zone', loaded: true }],
+                init: function() { return this; },
+                showAd: function() { return true; },
+                load: function() { return Promise.resolve(); },
+                onReady: function(cb) { if (typeof cb === 'function') cb(); }
+            };
+        }
         
         // 3. 阻止錯誤訊息變數
-        try {
-            Object.defineProperty(window, 'showAdblockMessage', {
-                get: () => function() {},
-                set: () => {},
-                configurable: false
-            });
-            Object.defineProperty(window, 'adblockError', {
-                get: () => false,
-                set: () => {},
-                configurable: false
-            });
-            Object.defineProperty(window, 'initError', {
-                get: () => false,
-                set: () => {},
-                configurable: false
-            });
-        } catch (e) {}
+        if (suppressErrors) {
+            try {
+                Object.defineProperty(window, 'showAdblockMessage', {
+                    get: () => function() {},
+                    set: () => {},
+                    configurable: false
+                });
+                Object.defineProperty(window, 'adblockError', {
+                    get: () => false,
+                    set: () => {},
+                    configurable: false
+                });
+                Object.defineProperty(window, 'initError', {
+                    get: () => false,
+                    set: () => {},
+                    configurable: false
+                });
+            } catch (e) {}
+        }
         
         // 4. 移除播放器內部的錯誤訊息元素（增強版 v3）
         const removePlayerErrors = () => {
-            // 常見的錯誤訊息選擇器
-            const errorSelectors = [
-                '.player-error', '.error-message', '.adblock-message',
-                '.cvp-error', '.video-error', '.player-message',
-                '[class*="error"]', '[class*="adblock"]', '[class*="blocker"]',
-                '[class*="blocked"]', '[class*="warning"]', '[class*="overlay"]',
-                '[class*="modal"]', '[class*="popup"]', '[class*="notice"]'
-            ];
+            const errorSelectors = getJavboysFrameErrorSelectors(config);
             
             // 需要阻擋的關鍵文字
             const blockTexts = [
@@ -606,8 +674,10 @@ function handleJavboysPlayer() {
         }
         
         // 6. 覆寫 alert/confirm 阻止彈窗錯誤訊息
-        window.alert = function() {};
-        window.confirm = function() { return true; };
+        if (suppressErrors) {
+            window.alert = function() {};
+            window.confirm = function() { return true; };
+        }
         
         return; // 播放器內部處理完成
     }
@@ -615,18 +685,24 @@ function handleJavboysPlayer() {
     // ===== 主頁面處理 =====
     
     // 1. 偽造更多廣告網路 API
-    window.ExoLoader = window.ExoLoader || {
-        loaded: true,
-        serve: function() { return true; },
-        addZone: function() { return true; },
-        zones: [],
-        init: function() { return true; },
-        showAd: function() { return true; }
-    };
+    if (fakeGlobals.size === 0 || fakeGlobals.has('exoloader')) {
+        window.ExoLoader = window.ExoLoader || {
+            loaded: true,
+            serve: function() { return true; },
+            addZone: function() { return true; },
+            zones: [],
+            init: function() { return true; },
+            showAd: function() { return true; }
+        };
+    }
     
     // 偽造 VAST/VPAID 廣告系統
-    window.VPAID = window.VPAID || { loaded: true };
-    window.VAST = window.VAST || { loaded: true };
+    if (fakeGlobals.size === 0 || fakeGlobals.has('vpaid')) {
+        window.VPAID = window.VPAID || { loaded: true };
+    }
+    if (fakeGlobals.size === 0 || fakeGlobals.has('vast')) {
+        window.VAST = window.VAST || { loaded: true };
+    }
     window.IMALoader = window.IMALoader || { loaded: true };
     
     // 2. 移除 "For video advertisers" 覆蓋層和廣告元素
@@ -704,13 +780,7 @@ function handleJavboysPlayer() {
         });
         
         // 4. 確保 iframe 播放器可見且可互動
-        const PLAYER_IFRAME_SELECTOR = [
-            'iframe[src*="javboys"]',
-            'iframe[src*="player.javboys"]',
-            'iframe[src*="myvidplay"]',
-            'iframe[src*="upn.one"]',
-            'iframe[src*="luluvdoo"]'
-        ].join(', ');
+        const PLAYER_IFRAME_SELECTOR = getJavboysPageIframeSelector();
 
         const neutralizeCoveringLayers = (iframe) => {
             const rect = iframe.getBoundingClientRect();
@@ -923,7 +993,7 @@ function init() {
         interceptDetectionRequests();
         preventConsoleClear();
         removeAdblockMessages();
-        handleJavboysPlayer();
+        runAntiAntiBlockStrategy();
         injectAdblockHideStyles();
     }
 

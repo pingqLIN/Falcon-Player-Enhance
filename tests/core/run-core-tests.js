@@ -329,6 +329,19 @@ const shouldUseJavboysAntiAntiBlockStrategy = loadFunction(
     }
   }
 );
+const resolveAntiAntiBlockStrategyName = loadFunction(
+  'extension/content/anti-antiblock.js',
+  'resolveAntiAntiBlockStrategyName',
+  {
+    shouldUseJavboysAntiAntiBlockStrategy() {
+      return true;
+    }
+  }
+);
+const getJavboysFrameErrorSelectors = loadFunction(
+  'extension/content/anti-antiblock.js',
+  'getJavboysFrameErrorSelectors'
+);
 
 function makeElement({ className = '', dataset = {}, parentElement = null } = {}) {
   return {
@@ -711,6 +724,19 @@ run('site-profile anti-antiblock helper returns matched strategy values', () => 
 
 run('anti-antiblock strategy dispatch prefers configured profile', () => {
   assert.equal(shouldUseJavboysAntiAntiBlockStrategy(), true);
+});
+
+run('anti-antiblock resolves the configured strategy name', () => {
+  assert.equal(resolveAntiAntiBlockStrategyName(), 'javboys-cvp');
+});
+
+run('anti-antiblock merges profile-provided error selectors with defaults', () => {
+  const selectors = getJavboysFrameErrorSelectors({
+    errorSelectors: ['.custom-error', '.player-error']
+  });
+
+  assert.equal(selectors.includes('.player-error'), true);
+  assert.equal(selectors.includes('.custom-error'), true);
 });
 
 console.log('Core smoke tests passed.');
