@@ -21,10 +21,24 @@
 
 同一支 `inject-blocker.js` 裡，`MALICIOUS_DOMAINS` 與 AI 動態 blocked domains 的 URL 比對，已從單純 `String.includes()` 強化成 token-aware matching，降低正常 URL 片段被誤判成惡意域名的風險。
 
-### 1.3 本輪已跑過的新鮮驗證
+### 1.3 pinned popup restore 已補上 startup / onRemoved 共用恢復流程
+
+本輪已針對 `extension/background.js` 補上 popup reliability 第一刀：
+
+- `loadPinnedPopupPlayers()` 不再一律刪除失聯 `windowId`
+- 對仍可恢復的 pinned entry，現在會先嘗試重建 popup window
+- `chrome.windows.onRemoved` 也改成共用同一套 restore helper
+- restore 前會先嘗試把舊 `sourceTabId` rebind 到 live tab
+- 找不到 live tab 但仍有 `videoSrc / iframeSrc` 時，會降級成 direct popup，而不是開出 `Remote Offline`
+- 若重建失敗，會保留可重試的 pinned entry，而不是直接把記錄吃掉
+
+這一版先解的是「跨 session / runtime restart 後 pinned popup 無法恢復」的主問題；popup-player 內部播放狀態 restore 仍屬下一階段。
+
+### 1.4 本輪已跑過的新鮮驗證
 
 已通過：
 
+- `node --check extension/background.js`
 - `node --check extension/content/inject-blocker.js`
 - `python -m unittest discover -s tests/live-browser -p "test*.py"`
 
@@ -34,15 +48,14 @@
 
 子代理結論：播放器彈窗這條線目前仍有三個高優先缺口。
 
-1. `pinned popup` 的跨 session restore 尚未真正成立
-   - `loadPinnedPopupPlayers()` 目前會直接刪除不存在的 `windowId`
-   - 因此瀏覽器重開或 service worker 重啟後，已釘選 popup 不會恢復
-
-2. popup window 本體不會恢復播放狀態與視覺狀態
+1. popup window 本體不會恢復播放狀態與視覺狀態
    - 目前只會靠 query params 重建 payload
    - `currentTime`、`volume/mute`、`playbackRate`、色彩/溫度等 UI 狀態都會重置
+   - 目前最值得先補的欄位順序是：
+     `currentTime`、`volume`、`muted`、`playbackRate`
+   - 第 5 個再補 `visualState.temperature`
 
-3. popup / direct-popup / popup window 的自動化驗證仍明顯不足
+2. popup / direct-popup / popup window 的自動化驗證仍明顯不足
    - `browser_judge.py` 偏被動巡檢，不會真的操作 popup button
    - `tests/test-popup-player.html` 仍偏手動頁面
    - repo 內既有 smoke report 還留有舊專案路徑 artifact
@@ -75,7 +88,6 @@
 
 ### P1
 
-- `loadPinnedPopupPlayers()` 改成「重建 pinned popup」而不是「清掉失聯 entry」
 - popup-player 增加最小 session state restore
   - 最少先補 `currentTime`
   - `volume / muted`
@@ -140,6 +152,23 @@
   - `remote/direct` 模式
   - `direct-popup overlay` 模式
 
+建議最小 smoke suite：
+
+- `popup-open-local-video`
+  - 開 `tests/test-popup-player.html`
+  - 點 `.shield-popup-player-btn`
+  - 斷言新視窗 URL 指向 `popup-player/popup-player.html`
+- `popup-blocked-counter`
+  - 觸發測試惡意彈窗
+  - 斷言沒有外站 popup 建立，且 blocked counter 有增加
+- `direct-popup-overlay-smoke`
+  - 觸發 direct host popup
+  - 斷言 popup tab 內出現 `#falcon-direct-popup-overlay-root`
+- `pin-close-reopen`
+  - 切 pinned mode
+  - 關閉 pinned popup
+  - 確認 restore 只發生一次且 storage entry 有正確更新
+
 ### Phase 4: Rule Generalization
 
 目標：
@@ -155,6 +184,5 @@
 ## 5. 管理備註
 
 - 本輪子代理審查屬唯讀探索，沒有直接改檔
-- 目前已落地的實作修改只有 `inject-blocker.js`
+- 目前已落地的實作修改為 `inject-blocker.js` 與 `background.js`
 - 若下一輪要繼續 YOLO 執行，最推薦直接從 `Phase 2: Popup Reliability` 開始
-

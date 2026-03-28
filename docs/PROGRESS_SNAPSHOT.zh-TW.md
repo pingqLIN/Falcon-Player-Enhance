@@ -2,6 +2,7 @@
 
 > 2026-03-28 補充：
 > 已新增 `docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-28.zh-TW.md`，收斂本輪 YOLO mode + 子代理通盤審查的 findings、已驗證修補與下一階段執行順序。
+> 同日再補：`extension/background.js` 已完成 pinned popup startup/onRemoved restore 第一版修補，Phase 2 正式啟動。
 
 > 更新日期: 2026-03-20（第二次更新：加入審查報告摘要）
 > 用途: 提供給 Opus 做快速檢查與二次審閱
