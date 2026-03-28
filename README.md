@@ -257,6 +257,8 @@ All scripts ──statsUpdate──▶ background.js ──aipolicyUpdate──�
 ### Test Commands
 
 ```bash
+npm run check                # Main local quality gate (JS + rules + targets + Python live-browser unit tests)
+npm run test:python          # Live-browser Python unit tests only
 npm run test:ai              # AI evaluation suite
 npm run test:e2e-replay       # End-to-end replay tests
 npm run test:lmstudio         # LM Studio integration tests

@@ -62,6 +62,17 @@
 - BoyfriendTV detector rule extraction
 - quick-add 重新啟用前提
 
+### 2.4 本地主幹檢查已納入 Python live-browser 單元測試
+
+已完成：
+
+- `package.json` 新增 `test:python`
+- `npm run check` 現在會連同 `tests/live-browser` 的 Python 單元測試一起執行
+- CI 的 `check` job 已補上 Python setup，避免本地與 CI 的 gate 定義分裂
+- `README.md` 的開發指令說明已更新
+
+這代表目前 `npm run check` 不再只是 JS / rules / targets 的 gate，而是開始覆蓋 Python-side live-browser 工具鏈。
+
 ---
 
 ## 三、這輪確認出的高優先問題
@@ -105,6 +116,22 @@
 影響：
 
 - 功能上可用，但安全模型仍是過渡態
+
+### P1. main-world policy bridge 目前可被頁面腳本偽造
+
+已確認風險：
+
+- `inject-blocker.js` 目前接受 `__SHIELD_AI_POLICY__`
+- `__SHIELD_BLOCKING_LEVEL__`
+- `__SHIELD_FEATURE_SETTINGS__`
+- `ai-runtime.js` 則透過 `window.postMessage(..., '*')` 發送相關訊息
+
+影響：
+
+- 頁面腳本若能偽造相同訊息，就有機會把 blocking level 調低，或將 popup blocking 關閉
+- 這不是單純資料污染，而是直接碰到保護功能的 trust boundary
+
+這個問題應視為接近 P1 安全與功能正確性問題，而不是普通 backlog。
 
 ### P1. `anti-antiblock.js` 仍是半資料化、半站族策略
 
@@ -153,6 +180,19 @@
 
 - 規則層已存在，但 selector 知識還沒有真正集中
 
+### P2. schema 與 runtime 仍存在數個「驗證通過但執行不一致」的落差
+
+已確認例子：
+
+- `popupMode: "iframe-direct"` 已被 validator 接受，但 background 尚未有對應分支
+- `redirectRecoveryEnabled` 已被驗證，但 runtime 尚未真正消費
+- `antiAntiBlockProfile` 目前實作上仍只有 `javboys-cvp`，其他值不會有明確錯誤
+
+影響：
+
+- 規則檔可能看起來完整，但 runtime 實際不一定照做
+- 這會讓未來的規則化重構產生「配置成功、功能卻沒生效」的隱性風險
+
 ---
 
 ## 四、建議執行順序
@@ -196,7 +236,7 @@
 ## 六、建議下一輪直接做的 3 件事
 
 1. 補 popup 視窗本體測試
-2. 將 `anti-antiblock` 改成 explicit profile-only strategy
-3. 為 provider key 補清除與 sender gating
+2. 關閉 main-world forged `postMessage` 降級保護的路徑
+3. 將 `anti-antiblock` 改成 explicit profile-only strategy
 
 這三件事完成後，主線的「功能可信度」與「架構可信度」都會再往前推一大步。

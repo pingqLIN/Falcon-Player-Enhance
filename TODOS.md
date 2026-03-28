@@ -62,6 +62,18 @@
 **Priority:** P1
 **Depends on:** Current dashboard persistence flow, background message routing, and the existing secret-handling guidelines
 
+### Close the main-world forged policy message boundary
+
+**What:** Prevent page scripts from using `postMessage` channels to lower blocking level, disable popup protection, or inject fake AI policy into the MAIN world bridge.
+
+**Why:** The current `inject-blocker.js` / `ai-runtime.js` bridge accepts policy-bearing messages from the page window, which means a hostile site script can potentially weaken the extension's own protections from inside the protected page.
+
+**Context:** This needs a real trust-boundary decision, not just another heuristic. The short-term goal is to stop downgrade-capable messages from being page-forgeable; the follow-up goal is to redesign MAIN world messaging so runtime policy changes come from a channel the page cannot spoof.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Current MAIN world bridge design, AI runtime dispatch path, and the existing protection-level / feature-settings flow
+
 ### Extract BoyfriendTV detector literals into rule-backed metadata
 
 **What:** Move BoyfriendTV-specific detection literals out of the generic `player-detector.js` flow into a rule object or profile-backed metadata layer.
