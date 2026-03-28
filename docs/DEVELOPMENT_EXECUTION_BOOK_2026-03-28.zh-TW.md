@@ -34,12 +34,32 @@
 
 這一版先解的是「跨 session / runtime restart 後 pinned popup 無法恢復」的主問題；popup-player 內部播放狀態 restore 仍屬下一階段。
 
-### 1.4 本輪已跑過的新鮮驗證
+### 1.4 popup-player 最小 state restore 已接上 pinned 路徑
+
+本輪已針對 `extension/popup-player/popup-player.js` 補上最小 state restore：
+
+- 只在 pinned/reopen 路徑自動套用
+- 已接上 `currentTime`
+- 已接上 `volume`
+- 已接上 `muted`
+- 已接上 `playbackRate`
+- 已接上 `temperature`
+
+目前刻意未擴大到 `paused / loop / brightness / contrast / saturation / sharpness / hue`，避免一次改動過大。
+
+已知產品語意提醒：
+
+- `pinned remote restore` 目前會主動對來源頁送出 `setVolume / setSpeed / toggleMute / seekToRatio`
+- 這代表「重開 pinned popup」會自動調整來源頁播放器
+- 若產品後續不希望這種自動回寫，需要再補一層 user-intent 規則
+
+### 1.5 本輪已跑過的新鮮驗證
 
 已通過：
 
 - `node --check extension/background.js`
 - `node --check extension/content/inject-blocker.js`
+- `node --check extension/popup-player/popup-player.js`
 - `python -m unittest discover -s tests/live-browser -p "test*.py"`
 
 ## 2. 子代理通盤審查摘要
@@ -59,6 +79,9 @@
    - `browser_judge.py` 偏被動巡檢，不會真的操作 popup button
    - `tests/test-popup-player.html` 仍偏手動頁面
    - repo 內既有 smoke report 還留有舊專案路徑 artifact
+   - 目前最該優先補的驗證是：
+     `pinned remote restore`
+     `pinned direct/video restore`
 
 ### 2.2 rule-generalization / site-specific 收斂線
 
