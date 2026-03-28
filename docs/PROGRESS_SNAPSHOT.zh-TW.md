@@ -32,7 +32,7 @@
 | 主程序核心功能 | 80-85% | Dashboard、Block Element、獨立 protection toggles、穩定性修正已落地 |
 | 品質基礎設施 | 85-90% | `npm run check`、validator、core smoke tests、CI workflow 已建立 |
 | popup-player / 無干擾播放器 | 80-85% | 已補上可重跑的 live-browser 驗證路徑，但仍需更多真實站點回歸 |
-| site-specific 通用化重構 | 55-65% | 已從第一批消費者進一步推到 MAIN world runtime，但 `anti-antiblock` 策略仍未完全拆平 |
+| site-specific 通用化重構 | 60-70% | 已從第一批消費者進一步推到 MAIN world runtime，`anti-antiblock` 也已建立受控策略邊界 |
 | secret storage 硬化 | 10-20% | 文件策略與儲存模型已就位，DPAPI / native host 尚未實作 |
 | 多語說明文件擴充 | 0-10% | 尚未正式開始 |
 
@@ -121,7 +121,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - `overlay-remover.js`
 - `inject-blocker.js`
 - `player-enhancer.js`
-- `anti-antiblock.js`（目前已改成 profile-driven strategy dispatch，策略實作仍保留在 JS）
+- `anti-antiblock.js`（目前已改成 profile-driven strategy dispatch，並開始讀取 profile 的 antiAntiBlock 設定）
 
 這代表目前不是只有文件規劃，而是：
 
@@ -130,6 +130,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - content-side matcher / helper
 - MAIN world 也開始讀規則
 - 相容模式與 anti-antiblock strategy 已有共用接點
+- `anti-antiblock` 已開始消費 `fakeGlobals` / `suppressErrors` / `errorSelectors`
 
 ### 3.7 popup-player 驗證已從人工檢查提升為可重跑 smoke
 
@@ -205,10 +206,10 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 
 其中：
 
-- `anti-antiblock.js` 的 `handleJavboysPlayer()` 仍是最大單點
+- `anti-antiblock.js` 的 `handleJavboysPlayer()` 仍是最大單點，但現在已被受控 dispatcher 包起來
 - `MALICIOUS_DOMAINS` 的比對精度已改善，但其知識仍未完全搬離 runtime
 - `inject-blocker.js` 與 `player-enhancer.js` 已移除本地 compatibility host list，但尚未完全資料化
-- `anti-antiblock.js` 目前只是先完成 profile-driven dispatch，策略內容仍然偏大
+- `anti-antiblock.js` 雖已開始讀 profile config，但策略內容仍然偏大
 
 ### 6.2 popup-player 仍需更多真實站點回歸
 

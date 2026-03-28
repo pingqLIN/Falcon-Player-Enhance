@@ -92,4 +92,5 @@
 - Removed local compatibility host lists from `inject-blocker.js` and `player-enhancer.js` in favor of profile-driven capabilities.
 - Improved `inject-blocker.js` malicious URL detection from broad substring matching toward boundary-aware token matching.
 - Switched `anti-antiblock.js` from naked hostname dispatch to profile-driven anti-antiblock strategy selection, while keeping the large JS strategy implementation intact for now.
+- Wired `anti-antiblock.js` to start consuming profile-provided `fakeGlobals`, `suppressErrors`, and `errorSelectors` as part of the current strategy boundary.
 - Added repeatable popup-player / direct-popup smoke verification under `tests/live-browser/`.
