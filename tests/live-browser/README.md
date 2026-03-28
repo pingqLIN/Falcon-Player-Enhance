@@ -7,7 +7,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 - `browser_judge.py`: opens targets in Chromium, scores each page, saves evidence.
 - `import_bookmarks.py`: converts a Netscape bookmarks export into reviewed target candidates.
 - `self_learning_loop.py`: orchestrates judge -> regressions -> structured Codex review -> optional patch agent -> retry.
-- `test_popup_reliability.py`: headless popup smoke for popup-open-local-video and runtime-state-restore-on-reopen.
+- `test_popup_reliability.py`: headless popup smoke for popup-open-local-video, runtime-state-restore-on-reopen, and pinned-remote-restore.
 - `targets.example.json`: reviewed target format.
 - `targets.external-ai.single-page.curated.json`: curated single-page regression targets imported from an external AI review pass.
 - `targets.external-ai.single-page.smoke.json`: reduced smoke subset for faster live-browser validation, updated to keep only validated lower-noise seeds after the first smoke pass.

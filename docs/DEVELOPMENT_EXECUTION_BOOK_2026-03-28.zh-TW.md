@@ -13,6 +13,7 @@
 > - 已確認這兩個 case 可在 headless Chromium + unpacked extension 下通過
 > - 已新增 `tests/popup-reliability.smoke.js`
 > - 已補 `npm run test:popup-reliability`，驗證 direct-popup 與 remote mode 分流不互相覆蓋
+> - 已補上 `pinned-remote-restore` smoke，Phase 2 的 remote restore 現在已有 headless 可重跑驗證
 
 ## 1. 本輪已完成且已驗證的修補
 
@@ -113,6 +114,11 @@
   - 寫入 `currentTime / volume / muted / playbackRate / temperature`
   - 關閉後重新開啟同一路徑
   - 驗證 runtime state 已恢復
+- `pinned-remote-restore`
+  - 以 `tests/test-popup-player.html` 作為 source tab
+  - 開啟 `remote=1&pin=1` 的 popup-player 路徑
+  - 直接種入 popup runtime state，避免把 smoke 綁死在 close-persist 細節
+  - 重新開啟後驗證 source page 的 `currentTime / volume / muted / playbackRate` 被 remote bridge 拉回預期值
 - `direct-popup-vs-remote-routing`
   - 透過 `tests/popup-reliability.smoke.js` 直接驗證 background 路由決策
   - 確認 direct host iframe 走外站 popup / overlay 路徑
@@ -142,8 +148,8 @@
    - `tests/test-popup-player.html` 現在已有自動 smoke 消費者，但頁面本身仍偏手動驗證導向
    - repo 內既有 smoke report 還留有舊專案路徑 artifact
    - 目前最該優先補的驗證是：
-     `pinned remote restore`
      `direct-popup-overlay-smoke`
+     `popup-blocked-counter`
 
 ### 2.2 rule-generalization / site-specific 收斂線
 
@@ -173,7 +179,6 @@
 
 ### P1
 
-- `pinned remote restore` smoke
 - `direct-popup-overlay-smoke`
 - `popup-blocked-counter`
 - 將 popup direct / remote / direct-popup overlay 的驗證鏈收斂成更完整 smoke subset
@@ -238,7 +243,7 @@
 
 - `video` 模式: 已完成 `popup-open-local-video`
 - `runtime state restore`: 已完成 `runtime-state-restore-on-reopen`
-- `remote/direct` 模式: 尚未完成
+- `remote restore` 模式: 已完成 `pinned-remote-restore`
 - `direct-popup overlay` 模式: 尚未完成
 
 建議最小 smoke suite：
