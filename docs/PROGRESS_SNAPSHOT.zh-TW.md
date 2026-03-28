@@ -131,6 +131,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - MAIN world 也開始讀規則
 - 相容模式與 anti-antiblock strategy 已有共用接點
 - `anti-antiblock` 已開始消費 `fakeGlobals` / `suppressErrors` / `errorSelectors`
+- `site-behaviors.json` 的 `dnrAllowRules` 已開始與 `filter-rules.json` allow / initiator allowlist 做雙向一致性檢查
 
 ### 3.7 popup-player 驗證已從人工檢查提升為可重跑 smoke
 
@@ -139,6 +140,8 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - `tests/live-browser/test_popup_verification.py`
 - `tests/live-browser/fixtures/popup-player-verification.html`
 - `tests/live-browser/fixtures/direct-popup-verification.html`
+- `tests/live-browser/targets.popup-player.reviewed.smoke.json`
+- `scripts/run-popup-player-smoke.ps1`
 
 同時 `browser_judge.py` 已支援 `expectedSignals` 檢查，讓 popup-player / direct-popup 路徑可以透過固定 fixture 重跑，不再只依賴臨時人工巡檢。
 
@@ -222,6 +225,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 
 - 基礎驗證管線已建立
 - 下一步是把更多真實站點情境拉進回歸池
+- popup 視窗本體、direct-popup click-through、以及 popup state restore 仍缺少更直接的自動化覆蓋
 
 ---
 
@@ -239,6 +243,7 @@ Overview 中原本同步切換的功能，現在已改為各自獨立開關：
 - 文件策略
 - provider 分離儲存模型
 - Dashboard 的 draft / autosave / 提交流程
+- 但仍需補 provider key 清除流程、AI export sender gating、與 retention 說明對齊
 
 ### 7.2 多語說明文件擴充
 

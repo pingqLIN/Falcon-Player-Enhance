@@ -51,21 +51,44 @@ function validateStringList(value, label, options = {}) {
 }
 
 function collectAllowDomains(rules) {
-  if (!Array.isArray(rules)) return new Set();
+  if (!Array.isArray(rules)) {
+    return {
+      directDomains: new Set(),
+      initiatorDomains: new Set()
+    };
+  }
 
-  return new Set(
-    rules
-      .filter((rule) => rule?.action?.type === 'allow')
-      .map((rule) => String(rule?.condition?.urlFilter || '').trim())
-      .map((filter) => filter.match(/^\|\|([^^]+)\^$/))
-      .filter(Boolean)
-      .map((match) => match[1].toLowerCase())
-  );
+  const directDomains = new Set();
+  const initiatorDomains = new Set();
+
+  rules
+    .filter((rule) => rule?.action?.type === 'allow')
+    .forEach((rule) => {
+      const filter = String(rule?.condition?.urlFilter || '').trim();
+      const match = filter.match(/^\|\|([^^]+)\^$/);
+      if (match?.[1]) {
+        directDomains.add(match[1].toLowerCase());
+      }
+
+      const domains = Array.isArray(rule?.condition?.initiatorDomains)
+        ? rule.condition.initiatorDomains
+        : [];
+      domains
+        .map((domain) => String(domain || '').trim().toLowerCase())
+        .filter(Boolean)
+        .forEach((domain) => initiatorDomains.add(domain));
+    });
+
+  return {
+    directDomains,
+    initiatorDomains
+  };
 }
 
 const data = readJson(file, 'extension/rules/site-behaviors.json');
 const filterRules = readJson(filterFile, 'extension/rules/filter-rules.json');
-const allowDomains = collectAllowDomains(filterRules);
+const allowPolicy = collectAllowDomains(filterRules);
+const declaredDnrAllowRules = new Set();
 
 if (data) {
   if (!Number.isInteger(data.version) || data.version < 1) {
@@ -80,6 +103,7 @@ if (data) {
 
   (data.profiles || []).forEach((profile, index) => {
     const prefix = `profiles[${index}]`;
+    let safeMediaHosts = [];
 
     if (!profile || typeof profile !== 'object') {
       fail(`${prefix} must be an object`);
@@ -113,7 +137,7 @@ if (data) {
       if (typeof capabilities.forcePopupDirect !== 'boolean') fail(`${prefix}.capabilities.forcePopupDirect must be boolean`);
       if (!popupModes.has(capabilities.popupMode)) fail(`${prefix}.capabilities.popupMode must be one of: standard, remote-control, iframe-direct`);
       if (typeof capabilities.antiAntiBlockProfile !== 'string') fail(`${prefix}.capabilities.antiAntiBlockProfile must be a string`);
-      validateStringList(capabilities.safeMediaHosts, `${prefix}.capabilities.safeMediaHosts`, { lowercase: true });
+      safeMediaHosts = validateStringList(capabilities.safeMediaHosts, `${prefix}.capabilities.safeMediaHosts`, { lowercase: true });
     }
 
     const selectors = profile.selectors;
@@ -148,7 +172,13 @@ if (data) {
 
     const dnrAllowRules = validateStringList(profile.dnrAllowRules, `${prefix}.dnrAllowRules`, { lowercase: true });
     dnrAllowRules.forEach((domain) => {
-      if (!allowDomains.has(domain)) {
+      declaredDnrAllowRules.add(domain);
+
+      if (!safeMediaHosts.includes(domain)) {
+        fail(`${prefix}.dnrAllowRules must stay aligned with capabilities.safeMediaHosts (${domain})`);
+      }
+
+      if (!allowPolicy.directDomains.has(domain)) {
         fail(`${prefix}.dnrAllowRules references a domain not found in filter-rules.json allow rules: ${domain}`);
       }
     });
@@ -158,6 +188,24 @@ if (data) {
     }
   });
 }
+
+allowPolicy.directDomains.forEach((domain) => {
+  if (!declaredDnrAllowRules.has(domain)) {
+    fail(`filter-rules.json allow rule is not declared in any profile dnrAllowRules: ${domain}`);
+  }
+});
+
+allowPolicy.initiatorDomains.forEach((domain) => {
+  if (!declaredDnrAllowRules.has(domain)) {
+    fail(`filter-rules.json initiatorDomains entry is not declared in any profile dnrAllowRules: ${domain}`);
+  }
+});
+
+declaredDnrAllowRules.forEach((domain) => {
+  if (!allowPolicy.initiatorDomains.has(domain)) {
+    fail(`site-behaviors.json dnrAllowRules entry is not declared in filter-rules.json initiatorDomains: ${domain}`);
+  }
+});
 
 if (errors.length > 0) {
   console.error('Site behavior validation failed:');

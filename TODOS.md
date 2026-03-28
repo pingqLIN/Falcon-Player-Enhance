@@ -26,6 +26,18 @@
 **Priority:** P1
 **Depends on:** Current fixture-based popup verification, reviewed target selection, and stable Playwright environment
 
+### Verify the popup window itself, not just the source page
+
+**What:** Add popup-window focused automated coverage for `popup-player.html` and direct-popup overlay click-through behavior.
+
+**Why:** Current smoke and fixture checks prove the source page and judge pipeline, but they do not yet assert iframe-mode shield defaults, shortcut dispatch, direct-popup replay clicks, or restored popup UI state inside the popup window itself.
+
+**Context:** The reviewed live-target pool now exists, and fixture coverage is in place. The next meaningful strengthening step is one browser test for popup-player bootstrap plus one interaction test for direct-popup overlay event replay.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Existing popup-player fixture tests, stable browser automation, and current popup-player UI contract
+
 ### Implement Windows-native provider secret storage
 
 **What:** Replace the current per-provider persisted secret model with a Windows-native secret storage path such as DPAPI or a native-host bridge.
@@ -37,6 +49,42 @@
 **Effort:** L
 **Priority:** P1
 **Depends on:** Final design choice between direct DPAPI integration and native-host architecture
+
+### Harden provider secret lifecycle and trusted export surfaces
+
+**What:** Close the remaining security gaps around provider-key revocation, trusted sender checks for AI exports, and documentation of current retention behavior.
+
+**Why:** Keys are still durable in browser storage, empty submits do not clear secrets, and some AI insight/export handlers are not yet gated the same way as trusted settings paths.
+
+**Context:** This is smaller than the full DPAPI/native-host project and can be advanced incrementally. The first safe tranche is explicit key removal, sender-gating for export endpoints, and clearer docs about current retention semantics.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** Current dashboard persistence flow, background message routing, and the existing secret-handling guidelines
+
+### Extract BoyfriendTV detector literals into rule-backed metadata
+
+**What:** Move BoyfriendTV-specific detection literals out of the generic `player-detector.js` flow into a rule object or profile-backed metadata layer.
+
+**Why:** The current detector still embeds hostname checks, inline-script parsing hints, container IDs, and ad-signature strings directly in generic detection logic, which keeps site support coupled to code edits.
+
+**Context:** This should be a small safe extraction step, not a full detector rewrite. Start by centralizing the literals and making the existing parser consume that single rule object without changing behavior.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Stable `site-profile.js` / rule-loading conventions and the current player-detector regression behavior
+
+### Re-enable popup quick-add only after background support exists
+
+**What:** Keep the popup quick-add site promotion path hidden until `getCustomSites` / `addCustomSite` are implemented in `background.js`, then reintroduce it with end-to-end coverage.
+
+**Why:** The UI path exists, but the current popup flow does not have matching background handlers, which turns the button into a dead feature if exposed.
+
+**Context:** The safest short-term behavior is to keep the button hidden. The real follow-up is either implementing the background route cleanly or removing the feature entirely if it no longer fits the product direction.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Final decision on site promotion UX and background message API shape
 
 ### Roll out formal documentation i18n entry points
 

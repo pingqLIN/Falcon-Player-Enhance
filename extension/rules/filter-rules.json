@@ -1456,6 +1456,7 @@
     },
     "condition": {
       "initiatorDomains": [
+        "javboys.online",
         "player.javboys.online",
         "player.javboys.com",
         "myvidplay.com"

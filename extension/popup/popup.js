@@ -1358,10 +1358,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ========== Promote current site to enhanced protection ==========
+    // The quick-add path is intentionally disabled until the popup actions
+    // are backed by real background handlers.
+    const QUICK_ADD_SITE_ENABLED = false;
     const btnAddCurrentSite = document.getElementById('btn-add-current-site');
 
     async function checkQuickAddVisibility() {
         if (!btnAddCurrentSite) return;
+        if (!QUICK_ADD_SITE_ENABLED) {
+            btnAddCurrentSite.hidden = true;
+            const pinnedAdd = document.getElementById('pinned-add-site');
+            if (pinnedAdd) pinnedAdd.hidden = true;
+            return;
+        }
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (!tab?.url) return;
@@ -1387,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnAddCurrentSite) {
         btnAddCurrentSite.addEventListener('click', async () => {
+            if (!QUICK_ADD_SITE_ENABLED) return;
             const domain = btnAddCurrentSite._domain;
             if (!domain) return;
 
