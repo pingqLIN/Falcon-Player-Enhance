@@ -11,8 +11,10 @@ This folder contains the MVP for live-site validation with a browser-working jud
 - `targets.example.json`: reviewed target format.
 - `targets.external-ai.single-page.curated.json`: curated single-page regression targets imported from an external AI review pass.
 - `targets.external-ai.single-page.smoke.json`: reduced smoke subset for faster live-browser validation, updated to keep only validated lower-noise seeds after the first smoke pass.
+- `targets.popup-player.reviewed.smoke.json`: reviewed live-site smoke pool for popup-player regressions, curated from lower-noise public seeds.
 - `discovery-queries.example.json`: generic query templates for building new targets outside the repo.
 - `scripts/run-bookmark-self-learning.ps1`: one-command PowerShell entrypoint from bookmarks to self-learning loop.
+- `scripts/run-popup-player-smoke.ps1`: one-command PowerShell runner for the reviewed popup-player smoke pool.
 - `scripts/validate-live-browser-targets.js`: validates target JSON shape, tier-specific metadata, URL format, and blocks absolute local source paths.
 
 ## Quick Start
@@ -23,6 +25,7 @@ python tests/live-browser/browser_judge.py --help
 python tests/live-browser/self_learning_loop.py --help
 python tests/live-browser/test_popup_verification.py
 pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
+pwsh ./scripts/run-popup-player-smoke.ps1 -Headless
 ```
 
 ## Target Tiers
@@ -39,6 +42,7 @@ Current file mapping:
 - `targets.example.json` -> `example`
 - `targets.external-ai.single-page.curated.json` -> `curated`
 - `targets.external-ai.single-page.smoke.json` -> `smoke`
+- `targets.popup-player.reviewed.smoke.json` -> `smoke`
 - `targets.from-bookmarks.json` -> bookmark import baseline set
 - `targets.from-bookmarks.filtered.json` -> `filtered`
 - `targets.from-bookmarks.smoke.json` -> `smoke`
@@ -48,11 +52,13 @@ Current file mapping:
 - The repository does not ship a hardcoded adult-site list.
 - If you want category-specific targets, generate them outside the repo and review them before adding them to `targets.json`.
 - `targets.external-ai.single-page.curated.json` is a reviewed import artifact for regression work. Keep `requiresManualReview: true` until a human confirms each target still behaves as expected.
+- `targets.popup-player.reviewed.smoke.json` is intentionally small and opinionated. Only keep targets that are stable enough for recurring popup-player regression runs.
 - A bookmark export like `tests/bookmarks_2026_3_13.html` is a good sample input for `import_bookmarks.py`.
 - For reliable uBlock coverage, prefer either:
   - an unpacked uBlock directory via `--ublock-extension-dir`
   - an existing Chromium profile via `--browser-profile-dir`
 - `test_popup_verification.py` uses temporary browser-profile storage outside the repo so the verification run stays clean and repeatable.
+- `scripts/run-popup-player-smoke.ps1` is a convenience wrapper around `browser_judge.py`; use it when you want a quick live-site popup-player smoke pass without reassembling the command line.
 
 ## Built-In Patch Agents
 
