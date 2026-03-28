@@ -654,21 +654,158 @@ async function persistPinnedPopupPlayers() {
   await chrome.storage.local.set({ pinnedPopupPlayers });
 }
 
+function isRestorablePinnedPopupEntry(entry) {
+  if (!entry || entry.pinned !== true) return false;
+  const payload = sanitizePopupPlayerPayload(entry.payload || {});
+  return Boolean(payload.videoSrc || payload.iframeSrc || payload.sourceTabId > 0 || payload.sourceTabUrl);
+}
+
+function buildPinnedPopupPlayerEntry(payload, updatedAt = getNow()) {
+  const normalized = sanitizePopupPlayerPayload(payload);
+  normalized.pin = true;
+  return {
+    pinned: true,
+    payload: normalized,
+    updatedAt
+  };
+}
+
+function normalizeRestorableTabUrl(input = '') {
+  try {
+    const url = new URL(String(input || ''));
+    url.hash = '';
+    return url.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+function isLiveTabMatch(tab, expectedUrl) {
+  const tabId = Number(tab?.id || 0);
+  if (!Number.isFinite(tabId) || tabId <= 0) return false;
+  return normalizeRestorableTabUrl(tab?.url) === expectedUrl;
+}
+
+async function rebindPinnedPopupSource(payload) {
+  const normalized = sanitizePopupPlayerPayload(payload);
+  const expectedUrl = normalizeRestorableTabUrl(normalized.sourceTabUrl);
+
+  if (normalized.sourceTabId > 0) {
+    try {
+      const tab = await chrome.tabs.get(normalized.sourceTabId);
+      if (Number.isFinite(Number(tab?.id || 0)) && Number(tab.id) > 0) {
+        if (!expectedUrl || isLiveTabMatch(tab, expectedUrl)) {
+          normalized.sourceTabId = Number(tab.id);
+          if (!normalized.sourceTabUrl && tab.url) {
+            normalized.sourceTabUrl = String(tab.url);
+          }
+          return { canRestore: true, payload: normalized };
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (expectedUrl) {
+    try {
+      const tabs = await chrome.tabs.query({});
+      const match = (tabs || []).find((tab) => isLiveTabMatch(tab, expectedUrl));
+      if (match?.id) {
+        normalized.sourceTabId = Number(match.id);
+        normalized.sourceTabUrl = String(match.url || normalized.sourceTabUrl || '');
+        return { canRestore: true, payload: normalized };
+      }
+    } catch (_) {}
+  }
+
+  if (normalized.videoSrc || normalized.iframeSrc) {
+    normalized.sourceTabId = 0;
+    normalized.remoteControlPreferred = false;
+    return { canRestore: true, payload: normalized };
+  }
+
+  return { canRestore: false, payload: normalized };
+}
+
+async function restorePinnedPopupPlayerEntry(entry) {
+  if (!isRestorablePinnedPopupEntry(entry)) {
+    return { restored: false, entry: null };
+  }
+
+  const rebound = await rebindPinnedPopupSource(entry.payload || {});
+  const payload = rebound.payload;
+  payload.pin = true;
+  if (!rebound.canRestore) {
+    return {
+      restored: false,
+      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()))
+    };
+  }
+
+  try {
+    const newWindow = await createPopupPlayerWindow(payload);
+    const windowId = String(newWindow?.id || '');
+    if (!windowId) {
+      return { restored: false, entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow())) };
+    }
+
+    return {
+      restored: true,
+      windowId,
+      entry: buildPinnedPopupPlayerEntry(payload)
+    };
+  } catch (error) {
+    console.error('❌ 無法重建已釘選彈窗視窗:', String(error?.message || error));
+    return {
+      restored: false,
+      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()))
+    };
+  }
+}
+
 async function loadPinnedPopupPlayers() {
   const result = await chrome.storage.local.get(['pinnedPopupPlayers']);
-  pinnedPopupPlayers =
+  const storedEntries =
     result.pinnedPopupPlayers && typeof result.pinnedPopupPlayers === 'object' ? result.pinnedPopupPlayers : {};
 
   const windows = await chrome.windows.getAll({});
   const alive = new Set((windows || []).map((item) => String(item.id)));
+  const nextEntries = {};
+  const restoreQueue = [];
   let changed = false;
-  Object.keys(pinnedPopupPlayers).forEach((windowId) => {
-    if (!alive.has(windowId)) {
-      delete pinnedPopupPlayers[windowId];
+
+  Object.entries(storedEntries).forEach(([windowId, entry]) => {
+    if (alive.has(windowId)) {
+      nextEntries[windowId] = entry;
+      return;
+    }
+
+    if (isRestorablePinnedPopupEntry(entry)) {
+      changed = true;
+      restoreQueue.push(entry);
+      return;
+    }
+
+    changed = true;
+  });
+
+  pinnedPopupPlayers = nextEntries;
+
+  for (const entry of restoreQueue) {
+    const restored = await restorePinnedPopupPlayerEntry(entry);
+    if (restored.windowId && restored.entry) {
+      pinnedPopupPlayers[restored.windowId] = restored.entry;
+      changed = true;
+      continue;
+    }
+
+    if (restored.entry) {
+      const fallbackKey = `pending:${String(restored.entry.updatedAt || getNow())}:${Math.random().toString(36).slice(2, 8)}`;
+      pinnedPopupPlayers[fallbackKey] = restored.entry;
       changed = true;
     }
-  });
-  if (changed) {
+  }
+
+  if (changed || restoreQueue.length > 0) {
     await persistPinnedPopupPlayers();
   }
 }
@@ -4534,12 +4671,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     const payload = sanitizePopupPlayerPayload(request);
-    payload.pin = true;
-    pinnedPopupPlayers[windowId] = {
-      pinned: true,
-      payload,
-      updatedAt: getNow()
-    };
+    pinnedPopupPlayers[windowId] = buildPinnedPopupPlayerEntry(payload);
     persistPinnedPopupPlayers().catch(() => {});
     sendResponse({ success: true, pinned: true, windowId: Number(windowId) });
     return true;
@@ -4734,25 +4866,22 @@ chrome.windows.onRemoved.addListener((removedWindowId) => {
     return;
   }
 
-  const payload = sanitizePopupPlayerPayload(entry.payload || {});
-  payload.pin = true;
   delete pinnedPopupPlayers[key];
 
-  createPopupPlayerWindow(payload)
-    .then((newWindow) => {
-      const nextKey = String(newWindow.id);
-      pinnedPopupPlayers[nextKey] = {
-        pinned: true,
-        payload: {
-          ...payload,
-          pin: true
-        },
-        updatedAt: getNow()
-      };
+  restorePinnedPopupPlayerEntry(entry)
+    .then((restored) => {
+      if (restored.windowId && restored.entry) {
+        pinnedPopupPlayers[restored.windowId] = restored.entry;
+        return persistPinnedPopupPlayers();
+      }
+
+      if (restored.entry) {
+        pinnedPopupPlayers[key] = restored.entry;
+      }
       return persistPinnedPopupPlayers();
     })
-    .catch((error) => {
-      console.error('❌ 無法重建已釘選彈窗視窗:', String(error?.message || error));
+    .catch(() => {
+      pinnedPopupPlayers[key] = entry;
       persistPinnedPopupPlayers().catch(() => {});
     });
 });

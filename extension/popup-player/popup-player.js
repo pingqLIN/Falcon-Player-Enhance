@@ -3,6 +3,7 @@
 
   const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
   const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
+  const POPUP_RUNTIME_STATE_PREFIX = 'popupPlayerState:';
   const SHARPEN_FILTER_IDS = [
     '',
     'popup-player-sharpen-1',
@@ -70,6 +71,12 @@
   let currentMode = 'idle';
   let remoteSyncInterval = null;
   let remotePlayerState = null;
+  let popupStateStorageKey = '';
+  let restoredPopupState = null;
+  let popupStatePersistTimer = null;
+  let lastPlaybackPersistAt = 0;
+  let remoteRestoreInFlight = false;
+  let remoteRestoreApplied = false;
 
   const visualState = {
     brightness: 100,
@@ -79,6 +86,153 @@
     hue: 0,
     temperature: 0
   };
+
+  function clampNumber(value, min, max, fallback = 0) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(min, Math.min(max, numeric));
+  }
+
+  function hashString(value) {
+    let hash = 5381;
+    for (const char of String(value || '')) {
+      hash = ((hash << 5) + hash) ^ char.charCodeAt(0);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function getPopupRuntimeIdentity(params = {}) {
+    const identity = {
+      playerId: params.playerId || '',
+      sourceTabUrl: params.sourceTabUrl || '',
+      videoSrc: params.videoSrc || '',
+      iframeSrc: params.iframeSrc || '',
+      title: params.title || ''
+    };
+    if (!identity.playerId && !identity.sourceTabUrl && !identity.videoSrc && !identity.iframeSrc) {
+      return '';
+    }
+    return JSON.stringify(identity);
+  }
+
+  function getPopupRuntimeStateKey(params = {}) {
+    const identity = getPopupRuntimeIdentity(params);
+    if (!identity) return '';
+    return POPUP_RUNTIME_STATE_PREFIX + hashString(identity);
+  }
+
+  function normalizePopupRuntimeState(value) {
+    const state = value && typeof value === 'object' ? value : {};
+    const playback = state.playback && typeof state.playback === 'object' ? state.playback : {};
+    const ui = state.ui && typeof state.ui === 'object' ? state.ui : {};
+
+    return {
+      version: 1,
+      playback: {
+        currentTime: clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0),
+        volume: clampNumber(playback.volume, 0, 1, 1),
+        muted: playback.muted === true,
+        playbackRate: clampNumber(playback.playbackRate, 0.25, 4, 1)
+      },
+      ui: {
+        temperature: clampNumber(ui.temperature, -100, 100, 0)
+      }
+    };
+  }
+
+  function shouldAutoRestoreRuntimeState(params = {}) {
+    return params.pin === true;
+  }
+
+  function loadPopupRuntimeState(key) {
+    if (!key) return null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      return normalizePopupRuntimeState(JSON.parse(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function collectPopupRuntimeState() {
+    const state = {
+      version: 1,
+      playback: {
+        currentTime: 0,
+        volume: 1,
+        muted: false,
+        playbackRate: 1
+      },
+      ui: {
+        temperature: clampNumber(visualState.temperature, -100, 100, 0)
+      }
+    };
+
+    if (currentMode === 'video' && currentVideo) {
+      state.playback.currentTime = clampNumber(currentVideo.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
+      state.playback.volume = clampNumber(currentVideo.volume, 0, 1, 1);
+      state.playback.muted = currentVideo.muted === true;
+      state.playback.playbackRate = clampNumber(currentVideo.playbackRate, 0.25, 4, 1);
+      return state;
+    }
+
+    if (currentMode === 'remote' && remotePlayerState) {
+      state.playback.currentTime = clampNumber(remotePlayerState.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
+      state.playback.volume = clampNumber(remotePlayerState.volume, 0, 1, 1);
+      state.playback.muted = remotePlayerState.muted === true;
+      state.playback.playbackRate = clampNumber(remotePlayerState.playbackRate, 0.25, 4, 1);
+      return state;
+    }
+
+    if (currentMode === 'iframe') {
+      return state;
+    }
+
+    return state;
+  }
+
+  function persistPopupRuntimeState() {
+    if (!popupStateStorageKey) return;
+    try {
+      localStorage.setItem(popupStateStorageKey, JSON.stringify(collectPopupRuntimeState()));
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  function schedulePopupRuntimeStatePersist(force = false) {
+    if (!popupStateStorageKey) return;
+    if (force) {
+      if (popupStatePersistTimer) {
+        clearTimeout(popupStatePersistTimer);
+        popupStatePersistTimer = null;
+      }
+      persistPopupRuntimeState();
+      return;
+    }
+    if (popupStatePersistTimer) return;
+    popupStatePersistTimer = window.setTimeout(() => {
+      popupStatePersistTimer = null;
+      persistPopupRuntimeState();
+    }, 180);
+  }
+
+  function notePlaybackProgressForPersistence() {
+    const now = Date.now();
+    if (now - lastPlaybackPersistAt < 1000) return;
+    lastPlaybackPersistAt = now;
+    schedulePopupRuntimeStatePersist();
+  }
+
+  function applyRestoredVisualState() {
+    if (!restoredPopupState?.ui) return;
+    visualState.temperature = clampNumber(restoredPopupState.ui.temperature, -100, 100, 0);
+    if (temperatureSlider) {
+      temperatureSlider.value = String(visualState.temperature);
+    }
+    applyVisualAdjustments();
+  }
 
   function getVideoParams() {
     const params = new URLSearchParams(window.location.search);
@@ -307,11 +461,51 @@
     speedSelect.value = String(remotePlayerState.playbackRate || 1);
     shieldState.textContent = 'Remote Link Shield';
     shieldState.classList.remove('active');
+    notePlaybackProgressForPersistence();
+  }
+
+  async function applyRestoredRemoteState() {
+    if (!shouldAutoRestoreRuntimeState(currentParams || {})) return;
+    if (!restoredPopupState?.playback) return;
+    if (!remotePlayerState || remoteRestoreApplied || remoteRestoreInFlight) return;
+
+    remoteRestoreInFlight = true;
+    try {
+      const playback = restoredPopupState.playback;
+      const desiredVolume = clampNumber(playback.volume, 0, 1, 1);
+      const desiredRate = clampNumber(playback.playbackRate, 0.25, 4, 1);
+      const desiredTime = clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
+      const desiredMuted = playback.muted === true;
+
+      if (Math.abs(Number(remotePlayerState.volume || 0) - desiredVolume) > 0.01) {
+        await sendRemoteControl('setVolume', desiredVolume);
+      }
+      if (Math.abs(Number(remotePlayerState.playbackRate || 1) - desiredRate) > 0.01) {
+        await sendRemoteControl('setSpeed', desiredRate);
+      }
+      const isMuted = remotePlayerState?.muted === true || Number(remotePlayerState?.volume || 0) === 0;
+      if (desiredMuted !== isMuted) {
+        await sendRemoteControl('toggleMute');
+      }
+      if (Number.isFinite(remotePlayerState?.duration) && Number(remotePlayerState.duration) > 0) {
+        const currentTime = Number(remotePlayerState.currentTime || 0);
+        if (Math.abs(currentTime - desiredTime) > 1) {
+          await sendRemoteControl('seekToRatio', Math.max(0, Math.min(1, desiredTime / Number(remotePlayerState.duration || 1))));
+        }
+      }
+      remoteRestoreApplied = true;
+      schedulePopupRuntimeStatePersist(true);
+    } catch (_) {
+      // no-op
+    } finally {
+      remoteRestoreInFlight = false;
+    }
   }
 
   async function refreshRemoteState() {
     const response = await sendRemotePlayerMessage({ action: 'getPlayerState' });
     applyRemoteState(response);
+    await applyRestoredRemoteState();
   }
 
   function startRemoteSync() {
@@ -456,18 +650,48 @@
       playbackState.classList.toggle('active', !video.paused);
     };
 
+    const applyRestoredVideoState = () => {
+      if (!shouldAutoRestoreRuntimeState(currentParams || {})) return;
+      if (!restoredPopupState?.playback) return;
+
+      const playback = restoredPopupState.playback;
+      video.volume = clampNumber(playback.volume, 0, 1, 1);
+      video.muted = playback.muted === true;
+      video.playbackRate = clampNumber(playback.playbackRate, 0.25, 4, 1);
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        video.currentTime = Math.min(video.duration, clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0));
+      }
+      schedulePopupRuntimeStatePersist(true);
+    };
+
     video.addEventListener('loadedmetadata', () => {
+      applyRestoredVideoState();
       syncPlaybackUI();
       if (autoFitWindow) {
         fitWindowToVideo(video).catch(() => {});
       }
     });
     video.addEventListener('durationchange', syncPlaybackUI);
-    video.addEventListener('timeupdate', syncPlaybackUI);
-    video.addEventListener('play', syncPlaybackUI);
-    video.addEventListener('pause', syncPlaybackUI);
-    video.addEventListener('volumechange', syncPlaybackUI);
-    video.addEventListener('ratechange', syncPlaybackUI);
+    video.addEventListener('timeupdate', () => {
+      syncPlaybackUI();
+      notePlaybackProgressForPersistence();
+    });
+    video.addEventListener('play', () => {
+      syncPlaybackUI();
+      schedulePopupRuntimeStatePersist();
+    });
+    video.addEventListener('pause', () => {
+      syncPlaybackUI();
+      schedulePopupRuntimeStatePersist(true);
+    });
+    video.addEventListener('volumechange', () => {
+      syncPlaybackUI();
+      schedulePopupRuntimeStatePersist();
+    });
+    video.addEventListener('ratechange', () => {
+      syncPlaybackUI();
+      schedulePopupRuntimeStatePersist();
+    });
     video.addEventListener('enterpictureinpicture', () => {
       btnPip.textContent = t('popupPlayerExitPip');
     });
@@ -739,11 +963,13 @@
       temperatureSlider.addEventListener('input', () => {
         visualState.temperature = Number(temperatureSlider.value);
         applyVisualAdjustments();
+        schedulePopupRuntimeStatePersist();
       });
     }
 
     btnResetImage.addEventListener('click', () => {
       resetImageAdjustments();
+      schedulePopupRuntimeStatePersist(true);
     });
 
     btnLinkShield.addEventListener('click', () => {
@@ -770,6 +996,7 @@
         }
       }
       setLinkShield(currentMode === 'iframe');
+      schedulePopupRuntimeStatePersist(true);
     });
 
     interactionShield.addEventListener('click', (event) => {
@@ -886,6 +1113,8 @@
 
     const params = getVideoParams();
     currentParams = params;
+    popupStateStorageKey = getPopupRuntimeStateKey(params);
+    restoredPopupState = loadPopupRuntimeState(popupStateStorageKey);
     windowInstanceId = params.windowId;
     isPinned = Boolean(params.pin);
     updatePinButton();
@@ -904,6 +1133,7 @@
     }
 
     resetImageAdjustments();
+    applyRestoredVisualState();
 
     if ((params.remoteControlPreferred || (!params.videoSrc && !params.iframeSrc)) && params.sourceTabId > 0) {
       setMode('remote');
@@ -938,6 +1168,7 @@
   }
 
   window.addEventListener('beforeunload', () => {
+    schedulePopupRuntimeStatePersist(true);
     cleanupPlayer();
     if (!isPinned) {
       syncPinStateToBackground();

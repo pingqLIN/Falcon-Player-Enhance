@@ -95,21 +95,39 @@ function isAdvancedPlayerProtectionEnabled() {
     return isPlayerSite() && !isCompatibilityModeSite() && isLevelAtLeast(BLOCKING_LEVEL.STANDARD);
 }
 
+function escapeRegex(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasBlockedUrlToken(value, token) {
+    const text = String(value || '').toLowerCase();
+    const normalizedToken = String(token || '').trim().toLowerCase();
+    if (!text || !normalizedToken) return false;
+
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(normalizedToken)}([^a-z0-9]|$)`);
+    return pattern.test(text);
+}
+
 function isBlockedUrl(url) {
     if (!url) return false;
     const urlStr = String(url).toLowerCase();
+    let resolvedHost = '';
     
     // 允許擴充功能內部 URL
     if (urlStr.startsWith('chrome-extension://') || urlStr.startsWith('moz-extension://')) {
         return false;
     }
     
-    if (MALICIOUS_DOMAINS.some(domain => urlStr.includes(domain.toLowerCase()))) {
+    try {
+        resolvedHost = new URL(urlStr, window.location.origin).hostname.toLowerCase();
+    } catch (e) {}
+
+    if (MALICIOUS_DOMAINS.some((domain) => hasBlockedUrlToken(resolvedHost, domain) || hasBlockedUrlToken(urlStr, domain))) {
         return true;
     }
     if (aiDynamicBlockedDomains.size > 0) {
         for (const domain of aiDynamicBlockedDomains) {
-            if (urlStr.includes(domain)) {
+            if (hasBlockedUrlToken(resolvedHost, domain) || hasBlockedUrlToken(urlStr, domain)) {
                 return true;
             }
         }
@@ -134,6 +152,45 @@ function normalizeBlockingLevel(level) {
     if (!Number.isFinite(numeric)) return BLOCKING_LEVEL.STANDARD;
     const rounded = Math.round(numeric);
     return Math.max(BLOCKING_LEVEL.OFF, Math.min(BLOCKING_LEVEL.HARDENED, rounded));
+}
+
+function clampSensitivityBoost(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(5, Math.round(numeric)));
+}
+
+function normalizeBlockedDomains(values) {
+    if (!Array.isArray(values)) return [];
+
+    return Array.from(new Set(
+        values
+            .map((value) => String(value || '').trim().toLowerCase())
+            .filter(Boolean)
+    ));
+}
+
+function mergeAllowedActions(currentActions, nextActions) {
+    return Array.from(new Set([
+        ...(Array.isArray(currentActions) ? currentActions : []),
+        ...(Array.isArray(nextActions) ? nextActions : [])
+    ]));
+}
+
+function mergePolicyGate(nextGate) {
+    const incomingGate = nextGate && typeof nextGate === 'object' ? nextGate : {};
+
+    return {
+        ...aiRuntimeState.policyGate,
+        ...incomingGate,
+        allowReversibleActions: aiRuntimeState.policyGate.allowReversibleActions === true || incomingGate.allowReversibleActions === true,
+        allowedActions: mergeAllowedActions(aiRuntimeState.policyGate.allowedActions, incomingGate.allowedActions)
+    };
+}
+
+function refreshAiBlockedDomains() {
+    aiDynamicBlockedDomains.clear();
+    aiRuntimeState.extraBlockedDomains.forEach((domain) => aiDynamicBlockedDomains.add(domain));
 }
 
 function setProtectionLevel(level) {
@@ -167,10 +224,7 @@ function emitAiEvent(type, options = {}) {
 
 function applyAiPolicy(policy) {
     if (!policy || typeof policy !== 'object') return;
-    aiRuntimeState.policyGate = {
-        ...aiRuntimeState.policyGate,
-        ...(policy.policyGate || {})
-    };
+    aiRuntimeState.policyGate = mergePolicyGate(policy.policyGate);
 
     const allowedActions = Array.isArray(aiRuntimeState.policyGate.allowedActions)
         ? aiRuntimeState.policyGate.allowedActions
@@ -180,14 +234,17 @@ function applyAiPolicy(policy) {
     const allowDomainExpansion = allowReversibleActions && allowedActions.includes('apply_extra_blocked_domains');
     const allowOverlayTuning = allowReversibleActions && allowedActions.includes('tune_overlay_scan');
 
-    aiRuntimeState.popupStrictMode = allowPopupStrict && Boolean(policy.popupStrictMode);
-    aiRuntimeState.sensitivityBoost = allowOverlayTuning ? Number(policy.sensitivityBoost || 0) : 0;
-    aiRuntimeState.extraBlockedDomains = allowDomainExpansion && Array.isArray(policy.extraBlockedDomains)
-        ? policy.extraBlockedDomains.map(v => String(v).toLowerCase())
-        : [];
+    aiRuntimeState.popupStrictMode = aiRuntimeState.popupStrictMode || (allowPopupStrict && Boolean(policy.popupStrictMode));
+    aiRuntimeState.sensitivityBoost = Math.max(
+        aiRuntimeState.sensitivityBoost,
+        allowOverlayTuning ? clampSensitivityBoost(policy.sensitivityBoost) : 0
+    );
+    aiRuntimeState.extraBlockedDomains = normalizeBlockedDomains([
+        ...aiRuntimeState.extraBlockedDomains,
+        ...(allowDomainExpansion ? normalizeBlockedDomains(policy.extraBlockedDomains) : [])
+    ]);
 
-    aiDynamicBlockedDomains.clear();
-    aiRuntimeState.extraBlockedDomains.forEach(domain => aiDynamicBlockedDomains.add(domain));
+    refreshAiBlockedDomains();
 
     CONFIG.sensitivity = Math.max(1, Math.min(10, BASE_SENSITIVITY + aiRuntimeState.sensitivityBoost));
 }
@@ -203,7 +260,9 @@ window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.type !== '__SHIELD_BLOCKING_LEVEL__') return;
-    setProtectionLevel(data.level);
+    const nextLevel = normalizeBlockingLevel(data.level);
+    if (nextLevel < protectionLevel) return;
+    setProtectionLevel(nextLevel);
     recoverFromRedirectTrap();
 });
 
