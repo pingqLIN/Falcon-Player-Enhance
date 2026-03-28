@@ -295,6 +295,9 @@ const STATS_DEFAULTS = {
 
 let stats = { ...STATS_DEFAULTS };
 let pinnedPopupPlayers = {};
+let pinnedPopupPlayersLoadPromise = null;
+let pinnedPopupRestorePromises = new Map();
+let pinnedPopupBoundsRestoreGuards = new Map();
 let blockingLevel = BLOCKING_LEVEL_DEFAULT;
 let lastActiveBlockingLevel = BLOCKING_LEVEL_DEFAULT;
 let runtimeExtensionEnabled = null;
@@ -582,10 +585,139 @@ function sanitizePopupPlayerPayload(input = {}) {
     sourceTabUrl: input.sourceTabUrl ? String(input.sourceTabUrl) : '',
     sourceTabId: Number.isFinite(Number(input.sourceTabId)) ? Number(input.sourceTabId) : 0,
     playerId: input.playerId ? String(input.playerId) : '',
+    restoreWidth: Number.isFinite(Number(input.restoreWidth)) ? Number(input.restoreWidth) : 0,
+    restoreHeight: Number.isFinite(Number(input.restoreHeight)) ? Number(input.restoreHeight) : 0,
+    restoreLeft: Number.isFinite(Number(input.restoreLeft)) ? Number(input.restoreLeft) : 0,
+    restoreTop: Number.isFinite(Number(input.restoreTop)) ? Number(input.restoreTop) : 0,
     remoteControlPreferred:
       input.remoteControlPreferred === true || String(input.remoteControlPreferred || '') === '1',
     pin: input.pin === true || String(input.pin || '') === '1'
   };
+}
+
+function sanitizePopupWindowBounds(input = {}) {
+  const bounds = input && typeof input === 'object' ? input : {};
+  const width = Math.round(Number(bounds.width || 0));
+  const height = Math.round(Number(bounds.height || 0));
+  const left = Math.round(Number(bounds.left));
+  const top = Math.round(Number(bounds.top));
+  const output = {};
+
+  if (Number.isFinite(width) && width >= 480) {
+    output.width = Math.min(width, 4000);
+  }
+  if (Number.isFinite(height) && height >= 320) {
+    output.height = Math.min(height, 3000);
+  }
+  if (Number.isFinite(left)) {
+    output.left = left;
+  }
+  if (Number.isFinite(top)) {
+    output.top = top;
+  }
+
+  return output;
+}
+
+function hasPopupWindowBounds(input = {}) {
+  const bounds = sanitizePopupWindowBounds(input);
+  return ['width', 'height', 'left', 'top'].some((key) => Number.isFinite(Number(bounds[key])));
+}
+
+function arePopupWindowBoundsEqual(leftBounds = {}, rightBounds = {}) {
+  const left = sanitizePopupWindowBounds(leftBounds);
+  const right = sanitizePopupWindowBounds(rightBounds);
+  return ['width', 'height', 'left', 'top'].every((key) => {
+    const leftValue = Number.isFinite(Number(left[key])) ? Number(left[key]) : null;
+    const rightValue = Number.isFinite(Number(right[key])) ? Number(right[key]) : null;
+    return leftValue === rightValue;
+  });
+}
+
+async function getPopupWindowBounds(windowId) {
+  const resolvedWindowId = Number(windowId || 0);
+  if (!Number.isFinite(resolvedWindowId) || resolvedWindowId <= 0) {
+    return {};
+  }
+
+  try {
+    const popupWindow = await chrome.windows.get(resolvedWindowId);
+    return sanitizePopupWindowBounds(popupWindow);
+  } catch (_) {
+    return {};
+  }
+}
+
+function getPopupWindowUpdateOptions(input = {}) {
+  const bounds = sanitizePopupWindowBounds(input);
+  const output = {};
+  if (Number.isFinite(bounds.width)) {
+    output.width = bounds.width;
+  }
+  if (Number.isFinite(bounds.height)) {
+    output.height = bounds.height;
+  }
+  if (Number.isFinite(bounds.left)) {
+    output.left = bounds.left;
+  }
+  if (Number.isFinite(bounds.top)) {
+    output.top = bounds.top;
+  }
+  return output;
+}
+
+function isPopupWindowBoundsErrorMessage(input = '') {
+  const message = String(input || '').toLowerCase();
+  return message.includes('invalid value for bounds') || message.includes('visible screen space');
+}
+
+function setPinnedPopupBoundsRestoreGuard(windowId, bounds, durationMs = 1500) {
+  const resolvedWindowId = String(windowId || '');
+  const resolvedBounds = sanitizePopupWindowBounds(bounds);
+  if (!resolvedWindowId || !hasPopupWindowBounds(resolvedBounds)) {
+    return;
+  }
+  pinnedPopupBoundsRestoreGuards.set(resolvedWindowId, {
+    bounds: resolvedBounds,
+    expiresAt: getNow() + Math.max(250, Number(durationMs || 0))
+  });
+}
+
+function getPinnedPopupBoundsRestoreGuard(windowId) {
+  const resolvedWindowId = String(windowId || '');
+  if (!resolvedWindowId) {
+    return null;
+  }
+  const guard = pinnedPopupBoundsRestoreGuards.get(resolvedWindowId);
+  if (!guard) {
+    return null;
+  }
+  if (Number(guard.expiresAt || 0) <= getNow()) {
+    pinnedPopupBoundsRestoreGuards.delete(resolvedWindowId);
+    return null;
+  }
+  return guard;
+}
+
+function resolvePinnedPopupBoundsDuringRestore(windowId, nextBounds = {}, fallbackBounds = {}) {
+  const resolvedWindowId = String(windowId || '');
+  const sanitizedNextBounds = sanitizePopupWindowBounds(nextBounds);
+  const sanitizedFallbackBounds = sanitizePopupWindowBounds(fallbackBounds);
+  const guard = getPinnedPopupBoundsRestoreGuard(resolvedWindowId);
+  if (!guard) {
+    return hasPopupWindowBounds(sanitizedNextBounds) ? sanitizedNextBounds : sanitizedFallbackBounds;
+  }
+  if (hasPopupWindowBounds(sanitizedNextBounds) && arePopupWindowBoundsEqual(sanitizedNextBounds, guard.bounds)) {
+    pinnedPopupBoundsRestoreGuards.delete(resolvedWindowId);
+    return sanitizedNextBounds;
+  }
+  return hasPopupWindowBounds(sanitizedFallbackBounds) ? sanitizedFallbackBounds : guard.bounds;
+}
+
+function waitForPopupWindowStabilize(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, Number(ms || 0)));
+  });
 }
 
 function withSenderPopupPlayerContext(input = {}, sender) {
@@ -626,6 +758,12 @@ function shouldOpenPopupDirectly(payload = {}) {
 function buildPopupPlayerUrl(payload = {}) {
   const normalized = sanitizePopupPlayerPayload(payload);
   const params = new URLSearchParams();
+  const restoreBounds = sanitizePopupWindowBounds({
+    width: normalized.restoreWidth,
+    height: normalized.restoreHeight,
+    left: normalized.restoreLeft,
+    top: normalized.restoreTop
+  });
   if (normalized.videoSrc) params.set('videoSrc', normalized.videoSrc);
   if (normalized.iframeSrc) params.set('iframeSrc', normalized.iframeSrc);
   if (normalized.poster) params.set('poster', normalized.poster);
@@ -636,6 +774,10 @@ function buildPopupPlayerUrl(payload = {}) {
   if (normalized.playerId) params.set('playerId', normalized.playerId);
   if (normalized.remoteControlPreferred) params.set('remote', '1');
   if (normalized.pin) params.set('pin', '1');
+  if (Number.isFinite(restoreBounds.width)) params.set('restoreWidth', String(restoreBounds.width));
+  if (Number.isFinite(restoreBounds.height)) params.set('restoreHeight', String(restoreBounds.height));
+  if (Number.isFinite(restoreBounds.left)) params.set('restoreLeft', String(restoreBounds.left));
+  if (Number.isFinite(restoreBounds.top)) params.set('restoreTop', String(restoreBounds.top));
   return chrome.runtime.getURL('popup-player/popup-player.html') + '?' + params.toString();
 }
 
@@ -660,14 +802,30 @@ function isRestorablePinnedPopupEntry(entry) {
   return Boolean(payload.videoSrc || payload.iframeSrc || payload.sourceTabId > 0 || payload.sourceTabUrl);
 }
 
-function buildPinnedPopupPlayerEntry(payload, updatedAt = getNow()) {
+function buildPinnedPopupPlayerEntry(payload, updatedAt = getNow(), windowBounds = {}) {
   const normalized = sanitizePopupPlayerPayload(payload);
   normalized.pin = true;
   return {
     pinned: true,
     payload: normalized,
-    updatedAt
+    updatedAt,
+    windowBounds: sanitizePopupWindowBounds(windowBounds)
   };
+}
+
+function getPinnedPopupRestoreKey(entry = {}) {
+  const payload = sanitizePopupPlayerPayload(entry.payload || {});
+  const windowBounds = sanitizePopupWindowBounds(entry.windowBounds || {});
+  return JSON.stringify({
+    sourceTabUrl: payload.sourceTabUrl || '',
+    videoSrc: payload.videoSrc || '',
+    iframeSrc: payload.iframeSrc || '',
+    playerId: payload.playerId || '',
+    remoteControlPreferred: payload.remoteControlPreferred === true,
+    pin: payload.pin === true,
+    updatedAt: Number(entry.updatedAt || 0),
+    windowBounds
+  });
 }
 
 function normalizeRestorableTabUrl(input = '') {
@@ -727,104 +885,223 @@ async function rebindPinnedPopupSource(payload) {
 }
 
 async function restorePinnedPopupPlayerEntry(entry) {
+  const restoreKey = getPinnedPopupRestoreKey(entry);
+  if (pinnedPopupRestorePromises.has(restoreKey)) {
+    return pinnedPopupRestorePromises.get(restoreKey);
+  }
+
+  const restorePromise = (async () => {
   if (!isRestorablePinnedPopupEntry(entry)) {
     return { restored: false, entry: null };
   }
 
   const rebound = await rebindPinnedPopupSource(entry.payload || {});
   const payload = rebound.payload;
+  const windowBounds = sanitizePopupWindowBounds(entry.windowBounds || {});
+  payload.restoreWidth = windowBounds.width || 0;
+  payload.restoreHeight = windowBounds.height || 0;
+  payload.restoreLeft = Number.isFinite(windowBounds.left) ? windowBounds.left : 0;
+  payload.restoreTop = Number.isFinite(windowBounds.top) ? windowBounds.top : 0;
   payload.pin = true;
   if (!rebound.canRestore) {
     return {
       restored: false,
-      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()))
+      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()), windowBounds)
     };
   }
 
   try {
-    const newWindow = await createPopupPlayerWindow(payload);
+    const restoreResult = await createPopupPlayerWindow(payload, windowBounds);
+    let newWindow = restoreResult?.window || restoreResult;
+    let resolvedBounds = sanitizePopupWindowBounds(
+      restoreResult?.restoredBounds || (hasPopupWindowBounds(newWindow) ? newWindow : windowBounds)
+    );
+    if (
+      newWindow?.id &&
+      hasPopupWindowBounds(windowBounds) &&
+      !arePopupWindowBoundsEqual(newWindow, windowBounds)
+    ) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        const updatedWindow = await chrome.windows.update(
+          newWindow.id,
+          getPopupWindowUpdateOptions(windowBounds)
+        );
+        if (updatedWindow?.id) {
+          newWindow = updatedWindow;
+        }
+        resolvedBounds = sanitizePopupWindowBounds(windowBounds);
+      } catch (_) {}
+    }
     const windowId = String(newWindow?.id || '');
     if (!windowId) {
-      return { restored: false, entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow())) };
+      return {
+        restored: false,
+        entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()), windowBounds)
+      };
+    }
+    if (hasPopupWindowBounds(resolvedBounds)) {
+      setPinnedPopupBoundsRestoreGuard(windowId, resolvedBounds);
     }
 
     return {
       restored: true,
       windowId,
-      entry: buildPinnedPopupPlayerEntry(payload)
+      entry: buildPinnedPopupPlayerEntry(
+        payload,
+        getNow(),
+        hasPopupWindowBounds(resolvedBounds) ? resolvedBounds : windowBounds
+      )
     };
   } catch (error) {
     console.error('❌ 無法重建已釘選彈窗視窗:', String(error?.message || error));
     return {
       restored: false,
-      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()))
+      entry: buildPinnedPopupPlayerEntry(payload, Number(entry.updatedAt || getNow()), windowBounds)
     };
+  }
+  })();
+
+  pinnedPopupRestorePromises.set(restoreKey, restorePromise);
+  try {
+    return await restorePromise;
+  } finally {
+    pinnedPopupRestorePromises.delete(restoreKey);
   }
 }
 
 async function loadPinnedPopupPlayers() {
-  const result = await chrome.storage.local.get(['pinnedPopupPlayers']);
-  const storedEntries =
-    result.pinnedPopupPlayers && typeof result.pinnedPopupPlayers === 'object' ? result.pinnedPopupPlayers : {};
-
-  const windows = await chrome.windows.getAll({});
-  const alive = new Set((windows || []).map((item) => String(item.id)));
-  const nextEntries = {};
-  const restoreQueue = [];
-  let changed = false;
-
-  Object.entries(storedEntries).forEach(([windowId, entry]) => {
-    if (alive.has(windowId)) {
-      nextEntries[windowId] = entry;
-      return;
-    }
-
-    if (isRestorablePinnedPopupEntry(entry)) {
-      changed = true;
-      restoreQueue.push(entry);
-      return;
-    }
-
-    changed = true;
-  });
-
-  pinnedPopupPlayers = nextEntries;
-
-  for (const entry of restoreQueue) {
-    const restored = await restorePinnedPopupPlayerEntry(entry);
-    if (restored.windowId && restored.entry) {
-      pinnedPopupPlayers[restored.windowId] = restored.entry;
-      changed = true;
-      continue;
-    }
-
-    if (restored.entry) {
-      const fallbackKey = `pending:${String(restored.entry.updatedAt || getNow())}:${Math.random().toString(36).slice(2, 8)}`;
-      pinnedPopupPlayers[fallbackKey] = restored.entry;
-      changed = true;
-    }
+  if (pinnedPopupPlayersLoadPromise) {
+    return pinnedPopupPlayersLoadPromise;
   }
 
-  if (changed || restoreQueue.length > 0) {
-    await persistPinnedPopupPlayers();
+  pinnedPopupPlayersLoadPromise = (async () => {
+    const result = await chrome.storage.local.get(['pinnedPopupPlayers']);
+    const storedEntries =
+      result.pinnedPopupPlayers && typeof result.pinnedPopupPlayers === 'object' ? result.pinnedPopupPlayers : {};
+
+    const windows = await chrome.windows.getAll({});
+    const windowsById = new Map((windows || []).map((item) => [String(item.id), item]));
+    const alive = new Set((windows || []).map((item) => String(item.id)));
+    const nextEntries = {};
+    const restoreQueue = [];
+    let changed = false;
+
+    Object.entries(storedEntries).forEach(([windowId, entry]) => {
+      if (alive.has(windowId)) {
+        const liveWindow = windowsById.get(windowId);
+        const nextBounds = sanitizePopupWindowBounds(liveWindow || {});
+        if (hasPopupWindowBounds(nextBounds) && !arePopupWindowBoundsEqual(entry?.windowBounds, nextBounds)) {
+          changed = true;
+          nextEntries[windowId] = {
+            ...entry,
+            windowBounds: nextBounds
+          };
+          return;
+        }
+
+        nextEntries[windowId] = entry;
+        return;
+      }
+
+      if (isRestorablePinnedPopupEntry(entry)) {
+        changed = true;
+        restoreQueue.push(entry);
+        return;
+      }
+
+      changed = true;
+    });
+
+    pinnedPopupPlayers = nextEntries;
+
+    for (const entry of restoreQueue) {
+      const restored = await restorePinnedPopupPlayerEntry(entry);
+      if (restored.windowId && restored.entry) {
+        pinnedPopupPlayers[restored.windowId] = restored.entry;
+        changed = true;
+        continue;
+      }
+
+      if (restored.entry) {
+        const fallbackKey = `pending:${String(restored.entry.updatedAt || getNow())}:${Math.random().toString(36).slice(2, 8)}`;
+        pinnedPopupPlayers[fallbackKey] = restored.entry;
+        changed = true;
+      }
+    }
+
+    if (changed || restoreQueue.length > 0) {
+      await persistPinnedPopupPlayers();
+    }
+  })();
+
+  try {
+    await pinnedPopupPlayersLoadPromise;
+  } finally {
+    pinnedPopupPlayersLoadPromise = null;
   }
 }
 
-async function createPopupPlayerWindow(payload = {}) {
+async function createPopupPlayerWindow(payload = {}, preferredBounds = {}) {
   const popupUrl = shouldUseRemoteControlMode(payload)
     ? buildPopupPlayerUrl({ ...payload, remoteControlPreferred: true })
     : shouldOpenPopupDirectly(payload)
     ? String(payload.iframeSrc || '').trim()
     : buildPopupPlayerUrl(payload);
-  const createdWindow = await chrome.windows.create({
-    url: popupUrl,
-    type: 'popup',
-    width: 1280,
-    height: 720,
-    focused: true
-  });
+  const bounds = sanitizePopupWindowBounds(preferredBounds);
+  const createWindow = async (nextBounds = {}) => {
+    const options = getPopupWindowUpdateOptions(nextBounds);
+    return chrome.windows.create({
+      url: popupUrl,
+      type: 'popup',
+      width: options.width || 1280,
+      height: options.height || 720,
+      ...(Number.isFinite(options.left) ? { left: options.left } : {}),
+      ...(Number.isFinite(options.top) ? { top: options.top } : {}),
+      focused: true
+    });
+  };
+
+  let createdWindow = null;
+  let usedFallbackBounds = false;
+
+  try {
+    createdWindow = await createWindow(bounds);
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (!hasPopupWindowBounds(bounds) || !isPopupWindowBoundsErrorMessage(message)) {
+      throw error;
+    }
+    usedFallbackBounds = true;
+    createdWindow = await createWindow({});
+  }
+
+  if (createdWindow?.id && hasPopupWindowBounds(bounds) && usedFallbackBounds !== true) {
+    const updateOptions = getPopupWindowUpdateOptions(bounds);
+    try {
+      const updatedWindow = await chrome.windows.update(createdWindow.id, updateOptions);
+      if (updatedWindow?.id) {
+        createdWindow = updatedWindow;
+      }
+    } catch (_) {}
+
+    if (!arePopupWindowBoundsEqual(createdWindow, bounds)) {
+      await waitForPopupWindowStabilize(180);
+      try {
+        const updatedWindow = await chrome.windows.update(createdWindow.id, updateOptions);
+        if (updatedWindow?.id) {
+          createdWindow = updatedWindow;
+        }
+      } catch (_) {}
+    }
+  }
+
   await registerDirectPopupOverlayWindow(createdWindow, payload);
-  return createdWindow;
+  return {
+    ...createdWindow,
+    window: createdWindow,
+    restoredBounds: usedFallbackBounds ? sanitizePopupWindowBounds(createdWindow || {}) : bounds
+  };
 }
 
 function getDirectPopupOverlayDomain(payload = {}) {
@@ -4665,15 +4942,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const pinned = request.pinned === true;
     if (!pinned) {
       delete pinnedPopupPlayers[windowId];
+      pinnedPopupBoundsRestoreGuards.delete(windowId);
       persistPinnedPopupPlayers().catch(() => {});
       sendResponse({ success: true, pinned: false, windowId: Number(windowId) });
       return true;
     }
 
-    const payload = sanitizePopupPlayerPayload(request);
-    pinnedPopupPlayers[windowId] = buildPinnedPopupPlayerEntry(payload);
-    persistPinnedPopupPlayers().catch(() => {});
-    sendResponse({ success: true, pinned: true, windowId: Number(windowId) });
+    (async () => {
+      const payload = sanitizePopupPlayerPayload(request);
+      const requestedBounds = sanitizePopupWindowBounds(request.windowBounds || {});
+      const existingWindowBounds = sanitizePopupWindowBounds(pinnedPopupPlayers[windowId]?.windowBounds || {});
+      const windowBounds = hasPopupWindowBounds(requestedBounds)
+        ? requestedBounds
+        : await getPopupWindowBounds(windowId);
+      const nextBounds = resolvePinnedPopupBoundsDuringRestore(windowId, windowBounds, existingWindowBounds);
+      pinnedPopupPlayers[windowId] = buildPinnedPopupPlayerEntry(payload, getNow(), nextBounds);
+      await persistPinnedPopupPlayers();
+      sendResponse({ success: true, pinned: true, windowId: Number(windowId) });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
     return true;
   }
 
@@ -4841,6 +5129,27 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
+chrome.windows?.onBoundsChanged?.addListener((popupWindow) => {
+  const windowId = String(popupWindow?.id || '');
+  const entry = pinnedPopupPlayers[windowId];
+  if (!entry || entry.pinned !== true) {
+    pinnedPopupBoundsRestoreGuards.delete(windowId);
+    return;
+  }
+
+  const nextBounds = sanitizePopupWindowBounds(popupWindow || {});
+  const resolvedBounds = resolvePinnedPopupBoundsDuringRestore(windowId, nextBounds, entry.windowBounds || {});
+  if (!hasPopupWindowBounds(resolvedBounds) || arePopupWindowBoundsEqual(entry.windowBounds, resolvedBounds)) {
+    return;
+  }
+
+  pinnedPopupPlayers[windowId] = {
+    ...entry,
+    windowBounds: resolvedBounds
+  };
+  persistPinnedPopupPlayers().catch(() => {});
+});
+
 chrome.action?.onClicked?.addListener((tab) => {
   const targetTabId = Number(tab?.id || 0);
   if (!Number.isFinite(targetTabId) || targetTabId <= 0) {
@@ -4857,6 +5166,7 @@ chrome.windows.onRemoved.addListener((removedWindowId) => {
   });
 
   const key = String(removedWindowId);
+  pinnedPopupBoundsRestoreGuards.delete(key);
   const entry = pinnedPopupPlayers[key];
   if (!entry || !entry.pinned) {
     if (entry) {
@@ -4866,24 +5176,33 @@ chrome.windows.onRemoved.addListener((removedWindowId) => {
     return;
   }
 
-  delete pinnedPopupPlayers[key];
-
-  restorePinnedPopupPlayerEntry(entry)
-    .then((restored) => {
-      if (restored.windowId && restored.entry) {
-        pinnedPopupPlayers[restored.windowId] = restored.entry;
-        return persistPinnedPopupPlayers();
-      }
-
-      if (restored.entry) {
-        pinnedPopupPlayers[key] = restored.entry;
-      }
-      return persistPinnedPopupPlayers();
-    })
-    .catch(() => {
-      pinnedPopupPlayers[key] = entry;
+  setTimeout(() => {
+    const latestEntry = pinnedPopupPlayers[key] || entry;
+    if (!latestEntry || latestEntry.pinned !== true) {
+      delete pinnedPopupPlayers[key];
       persistPinnedPopupPlayers().catch(() => {});
-    });
+      return;
+    }
+
+    delete pinnedPopupPlayers[key];
+
+    restorePinnedPopupPlayerEntry(latestEntry)
+      .then((restored) => {
+        if (restored.windowId && restored.entry) {
+          pinnedPopupPlayers[restored.windowId] = restored.entry;
+          return persistPinnedPopupPlayers();
+        }
+
+        if (restored.entry) {
+          pinnedPopupPlayers[key] = restored.entry;
+        }
+        return persistPinnedPopupPlayers();
+      })
+      .catch(() => {
+        pinnedPopupPlayers[key] = latestEntry;
+        persistPinnedPopupPlayers().catch(() => {});
+      });
+  }, 180);
 });
 
 setInterval(() => {

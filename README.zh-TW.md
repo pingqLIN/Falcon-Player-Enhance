@@ -258,9 +258,11 @@ popup-player.js ◀──playerSync──▶ content script (透過 sourceTabId)
 
 ```bash
 npm run test:ai              # AI 評估套件
-npm run test:e2e-replay       # 端對端回放測試
-npm run test:lmstudio         # LM Studio 整合測試
-npm run check:lmstudio        # LM Studio 健康檢查
+npm run test:e2e-replay      # 端對端回放測試
+npm run test:popup:smoke     # 3-case popup smoke 測試
+npm run test:popup:state-restore # popup 狀態還原驗證
+npm run test:lmstudio        # LM Studio 整合測試
+npm run check:lmstudio       # LM Studio 健康檢查
 ```
 
 ### 技術棧
@@ -273,7 +275,7 @@ npm run check:lmstudio        # LM Studio 健康檢查
 ### 重新擷取截圖
 
 ```bash
-node docs/take-screenshots.js
+npm run docs:screenshots
 ```
 
 ---

@@ -4,10 +4,13 @@
   "version": "4.4.0",
   "description": "Falcon-Player-Enhance development scripts",
   "scripts": {
+    "docs:screenshots": "python docs/take-screenshots.py",
     "check:lmstudio": "node tests/ai-eval/check-lmstudio-health.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
     "check:gateway": "node tests/ai-eval/check-gateway-health.js --endpoint http://127.0.0.1:8787/v1",
     "test:ai": "node tests/ai-eval/run-ai-evaluation.js",
     "test:e2e-replay": "node tests/e2e-ai-replay/run-e2e-ai-replay.js",
+    "test:popup:smoke": "python tests/popup-smoke/run_popup_smoke.py",
+    "test:popup:state-restore": "python tests/popup-smoke/run_popup_smoke.py --cases popup-player-state-restore",
     "test:lmstudio": "node tests/ai-eval/run-lmstudio-evaluation.js --mock",
     "test:lmstudio:live": "node tests/ai-eval/run-lmstudio-evaluation.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
     "test:openai:live": "node tests/ai-eval/run-openai-direct-evaluation.js --model gpt-5.4-mini",

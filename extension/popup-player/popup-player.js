@@ -58,6 +58,14 @@
   const temperatureValue = document.getElementById('temperature-value');
   const temperatureMatrix = document.getElementById('popup-player-temp-matrix');
   const btnTheme = document.getElementById('btn-theme');
+  const DEFAULT_VISUAL_STATE = {
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    sharpness: 0,
+    hue: 0,
+    temperature: 0
+  };
 
   let windowInstanceId = null;
   let chromeWindowId = null;
@@ -74,18 +82,12 @@
   let popupStateStorageKey = '';
   let restoredPopupState = null;
   let popupStatePersistTimer = null;
+  let pinSyncTimer = null;
   let lastPlaybackPersistAt = 0;
   let remoteRestoreInFlight = false;
   let remoteRestoreApplied = false;
 
-  const visualState = {
-    brightness: 100,
-    contrast: 100,
-    saturation: 100,
-    sharpness: 0,
-    hue: 0,
-    temperature: 0
-  };
+  const visualState = { ...DEFAULT_VISUAL_STATE };
 
   function clampNumber(value, min, max, fallback = 0) {
     const numeric = Number(value);
@@ -121,10 +123,21 @@
     return POPUP_RUNTIME_STATE_PREFIX + hashString(identity);
   }
 
+  function normalizePopupVisualState(value) {
+    const ui = value && typeof value === 'object' ? value : {};
+    return {
+      brightness: clampNumber(ui.brightness, 50, 150, DEFAULT_VISUAL_STATE.brightness),
+      contrast: clampNumber(ui.contrast, 50, 150, DEFAULT_VISUAL_STATE.contrast),
+      saturation: clampNumber(ui.saturation, 0, 200, DEFAULT_VISUAL_STATE.saturation),
+      sharpness: clampNumber(ui.sharpness, 0, 100, DEFAULT_VISUAL_STATE.sharpness),
+      hue: clampNumber(ui.hue, -180, 180, DEFAULT_VISUAL_STATE.hue),
+      temperature: clampNumber(ui.temperature, -100, 100, DEFAULT_VISUAL_STATE.temperature)
+    };
+  }
+
   function normalizePopupRuntimeState(value) {
     const state = value && typeof value === 'object' ? value : {};
     const playback = state.playback && typeof state.playback === 'object' ? state.playback : {};
-    const ui = state.ui && typeof state.ui === 'object' ? state.ui : {};
 
     return {
       version: 1,
@@ -134,9 +147,7 @@
         muted: playback.muted === true,
         playbackRate: clampNumber(playback.playbackRate, 0.25, 4, 1)
       },
-      ui: {
-        temperature: clampNumber(ui.temperature, -100, 100, 0)
-      }
+      ui: normalizePopupVisualState(state.ui)
     };
   }
 
@@ -164,9 +175,7 @@
         muted: false,
         playbackRate: 1
       },
-      ui: {
-        temperature: clampNumber(visualState.temperature, -100, 100, 0)
-      }
+      ui: normalizePopupVisualState(visualState)
     };
 
     if (currentMode === 'video' && currentVideo) {
@@ -227,7 +236,23 @@
 
   function applyRestoredVisualState() {
     if (!restoredPopupState?.ui) return;
-    visualState.temperature = clampNumber(restoredPopupState.ui.temperature, -100, 100, 0);
+    const restoredVisualState = normalizePopupVisualState(restoredPopupState.ui);
+    Object.assign(visualState, restoredVisualState);
+    if (brightnessSlider) {
+      brightnessSlider.value = String(visualState.brightness);
+    }
+    if (contrastSlider) {
+      contrastSlider.value = String(visualState.contrast);
+    }
+    if (saturationSlider) {
+      saturationSlider.value = String(visualState.saturation);
+    }
+    if (sharpnessSlider) {
+      sharpnessSlider.value = String(visualState.sharpness);
+    }
+    if (hueSlider) {
+      hueSlider.value = String(visualState.hue);
+    }
     if (temperatureSlider) {
       temperatureSlider.value = String(visualState.temperature);
     }
@@ -246,8 +271,33 @@
       playerId: params.get('playerId'),
       remoteControlPreferred: params.get('remote') === '1',
       windowId: params.get('windowId'),
+      restoreWidth: Number(params.get('restoreWidth') || 0),
+      restoreHeight: Number(params.get('restoreHeight') || 0),
+      restoreLeft: Number(params.get('restoreLeft') || 0),
+      restoreTop: Number(params.get('restoreTop') || 0),
       pin: params.get('pin') === '1'
     };
+  }
+
+  function applyRequestedWindowBounds(params = {}) {
+    const width = Math.round(Number(params.restoreWidth || 0));
+    const height = Math.round(Number(params.restoreHeight || 0));
+    const left = Math.round(Number(params.restoreLeft));
+    const top = Math.round(Number(params.restoreTop));
+    const hasSize = Number.isFinite(width) && width >= 480 && Number.isFinite(height) && height >= 320;
+    const hasPosition = Number.isFinite(left) && Number.isFinite(top);
+    if (!hasSize && !hasPosition) return;
+
+    try {
+      if (hasPosition && typeof window.moveTo === 'function') {
+        window.moveTo(left, top);
+      }
+      if (hasSize) {
+        window.resizeTo(width, height);
+      }
+    } catch (_) {
+      // no-op
+    }
   }
 
   function showError(message) {
@@ -318,11 +368,34 @@
         playerId: currentParams?.playerId || '',
         remoteControlPreferred: currentParams?.remoteControlPreferred === true,
         title: currentParams?.title || '',
-        pin: isPinned
+        pin: isPinned,
+        windowBounds: getCurrentWindowBounds()
       }).catch(() => {});
     } catch (_) {
       // no-op
     }
+  }
+
+  function getCurrentWindowBounds() {
+    const left = Number.isFinite(window.screenX) ? window.screenX : window.screenLeft;
+    const top = Number.isFinite(window.screenY) ? window.screenY : window.screenTop;
+    return {
+      left: Math.round(Number(left || 0)),
+      top: Math.round(Number(top || 0)),
+      width: Math.round(Number(window.outerWidth || 0)),
+      height: Math.round(Number(window.outerHeight || 0))
+    };
+  }
+
+  function schedulePinnedWindowBoundsSync(delay = 120) {
+    if (!isPinned) return;
+    if (pinSyncTimer) {
+      clearTimeout(pinSyncTimer);
+    }
+    pinSyncTimer = setTimeout(() => {
+      pinSyncTimer = null;
+      syncPinStateToBackground();
+    }, delay);
   }
 
   function updatePinButton() {
@@ -476,25 +549,48 @@
       const desiredRate = clampNumber(playback.playbackRate, 0.25, 4, 1);
       const desiredTime = clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
       const desiredMuted = playback.muted === true;
+      let restoreComplete = true;
 
       if (Math.abs(Number(remotePlayerState.volume || 0) - desiredVolume) > 0.01) {
         await sendRemoteControl('setVolume', desiredVolume);
       }
+      if (Math.abs(Number(remotePlayerState?.volume || 0) - desiredVolume) > 0.01) {
+        restoreComplete = false;
+      }
+
       if (Math.abs(Number(remotePlayerState.playbackRate || 1) - desiredRate) > 0.01) {
         await sendRemoteControl('setSpeed', desiredRate);
       }
-      const isMuted = remotePlayerState?.muted === true || Number(remotePlayerState?.volume || 0) === 0;
-      if (desiredMuted !== isMuted) {
+      if (Math.abs(Number(remotePlayerState?.playbackRate || 1) - desiredRate) > 0.01) {
+        restoreComplete = false;
+      }
+
+      const isMutedBeforeToggle = remotePlayerState?.muted === true || Number(remotePlayerState?.volume || 0) === 0;
+      if (desiredMuted !== isMutedBeforeToggle) {
         await sendRemoteControl('toggleMute');
       }
-      if (Number.isFinite(remotePlayerState?.duration) && Number(remotePlayerState.duration) > 0) {
+      const isMutedAfterToggle = remotePlayerState?.muted === true || Number(remotePlayerState?.volume || 0) === 0;
+      if (desiredMuted !== isMutedAfterToggle) {
+        restoreComplete = false;
+      }
+
+      const remoteDuration = Number(remotePlayerState?.duration || 0);
+      if (!(Number.isFinite(remoteDuration) && remoteDuration > 0)) {
+        restoreComplete = false;
+      } else {
         const currentTime = Number(remotePlayerState.currentTime || 0);
         if (Math.abs(currentTime - desiredTime) > 1) {
-          await sendRemoteControl('seekToRatio', Math.max(0, Math.min(1, desiredTime / Number(remotePlayerState.duration || 1))));
+          await sendRemoteControl('seekToRatio', Math.max(0, Math.min(1, desiredTime / remoteDuration)));
+        }
+        if (Math.abs(Number(remotePlayerState?.currentTime || 0) - desiredTime) > 1) {
+          restoreComplete = false;
         }
       }
-      remoteRestoreApplied = true;
-      schedulePopupRuntimeStatePersist(true);
+
+      remoteRestoreApplied = restoreComplete;
+      if (restoreComplete) {
+        schedulePopupRuntimeStatePersist(true);
+      }
     } catch (_) {
       // no-op
     } finally {
@@ -770,10 +866,15 @@
 
   async function togglePin() {
     isPinned = !isPinned;
+    currentParams = {
+      ...(currentParams || {}),
+      pin: isPinned
+    };
     updatePinButton();
     if (!chromeWindowId) {
       chromeWindowId = await getCurrentChromeWindowId();
     }
+    schedulePopupRuntimeStatePersist(true);
     syncPinStateToBackground();
   }
 
@@ -935,27 +1036,32 @@
     brightnessSlider.addEventListener('input', () => {
       visualState.brightness = Number(brightnessSlider.value);
       applyVisualAdjustments();
+      schedulePopupRuntimeStatePersist();
     });
 
     contrastSlider.addEventListener('input', () => {
       visualState.contrast = Number(contrastSlider.value);
       applyVisualAdjustments();
+      schedulePopupRuntimeStatePersist();
     });
 
     saturationSlider.addEventListener('input', () => {
       visualState.saturation = Number(saturationSlider.value);
       applyVisualAdjustments();
+      schedulePopupRuntimeStatePersist();
     });
 
     sharpnessSlider.addEventListener('input', () => {
       visualState.sharpness = Number(sharpnessSlider.value);
       applyVisualAdjustments();
+      schedulePopupRuntimeStatePersist();
     });
 
     if (hueSlider) {
       hueSlider.addEventListener('input', () => {
         visualState.hue = Number(hueSlider.value);
         applyVisualAdjustments();
+        schedulePopupRuntimeStatePersist();
       });
     }
 
@@ -1092,6 +1198,11 @@
       applyAutoFitWindow(changes[POPUP_AUTO_FIT_KEY].newValue !== false);
     });
 
+    window.addEventListener('resize', () => {
+      if (!isPinned) return;
+      syncPinStateToBackground();
+    });
+
     if (btnTheme) {
       btnTheme.addEventListener('click', () => {
         const next = document.body.dataset.theme === 'light' ? 'dark' : 'light';
@@ -1119,6 +1230,13 @@
     isPinned = Boolean(params.pin);
     updatePinButton();
     chromeWindowId = await getCurrentChromeWindowId();
+    if (params.pin) {
+      applyRequestedWindowBounds(params);
+      window.setTimeout(() => {
+        applyRequestedWindowBounds(params);
+        schedulePinnedWindowBoundsSync(0);
+      }, 220);
+    }
     if (isPinned) {
       syncPinStateToBackground();
     }
@@ -1169,10 +1287,14 @@
 
   window.addEventListener('beforeunload', () => {
     schedulePopupRuntimeStatePersist(true);
-    cleanupPlayer();
-    if (!isPinned) {
-      syncPinStateToBackground();
-    }
+    syncPinStateToBackground();
+  });
+  window.addEventListener('pagehide', () => {
+    schedulePopupRuntimeStatePersist(true);
+    syncPinStateToBackground();
+  });
+  window.addEventListener('resize', () => {
+    schedulePinnedWindowBoundsSync();
   });
 
   init();

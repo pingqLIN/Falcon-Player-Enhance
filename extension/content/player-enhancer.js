@@ -177,8 +177,21 @@
         let hoverPinned = false;
         let hoverTimeout = null;
 
+        function syncPopupButtonMetadata() {
+            btn.dataset.shieldPopupTargetId = resolvePlayerControlId(player) || '';
+            btn.dataset.shieldPopupVideoSrc =
+                player.dataset?.shieldResolvedVideoSrc ||
+                (player.tagName === 'VIDEO' ? getVideoSource(player) : '') ||
+                '';
+            btn.dataset.shieldPopupIframeSrc =
+                player.dataset?.shieldResolvedIframeSrc ||
+                (player.tagName === 'IFRAME' ? getIframePayloadSource(player) : '') ||
+                '';
+        }
+
         function showOverlay() {
             clearTimeout(hoverTimeout);
+            syncPopupButtonMetadata();
             if (!applyFloatingPopupAnchorPosition(player, btn, tooltip)) {
                 return;
             }
@@ -235,9 +248,11 @@
 
         document.body.appendChild(btn);
         document.body.appendChild(tooltip);
+        syncPopupButtonMetadata();
 
         const refreshOverlayPosition = () => {
             if (btn.style.opacity === '1' || tooltip.style.opacity === '1') {
+                syncPopupButtonMetadata();
                 applyFloatingPopupAnchorPosition(player, btn, tooltip);
             }
         };

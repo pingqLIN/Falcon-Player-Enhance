@@ -258,9 +258,11 @@ All scripts ──statsUpdate──▶ background.js ──aipolicyUpdate──�
 
 ```bash
 npm run test:ai              # AI evaluation suite
-npm run test:e2e-replay       # End-to-end replay tests
-npm run test:lmstudio         # LM Studio integration tests
-npm run check:lmstudio        # LM Studio health check
+npm run test:e2e-replay      # End-to-end replay tests
+npm run test:popup:smoke     # 3-case popup smoke suite
+npm run test:popup:state-restore # Popup state restore verification
+npm run test:lmstudio        # LM Studio integration tests
+npm run check:lmstudio       # LM Studio health check
 ```
 
 ### Tech Stack
@@ -273,7 +275,7 @@ npm run check:lmstudio        # LM Studio health check
 ### Regenerate Screenshots
 
 ```bash
-node docs/take-screenshots.js
+npm run docs:screenshots
 ```
 
 ---
