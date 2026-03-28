@@ -20,6 +20,7 @@ This folder contains the MVP for live-site validation with a browser-working jud
 python tests/live-browser/import_bookmarks.py --help
 python tests/live-browser/browser_judge.py --help
 python tests/live-browser/self_learning_loop.py --help
+npm run test:popup-reliability
 python -m unittest tests/live-browser/test_popup_reliability.py
 pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 ```
@@ -34,6 +35,7 @@ pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
   - an unpacked uBlock directory via `--ublock-extension-dir`
   - an existing Chromium profile via `--browser-profile-dir`
 - `test_popup_reliability.py` intentionally validates popup creation via the extension service worker's `chrome.windows.getAll({ populate: true })` view instead of only Playwright page events; this is more stable for headless popup windows created by `chrome.windows.create()`.
+- `npm run test:popup-reliability` is the smallest direct routing smoke. It validates that iframe-direct hosts still open real direct popups while remote-only payloads continue to use the extension popup path.
 
 ## Built-In Patch Agents
 

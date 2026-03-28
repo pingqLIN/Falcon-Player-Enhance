@@ -597,9 +597,6 @@ function withSenderPopupPlayerContext(input = {}, sender) {
   if (!payload.sourceTabUrl && sender?.tab?.url) {
     payload.sourceTabUrl = String(sender.tab.url);
   }
-  if (shouldOpenPopupDirectly(payload) && payload.sourceTabId > 0) {
-    payload.remoteControlPreferred = true;
-  }
   return payload;
 }
 
@@ -641,6 +638,9 @@ function buildPopupPlayerUrl(payload = {}) {
 
 function shouldUseRemoteControlMode(payload = {}) {
   const normalized = sanitizePopupPlayerPayload(payload);
+  if (shouldOpenPopupDirectly(normalized)) {
+    return false;
+  }
   if (!Number.isFinite(normalized.sourceTabId) || normalized.sourceTabId <= 0) {
     return false;
   }
@@ -811,10 +811,10 @@ async function loadPinnedPopupPlayers() {
 }
 
 async function createPopupPlayerWindow(payload = {}) {
-  const popupUrl = shouldUseRemoteControlMode(payload)
-    ? buildPopupPlayerUrl({ ...payload, remoteControlPreferred: true })
-    : shouldOpenPopupDirectly(payload)
+  const popupUrl = shouldOpenPopupDirectly(payload)
     ? String(payload.iframeSrc || '').trim()
+    : shouldUseRemoteControlMode(payload)
+    ? buildPopupPlayerUrl({ ...payload, remoteControlPreferred: true })
     : buildPopupPlayerUrl(payload);
   const createdWindow = await chrome.windows.create({
     url: popupUrl,

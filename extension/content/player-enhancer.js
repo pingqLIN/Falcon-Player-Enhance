@@ -1236,9 +1236,7 @@
         const iframeSrc = preferIframePopup ? resolvedIframeSrc : (payload?.iframeSrc || '');
         const poster = payload?.poster || '';
         const playerId = resolvePlayerControlId(player);
-        const remoteControlPreferred =
-            (!videoSrc && !iframeSrc) ||
-            (iframeSrc && shouldOpenPopupDirectly(iframeSrc));
+        const remoteControlPreferred = !videoSrc && !iframeSrc;
 
         if (preferIframePopup) {
             console.log('🛡️ 受保護串流改用 iframe popup 模式:', {

@@ -5,6 +5,7 @@
 > 同日再補：`extension/background.js` 已完成 pinned popup startup/onRemoved restore 第一版修補，Phase 2 正式啟動。
 > 同日第三次補充：`extension/popup-player/popup-player.js` 已補上 close/unpin race 修正，並修掉 popup state 在 close 路徑被預設值覆蓋的問題。
 > 同日第四次補充：`tests/live-browser/test_popup_reliability.py` 已新增並通過，Phase 2 現在至少有 `popup-open-local-video` 與 `runtime-state-restore-on-reopen` 兩個可重跑 popup smoke。
+> 同日第五次補充：`background.js` / `player-enhancer.js` 已修正 direct-popup 不再被誤導向 remote mode，並新增 `npm run test:popup-reliability` 驗證 direct/remote 分流。
 
 > 更新日期: 2026-03-20（第二次更新：加入審查報告摘要）
 > 用途: 提供給 Opus 做快速檢查與二次審閱

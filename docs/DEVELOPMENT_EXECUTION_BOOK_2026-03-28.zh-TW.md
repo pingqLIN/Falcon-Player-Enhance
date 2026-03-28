@@ -11,6 +11,8 @@
 >   - `popup-open-local-video`
 >   - `runtime-state-restore-on-reopen`
 > - 已確認這兩個 case 可在 headless Chromium + unpacked extension 下通過
+> - 已新增 `tests/popup-reliability.smoke.js`
+> - 已補 `npm run test:popup-reliability`，驗證 direct-popup 與 remote mode 分流不互相覆蓋
 
 ## 1. 本輪已完成且已驗證的修補
 
@@ -72,17 +74,29 @@
 - `remotePlayerState` 尚未回來時，runtime state 會優先保留已恢復狀態，而不是覆寫成空白初始值
 - `cleanupPlayer()` 現在會一併清掉 pending persist timer，避免 close 流程尾端再寫一次過期狀態
 
-### 1.6 本輪已跑過的新鮮驗證
+### 1.6 direct-popup / remote mode 分流已補上第三刀
+
+本輪再補了一個會直接影響 `direct-popup overlay` 驗證可信度的路徑問題：
+
+- `player-enhancer.js` 不再把 direct host 的 iframe popup 一律標成 `remoteControlPreferred`
+- `background.js` 現在會優先判斷 direct-popup path，再決定是否進 remote mode
+- `withSenderPopupPlayerContext()` 不再把 direct host 強制升級成 remote mode
+
+這代表 `direct-popup overlay` 路徑現在真的能被走到，不會在有 `sourceTabId` 時被 remote popup 抢走。
+
+### 1.7 本輪已跑過的新鮮驗證
 
 已通過：
 
 - `node --check extension/background.js`
 - `node --check extension/content/inject-blocker.js`
 - `node --check extension/popup-player/popup-player.js`
+- `node --check tests/popup-reliability.smoke.js`
+- `npm run test:popup-reliability`
 - `python -m unittest tests/live-browser/test_popup_reliability.py`
 - `python -m unittest discover -s tests/live-browser -p "test*.py"`
 
-### 1.7 popup reliability smoke 已形成第一版可重跑子集
+### 1.8 popup reliability smoke 已形成第一版可重跑子集
 
 本輪新增：
 
@@ -99,6 +113,10 @@
   - 寫入 `currentTime / volume / muted / playbackRate / temperature`
   - 關閉後重新開啟同一路徑
   - 驗證 runtime state 已恢復
+- `direct-popup-vs-remote-routing`
+  - 透過 `tests/popup-reliability.smoke.js` 直接驗證 background 路由決策
+  - 確認 direct host iframe 走外站 popup / overlay 路徑
+  - 確認純 remote payload 仍走 extension popup `remote=1`
 
 這一版刻意不用 Playwright 的一般 page event 當 popup 開窗唯一訊號，因為 headless Chromium 下 `chrome.windows.create()` 建立的 popup window 不一定會以一般 `context.pages` 浮現；目前改採 background 可觀測狀態驗證 popup 開窗，對 headless 比較穩定。
 

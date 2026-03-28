@@ -201,10 +201,10 @@
     return state;
   }
 
-  function persistPopupRuntimeState() {
+  function persistPopupRuntimeState(state = null) {
     if (!popupStateStorageKey) return;
     try {
-      localStorage.setItem(popupStateStorageKey, JSON.stringify(collectPopupRuntimeState()));
+      localStorage.setItem(popupStateStorageKey, JSON.stringify(state || collectPopupRuntimeState()));
     } catch (_) {
       // no-op
     }
@@ -212,6 +212,7 @@
 
   function schedulePopupRuntimeStatePersist(force = false) {
     if (!popupStateStorageKey) return;
+    if (popupClosing) return;
     if (force) {
       if (popupStatePersistTimer) {
         clearTimeout(popupStatePersistTimer);
@@ -796,8 +797,9 @@
       alert(t('popupPlayerAlertUnpinBeforeClose'));
       return;
     }
+    const runtimeState = collectPopupRuntimeState();
     popupClosing = true;
-    schedulePopupRuntimeStatePersist(true);
+    persistPopupRuntimeState(runtimeState);
     await syncPinStateToBackground();
     cleanupPlayer();
     window.close();
@@ -1186,7 +1188,8 @@
 
   window.addEventListener('beforeunload', () => {
     if (!popupClosing) {
-      schedulePopupRuntimeStatePersist(true);
+      popupClosing = true;
+      persistPopupRuntimeState(collectPopupRuntimeState());
     }
     cleanupPlayer();
     if (!isPinned) {
