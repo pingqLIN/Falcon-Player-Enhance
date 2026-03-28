@@ -77,6 +77,7 @@
   let lastPlaybackPersistAt = 0;
   let remoteRestoreInFlight = false;
   let remoteRestoreApplied = false;
+  let popupClosing = false;
 
   const visualState = {
     brightness: 100,
@@ -156,18 +157,26 @@
   }
 
   function collectPopupRuntimeState() {
-    const state = {
-      version: 1,
-      playback: {
-        currentTime: 0,
-        volume: 1,
-        muted: false,
-        playbackRate: 1
-      },
-      ui: {
-        temperature: clampNumber(visualState.temperature, -100, 100, 0)
-      }
-    };
+    const fallback = restoredPopupState ? normalizePopupRuntimeState(restoredPopupState) : null;
+    const state = fallback
+      ? {
+          version: fallback.version,
+          playback: { ...fallback.playback },
+          ui: { ...fallback.ui }
+        }
+      : {
+          version: 1,
+          playback: {
+            currentTime: 0,
+            volume: 1,
+            muted: false,
+            playbackRate: 1
+          },
+          ui: {
+            temperature: 0
+          }
+        };
+    state.ui.temperature = clampNumber(visualState.temperature, -100, 100, 0);
 
     if (currentMode === 'video' && currentVideo) {
       state.playback.currentTime = clampNumber(currentVideo.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
@@ -302,10 +311,10 @@
     });
   }
 
-  function syncPinStateToBackground() {
-    if (!chromeWindowId) return;
+  async function syncPinStateToBackground() {
+    if (!chromeWindowId) return false;
     try {
-      chrome.runtime.sendMessage({
+      await chrome.runtime.sendMessage({
         action: 'setPopupPlayerPin',
         pinned: isPinned,
         chromeWindowId,
@@ -319,9 +328,10 @@
         remoteControlPreferred: currentParams?.remoteControlPreferred === true,
         title: currentParams?.title || '',
         pin: isPinned
-      }).catch(() => {});
+      });
+      return true;
     } catch (_) {
-      // no-op
+      return false;
     }
   }
 
@@ -754,6 +764,10 @@
   }
 
   function cleanupPlayer() {
+    if (popupStatePersistTimer) {
+      clearTimeout(popupStatePersistTimer);
+      popupStatePersistTimer = null;
+    }
     if (remoteSyncInterval) {
       clearInterval(remoteSyncInterval);
       remoteSyncInterval = null;
@@ -774,7 +788,7 @@
     if (!chromeWindowId) {
       chromeWindowId = await getCurrentChromeWindowId();
     }
-    syncPinStateToBackground();
+    await syncPinStateToBackground();
   }
 
   async function cleanupAndClose() {
@@ -782,6 +796,9 @@
       alert(t('popupPlayerAlertUnpinBeforeClose'));
       return;
     }
+    popupClosing = true;
+    schedulePopupRuntimeStatePersist(true);
+    await syncPinStateToBackground();
     cleanupPlayer();
     window.close();
   }
@@ -1120,7 +1137,7 @@
     updatePinButton();
     chromeWindowId = await getCurrentChromeWindowId();
     if (isPinned) {
-      syncPinStateToBackground();
+      await syncPinStateToBackground();
     }
 
     const displaySrc = params.videoSrc || params.iframeSrc || '';
@@ -1168,10 +1185,12 @@
   }
 
   window.addEventListener('beforeunload', () => {
-    schedulePopupRuntimeStatePersist(true);
+    if (!popupClosing) {
+      schedulePopupRuntimeStatePersist(true);
+    }
     cleanupPlayer();
     if (!isPinned) {
-      syncPinStateToBackground();
+      syncPinStateToBackground().catch(() => {});
     }
   });
 
