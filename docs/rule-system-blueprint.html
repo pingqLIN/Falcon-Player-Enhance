@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Falcon-Player-Enhance — 新版規則藍圖</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%239f2d24'/%3E%3Cpath d='M18 18h28v8H18zm0 12h20v8H18zm0 12h28v8H18z' fill='%23fffaf0'/%3E%3C/svg%3E">
+<style>
+:root {
+  --paper: #f4efe5;
+  --paper-strong: #fffaf0;
+  --ink: #181512;
+  --ink-soft: #5d5348;
+  --grid: rgba(111, 86, 58, 0.18);
+  --line: rgba(37, 28, 20, 0.16);
+  --accent: #9f2d24;
+  --accent-soft: rgba(159, 45, 36, 0.12);
+  --olive: #42533b;
+  --amber: #a76912;
+  --teal: #225f64;
+  --shadow: 0 18px 40px rgba(43, 28, 13, 0.12);
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --font-display: "Baskerville", "Palatino Linotype", "Book Antiqua", serif;
+  --font-body: "Aptos", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(circle at top left, rgba(159, 45, 36, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent 16%),
+    repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 30px,
+      rgba(111, 86, 58, 0.04) 30px,
+      rgba(111, 86, 58, 0.04) 31px
+    ),
+    var(--paper);
+}
+
+a {
+  color: inherit;
+}
+
+.page {
+  width: min(1280px, calc(100% - 40px));
+  margin: 24px auto 48px;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 42px 42px 34px;
+  border: 1px solid var(--line);
+  border-radius: 34px;
+  background:
+    linear-gradient(135deg, rgba(159, 45, 36, 0.08), transparent 48%),
+    linear-gradient(0deg, rgba(255, 250, 240, 0.95), rgba(255, 250, 240, 0.95)),
+    var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border: 1px dashed rgba(159, 45, 36, 0.22);
+  border-radius: 24px;
+  pointer-events: none;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(24, 21, 18, 0.06);
+  color: var(--ink-soft);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 860px;
+  font-family: var(--font-display);
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.9fr);
+  gap: 26px;
+  margin-top: 24px;
+}
+
+.hero-copy {
+  font-size: 18px;
+  line-height: 1.75;
+  color: var(--ink-soft);
+}
+
+.hero-copy strong {
+  color: var(--ink);
+}
+
+.hero-notes {
+  display: grid;
+  gap: 12px;
+}
+
+.note {
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.note-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.note-value {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.section {
+  margin-top: 26px;
+  padding: 30px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 240, 0.8);
+  box-shadow: var(--shadow);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+
+.section-kicker {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.section h2 {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.section-summary {
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.problem-grid,
+.experiment-grid,
+.source-grid,
+.migration-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.problem-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.problem-card,
+.experiment-card,
+.source-card,
+.migration-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 100%;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.problem-card::before,
+.experiment-card::before,
+.source-card::before,
+.migration-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), rgba(159, 45, 36, 0.1));
+}
+
+.problem-card h3,
+.experiment-card h3,
+.source-card h3,
+.migration-card h3,
+.layer-card h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.problem-card p,
+.experiment-card p,
+.source-card p,
+.migration-card p,
+.layer-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.problem-tag,
+.experiment-tag,
+.source-tag,
+.migration-tag {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.experiment-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.experiment-verdict {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(24, 21, 18, 0.1);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.diagram-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.architecture {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 22px;
+}
+
+.signal-board {
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(159, 45, 36, 0.07), transparent 40%),
+    rgba(255, 255, 255, 0.65);
+}
+
+.signal-board h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.signal-list {
+  display: grid;
+  gap: 10px;
+}
+
+.signal-list div {
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(24, 21, 18, 0.05);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.layer-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.layer-card {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 170px;
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.layer-index {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.layer-number {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--paper-strong);
+  background: var(--ink);
+}
+
+.layer-kind {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.layer-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.layer-points {
+  display: grid;
+  gap: 8px;
+}
+
+.layer-points div,
+.source-list div {
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(24, 21, 18, 0.05);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.layer-edge {
+  display: grid;
+  gap: 8px;
+}
+
+.edge-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.edge-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(159, 45, 36, 0.08);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--accent);
+}
+
+.source-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.source-card.canonical::before {
+  background: linear-gradient(90deg, var(--olive), rgba(66, 83, 59, 0.08));
+}
+
+.source-card.runtime::before {
+  background: linear-gradient(90deg, var(--teal), rgba(34, 95, 100, 0.08));
+}
+
+.source-card.review::before {
+  background: linear-gradient(90deg, var(--amber), rgba(167, 105, 18, 0.08));
+}
+
+.execution {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.step {
+  padding: 16px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.step-index {
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.step h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.step p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.migration-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.migration-card::before {
+  background: linear-gradient(90deg, var(--ink), rgba(24, 21, 18, 0.08));
+}
+
+.footer {
+  margin-top: 26px;
+  padding: 24px 30px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(24, 21, 18, 0.92);
+  color: rgba(255, 250, 240, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.footer h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.footer p {
+  margin: 0;
+  max-width: 920px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.footer strong {
+  color: #ffffff;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+@media (max-width: 1120px) {
+  .problem-grid,
+  .source-grid,
+  .migration-grid,
+  .execution {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .architecture {
+    grid-template-columns: 1fr;
+  }
+
+  .layer-card {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .layer-edge {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    width: min(100% - 24px, 100%);
+  }
+
+  .hero,
+  .section,
+  .footer {
+    padding: 22px;
+  }
+
+  .hero-grid,
+  .problem-grid,
+  .experiment-grid,
+  .source-grid,
+  .migration-grid,
+  .execution {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    display: block;
+  }
+
+  .section-summary {
+    margin-top: 14px;
+  }
+
+  .layer-card {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Falcon Rule System vNext</div>
+      <h1>不是再加更多規則，而是把規則真相來源重新統一。</h1>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          這份圖面把現況的 <strong>DNR / MAIN world / DOM heuristic / CSS hide / AI advisory / user custom rules</strong> 重新思考了一次。
+          結論很直接：<strong>最佳方案不是擴張更多 blocklist，而是建立單一規則供應鏈，清楚分隔 baseline、runtime、policy overlay、review queue。</strong>
+        </div>
+        <div class="hero-notes">
+          <div class="note">
+            <div class="note-label">交付方式</div>
+            <div class="note-value">HTML 編排圖面，方便後續繼續迭代、掛註解、加上實際模組對照。</div>
+          </div>
+          <div class="note">
+            <div class="note-label">設計立場</div>
+            <div class="note-value">維持播放器保護專家定位，通用 ad blocking 仍委外給 uBlock Origin Lite。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">Problem Heatmap</div>
+          <h2>現況最大的不是規則不夠，而是規則分裂。</h2>
+        </div>
+        <div class="section-summary">
+          同一類風險同時存在於 JSON、background constants、content heuristics、AI seeds 與 storage custom rules，
+          導致補丁很快，但長期 drift、重複處理與回溯成本持續累積。
+        </div>
+      </div>
+      <div class="problem-grid">
+        <article class="problem-card">
+          <div class="problem-tag">Truth Split</div>
+          <h3>哪裡才算正式規則？</h3>
+          <p><span class="mono">filter-rules.json</span>、<span class="mono">background.js</span>、<span class="mono">inject-blocker.js</span>、<span class="mono">cosmetic-filter.js</span> 都持有自己的 truth fragment。</p>
+        </article>
+        <article class="problem-card">
+          <div class="problem-tag">Duplicate Action</div>
+          <h3>同一元素可能被重複處理</h3>
+          <p>同一個 overlay 可能先被 CSS 隱藏，再被 DOM remover 處理，最後又被 MAIN world guard 攔一次。</p>
+        </article>
+        <article class="problem-card">
+          <div class="problem-tag">AI Boundary</div>
+          <h3>AI seeds 與正式規則容易混淆</h3>
+          <p><span class="mono">ad-list.json</span> 結構很像正式規則，但目前實際角色更接近 vocabulary 與 knowledge seeds。</p>
+        </article>
+        <article class="problem-card">
+          <div class="problem-tag">Rollback Cost</div>
+          <h3>出了誤判，難以快速回溯</h3>
+          <p>因為 runtime behavior 不只一條鏈，誤刪與誤攔截往往無法快速回答是誰造成的。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">Thought Experiments</div>
+          <h2>四個腦內思想實驗後，最佳解不是「更多」，而是「更乾淨」。</h2>
+        </div>
+        <div class="section-summary">
+          這裡不是只評估效益，也把容易在實作時被忽略的副作用一起拉進來：性能、誤判、回退、資料污染與維護成本。
+        </div>
+      </div>
+      <div class="experiment-grid">
+        <article class="experiment-card">
+          <div class="experiment-tag">Experiment 1</div>
+          <h3>保留現況多來源模型</h3>
+          <p>補丁速度最快，但規則真相來源會繼續裂開。每多一個快速 patch，後面就多一份 drift 與回歸風險。</p>
+          <div class="experiment-verdict">結論：適合救火，不適合當長期系統。</div>
+        </article>
+        <article class="experiment-card">
+          <div class="experiment-tag">Experiment 2</div>
+          <h3>把 <span class="mono">ad-list.json</span> 直接升格為唯一 blocklist</h3>
+          <p>看起來統一，但實際上把 <span class="mono">domain / selector / token / pattern</span> 混成同一條執行管線，誤判模型會失真。</p>
+          <div class="experiment-verdict">結論：可作 vocabulary，不該直接作唯一執行規則集。</div>
+        </article>
+        <article class="experiment-card">
+          <div class="experiment-tag">Experiment 3</div>
+          <h3>允許 AI 自動 durable mutation</h3>
+          <p>學習速度確實最快，但 selector 污染與 false positive 也會一起加速，rollback 成本會遠高於現在的 repo 邊界。</p>
+          <div class="experiment-verdict">結論：在目前架構能力下不值得啟用。</div>
+        </article>
+        <article class="experiment-card">
+          <div class="experiment-tag">Experiment 4</div>
+          <h3>把 enhanced chain 全域下放到所有站</h3>
+          <p>陌生站首訪保護更早，但 document_start 注入、MAIN world 相容性與誤攔截風險也會同步上升。</p>
+          <div class="experiment-verdict">結論：應改成風險觸發升級，不應全域最強注入。</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">New Architecture</div>
+          <h2>新版規則體系：四層模型，單一規則供應鏈。</h2>
+        </div>
+        <div class="section-summary">
+          正式規則、執行期防護、AI 覆蓋與待審核規則必須拆開，才能同時保住播放器保護能力與長期可維護性。
+        </div>
+      </div>
+      <div class="diagram-shell">
+        <div class="diagram-caption">
+          左側是新的 canonical input board，右側是四層規則鏈。每一層只做一件事：<strong>baseline 定義正式底座，runtime guards 負責可逆防禦，policy overlay 負責可逆參數調整，review queue 接住可學習但尚未正式採用的規則。</strong>
+        </div>
+        <div class="architecture">
+          <aside class="signal-board">
+            <h3>Canonical Input Board</h3>
+            <div class="signal-list">
+              <div><strong>Baseline data</strong><br>DNR request rules, high-confidence selectors, site behavior profiles</div>
+              <div><strong>Runtime telemetry</strong><br>popup, redirect, overlay_removed, suspicious_dom_churn</div>
+              <div><strong>Policy overlay</strong><br>blocking level, popupStrictMode, guardExternalNavigation, extraBlockedDomains</div>
+              <div><strong>Review inputs</strong><br>hiddenElements, AI candidates, teach mode output</div>
+            </div>
+          </aside>
+          <div class="layer-grid">
+            <article class="layer-card">
+              <div class="layer-index">
+                <div class="layer-number">1</div>
+                <div class="layer-kind">Baseline Rules</div>
+              </div>
+              <div class="layer-meta">
+                <h3>正式底座，只放高信心、低誤判規則</h3>
+                <div class="layer-points">
+                  <div>承接 DNR request/domain rules、穩定 selector hide、站點 profile。</div>
+                  <div>必須可 build、可測試、可追溯來源。</div>
+                </div>
+              </div>
+              <div class="layer-edge">
+                <div class="edge-label">禁止</div>
+                <div class="edge-box">不直接吸收 AI candidate 與 user custom rules</div>
+              </div>
+            </article>
+            <article class="layer-card">
+              <div class="layer-index">
+                <div class="layer-number">2</div>
+                <div class="layer-kind">Runtime Guards</div>
+              </div>
+              <div class="layer-meta">
+                <h3>只做執行期防禦，不再維護第二份長期 truth</h3>
+                <div class="layer-points">
+                  <div>處理 popup interception、overlay cleanup、fake video、player-adjacent traps。</div>
+                  <div>只讀 baseline 與 policy overlay，不自行擴張正式規則。</div>
+                </div>
+              </div>
+              <div class="layer-edge">
+                <div class="edge-label">典型模組</div>
+                <div class="edge-box">inject-blocker / merged overlay-remover chain</div>
+              </div>
+            </article>
+            <article class="layer-card">
+              <div class="layer-index">
+                <div class="layer-number">3</div>
+                <div class="layer-kind">Policy Overlay</div>
+              </div>
+              <div class="layer-meta">
+                <h3>AI 與 blocking level 只能覆蓋參數，不能寫正式規則</h3>
+                <div class="layer-points">
+                  <div>允許 reversible actions：<span class="mono">popupStrictMode</span>、<span class="mono">guardExternalNavigation</span>、<span class="mono">overlayScanMs</span>、<span class="mono">extraBlockedDomains</span>。</div>
+                  <div>仍維持 policy gate 與 host-scoped advisory。</div>
+                </div>
+              </div>
+              <div class="layer-edge">
+                <div class="edge-label">邊界</div>
+                <div class="edge-box">不做 durable mutation</div>
+              </div>
+            </article>
+            <article class="layer-card">
+              <div class="layer-index">
+                <div class="layer-number">4</div>
+                <div class="layer-kind">Review Queue</div>
+              </div>
+              <div class="layer-meta">
+                <h3>把可學習資料和正式底座拆開</h3>
+                <div class="layer-points">
+                  <div>接住 <span class="mono">hiddenElements</span>、generated candidates、teach mode 樣本。</div>
+                  <div>經 review、驗證、回滾流程後，才允許升級為 baseline。</div>
+                </div>
+              </div>
+              <div class="layer-edge">
+                <div class="edge-label">保護作用</div>
+                <div class="edge-box">避免 false positive 直接污染正式規則</div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">Canonical Sources</div>
+          <h2>規則來源重新收斂成三個正式入口。</h2>
+        </div>
+        <div class="section-summary">
+          目的不是把一切塞到單一 JSON，而是建立三種清楚的 source of truth：正式底座、執行期配置、待審核資料。
+        </div>
+      </div>
+      <div class="source-grid">
+        <article class="source-card canonical">
+          <div class="source-tag">Canonical Baseline</div>
+          <h3><span class="mono">rules/baseline-rules.*</span></h3>
+          <p>承接高信心 request/domain rules、穩定 selectors 與可版本化的正式底座。</p>
+          <div class="source-list">
+            <div>取代現行 <span class="mono">filter-rules.json</span> 的單一格式限制</div>
+            <div>吸收高信心 domain/token，不再散落在多處常數</div>
+            <div>可輸出 DNR、runtime config、selector bundles</div>
+          </div>
+        </article>
+        <article class="source-card runtime">
+          <div class="source-tag">Behavior Profile</div>
+          <h3><span class="mono">rules/site-profiles.*</span></h3>
+          <p>由 domain registry 升級成最小行為 schema，描述 enhanced chain、相容模式與站點行為。</p>
+          <div class="source-list">
+            <div>站點是否啟用 enhanced chain</div>
+            <div>哪些 guard 需放寬或加嚴</div>
+            <div>哪些 iframe / player family 被視為安全媒體來源</div>
+          </div>
+        </article>
+        <article class="source-card review">
+          <div class="source-tag">Review State</div>
+          <h3><span class="mono">storage review state</span></h3>
+          <p>接住可學習、可自訂、尚未正式採用的規則，預設不是 baseline。</p>
+          <div class="source-list">
+            <div><span class="mono">hiddenElements</span> 與 reviewed selectors 分層</div>
+            <div>AI generated candidates 與 teach mode output</div>
+            <div>accepted / rejected / rollback log</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">Execution Order</div>
+          <h2>新版仍保留快慢分層，但權責更清楚。</h2>
+        </div>
+        <div class="section-summary">
+          執行順序不需要被推翻；真正需要改的是每個階段到底該讀什麼規則、能不能自己擴張規則。
+        </div>
+      </div>
+      <div class="execution">
+        <article class="step">
+          <div class="step-index">01</div>
+          <h3>Background init</h3>
+          <p>載入 baseline、site profiles、blocking level、AI state，決定當前 tab 是否升級到 enhanced chain。</p>
+        </article>
+        <article class="step">
+          <div class="step-index">02</div>
+          <h3>DNR first</h3>
+          <p>高信心 request/domain rules 先擋掉最不需要進頁面的流量與已知 trap host。</p>
+        </article>
+        <article class="step">
+          <div class="step-index">03</div>
+          <h3>document_start guards</h3>
+          <p>MAIN world 與 early isolated guards 只處理必須搶先攔截的 popup、redirect、anti-adblock 與已知 safe profile。</p>
+        </article>
+        <article class="step">
+          <div class="step-index">04</div>
+          <h3>document_idle cleanup</h3>
+          <p>player detector、merged overlay chain、fake video 與 enhancer 接手做播放器周邊的精細清理。</p>
+        </article>
+        <article class="step">
+          <div class="step-index">05</div>
+          <h3>Policy overlay</h3>
+          <p>AI 與 blocking level 只能調 runtime knobs，不能把學到的規則直接升格成正式底座。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-kicker">Migration Route</div>
+          <h2>不是大爆炸重寫，而是五段式遷移。</h2>
+        </div>
+        <div class="section-summary">
+          每一步都應該能獨立驗證與回退，避免在 MAIN world 與 DOM heuristic 上一次引入太多未知數。
+        </div>
+      </div>
+      <div class="migration-grid">
+        <article class="migration-card">
+          <div class="migration-tag">Phase 1</div>
+          <h3>定義 schema</h3>
+          <p>先建 baseline 與 site profile schema，完成 source-of-truth mapping，不先碰核心行為。</p>
+        </article>
+        <article class="migration-card">
+          <div class="migration-tag">Phase 2</div>
+          <h3>合併 popup / overlay chain</h3>
+          <p>把 <span class="mono">anti-popup</span> 與 <span class="mono">overlay-remover</span> 收斂為同一條 DOM heuristic 管線。</p>
+        </article>
+        <article class="migration-card">
+          <div class="migration-tag">Phase 3</div>
+          <h3>抽離 MAIN world truth</h3>
+          <p>讓 <span class="mono">inject-blocker</span> 不再長期持有第二份 domain/block token truth。</p>
+        </article>
+        <article class="migration-card">
+          <div class="migration-tag">Phase 4</div>
+          <h3>限縮 cosmetic filter</h3>
+          <p>只消費 baseline selectors 與 reviewed custom selectors，不再兼任動態 heuristic。</p>
+        </article>
+        <article class="migration-card">
+          <div class="migration-tag">Phase 5</div>
+          <h3>建立 review pipeline</h3>
+          <p>讓 AI candidates 與 user custom rules 都經 review/rollback 流程，再決定是否升級為 baseline。</p>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <h2>最終判斷</h2>
+      <p>
+        <strong>最佳方式不是新增一套規則，而是建立單一規則供應鏈。</strong>
+        只有把 <span class="mono">baseline</span>、<span class="mono">runtime guards</span>、
+        <span class="mono">policy overlay</span>、<span class="mono">review queue</span> 的邊界切開，
+        才能同時保住播放器保護能力、AI 可逆強化能力、使用者自訂彈性與長期維護性。
+      </p>
+    </footer>
+  </main>
+</body>
+</html>

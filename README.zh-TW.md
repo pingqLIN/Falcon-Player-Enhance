@@ -28,7 +28,7 @@
 
 ## 概述
 
-**Falcon-Player-Enhance** 是一款專注於**影片播放器保護**的 Chrome 擴充功能。有別於通用型廣告攔截器，它專注於確保您的影片播放器乾淨、正常運作且功能完備。
+**Falcon-Player-Enhance** 是一款專注於**影片播放器保護**的 Chrome 擴充功能。它的設計目標是與 uBlock Origin Lite 這類通用型 blocker 互補，同時在未安裝 blocker 時仍提供最小可用的基礎防護。
 
 | 能力 | 說明 |
 |------|------|
@@ -38,9 +38,9 @@
 | ⌨️ **鍵盤快捷鍵** | 14+ 組快捷鍵控制播放、音量、速度、截圖 |
 | 🖥️ **無干擾播放器** | 獨立視窗播放，支援畫面調整（亮度/對比/色調/色溫） |
 | 🤖 **AI 輔助分析** | 串接 OpenAI / Gemini / LM Studio，即時風險評估 |
-| 🌐 **網路層攔截** | 透過 declarativeNetRequest 封鎖 200+ 廣告網域 |
+| 🌐 **最小基礎防護** | 以高信心 DNR 與網域守門規則處理惡意導流與播放器周邊陷阱 |
 
-> 💡 **建議：** 搭配 [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) 使用，獲得最完整的廣告攔截效果。
+> 💡 **建議：** 搭配 [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) 使用，讓 uBOL 處理廣域廣告/追蹤阻擋，Falcon 專注於播放器保護、彈窗修復、覆蓋層清理與 hostile player site 修復。
 
 ---
 
@@ -76,12 +76,12 @@
 
 | 層級 | 功能 | 說明 |
 |------|------|------|
-| **網路層** | DNR 規則 | 200+ 廣告網域在網路層即被攔截 |
+| **網路層** | 基線 DNR 守門 | 以高信心規則處理惡意導流、trap popup 與播放器周邊高風險域 |
 | **DOM 層** | 覆蓋層移除 | 移除覆蓋在播放器上的廣告與點擊劫持層 |
 | **DOM 層** | 假影片移除 | 辨識並移除誘騙用的假影片元素 |
-| **腳本層** | 反偵測繞過 | 在 MAIN world 注入，繞過反廣告攔截偵測 |
+| **腳本層** | 反偵測繞過 | 在 MAIN world 注入，做播放器場景導向的相容性修復 |
 | **腳本層** | 注入攔截器 | 即時阻擋惡意腳本注入 |
-| **CSS 層** | 外觀過濾 | 透過 CSS `display: none` 隱藏廣告元素 |
+| **CSS 層** | 外觀過濾 | 以播放器周邊為主的保守清理，而非全頁廣告覆蓋競賽 |
 | **視窗層** | 反彈窗 | 攔截未授權彈窗，同時保留正常功能 |
 
 ### 🎬 播放器增強
@@ -113,7 +113,7 @@
 |------|------|
 | **元素選取器** | 點擊任何頁面元素建立自訂封鎖規則 |
 | **AI 教學模式** | 點擊元素讓 AI 學習判斷處理方式 |
-| **四級封鎖** | OFF → BASIC → STANDARD → HARDENED |
+| **保護模式** | Companion-first 模式與 basic standalone fallback |
 | **儀表板** | 完整設定面板，4 個分頁：總覽 / 站點 / AI / 進階 |
 | **白名單 / 黑名單** | 依站點自訂保護策略 |
 
@@ -285,6 +285,9 @@ npm run docs:screenshots
 | 文件 | 說明 |
 |------|------|
 | [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | 完整功能指南（含截圖，繁體中文） |
+| [PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md](docs/PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md) | 與 uBOL 互補的產品邊界與模式策略 |
+| [ROADMAP_UBOL_COMPANION.zh-TW.md](docs/ROADMAP_UBOL_COMPANION.zh-TW.md) | 依保留 / 最小防護 / 避免重疊 / AI 擴張拆分的路線圖 |
+| [DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md](docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md) | 現行開發主依據與 YOLO mode 執行優先序 |
 | [INSTALL.md](INSTALL.md) | 安裝與設定說明 |
 | [AI_INTEGRATED_VERSION.zh-TW.md](docs/AI_INTEGRATED_VERSION.zh-TW.md) | AI Edition Fork 開發文件 |
 

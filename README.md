@@ -28,7 +28,7 @@
 
 ## Overview
 
-**Falcon-Player-Enhance** is a Chrome extension purpose-built for **video player protection** on media websites. Unlike general-purpose ad blockers, it focuses on keeping your video player clean, functional, and enhanced.
+**Falcon-Player-Enhance** is a Chrome extension purpose-built for **video player protection** on media websites. It is designed to complement general-purpose blockers such as uBlock Origin Lite, while still providing a basic standalone safety net when no blocker is installed.
 
 | Capability | Description |
 |------------|-------------|
@@ -38,9 +38,9 @@
 | ⌨️ **Keyboard Shortcuts** | 14+ hotkeys for playback, volume, speed, and screenshot |
 | 🖥️ **Distraction-Free Player** | Independent popup window with visual adjustments (brightness/contrast/hue/temperature) |
 | 🤖 **AI-Assisted Analysis** | Integrates OpenAI / Gemini / LM Studio for real-time risk assessment |
-| 🌐 **Network-Level Blocking** | 200+ ad domains blocked via declarativeNetRequest rules |
+| 🌐 **Basic Standalone Protection** | High-confidence DNR and domain guardrails for malicious redirects and player-adjacent traps |
 
-> 💡 **Recommended:** Use alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) for comprehensive ad blocking.
+> 💡 **Recommended:** Use alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) for broad ad/tracker blocking. Falcon focuses on player protection, popup recovery, overlay cleanup, and hostile-player-site repair.
 
 ---
 
@@ -76,12 +76,12 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 
 | Layer | Feature | Description |
 |-------|---------|-------------|
-| **Network** | DNR Rules | 200+ ad domains blocked at the network level |
+| **Network** | Baseline DNR Guardrails | High-confidence protection for malicious redirects, popup lures, and player-adjacent trap domains |
 | **DOM** | Overlay Removal | Removes ads and click-hijack layers covering the player |
 | **DOM** | Fake Video Removal | Identifies and removes decoy video elements |
-| **Script** | Anti-Adblock Bypass | Circumvents anti-adblock detection (MAIN world injection) |
+| **Script** | Anti-Adblock Bypass | Site-specific player recovery in hostile environments (MAIN world injection) |
 | **Script** | Inject Blocker | Blocks malicious script injections in real time |
-| **CSS** | Cosmetic Filter | Hides ad elements via CSS `display: none` rules |
+| **CSS** | Cosmetic Filter | Applies conservative player-adjacent cleanup instead of broad page-wide blocking |
 | **Window** | Anti-Popup | Blocks unauthorized popups while allowing legitimate ones |
 
 ### 🎬 Player Enhancement
@@ -113,7 +113,7 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 |---------|-------------|
 | **Element Picker** | Click any page element to create a custom blocking rule |
 | **AI Teach Mode** | Click elements to train the AI — it decides how to handle them |
-| **4-Level Blocking** | OFF → BASIC → STANDARD → HARDENED protection levels |
+| **Protection Modes** | Companion-first protection levels with a basic standalone fallback |
 | **Dashboard** | Full settings panel with 4 tabs: Overview / Sites / AI / Advanced |
 | **Whitelist / Blacklist** | Per-site protection policies |
 
@@ -285,6 +285,9 @@ npm run docs:screenshots
 | Document | Description |
 |----------|-------------|
 | [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | Complete feature guide with screenshots (繁體中文) |
+| [PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md](docs/PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md) | Product boundary and mode strategy for companion use with uBOL |
+| [ROADMAP_UBOL_COMPANION.zh-TW.md](docs/ROADMAP_UBOL_COMPANION.zh-TW.md) | Roadmap grouped by keep / baseline / de-scope / AI expansion |
+| [DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md](docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md) | Current execution baseline and YOLO-mode development priorities |
 | [INSTALL.md](INSTALL.md) | Installation and setup instructions |
 | [AI_INTEGRATED_VERSION.zh-TW.md](docs/AI_INTEGRATED_VERSION.zh-TW.md) | AI Edition fork documentation |
 
