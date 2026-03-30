@@ -623,6 +623,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function filterEligiblePlayers(players) {
+        if (!Array.isArray(players)) return [];
+        return players.filter((player) => {
+            if (!player) return false;
+            if (player.eligible !== true) return false;
+            if (player.isSuspectedAd === true) return false;
+            return true;
+        });
+    }
+
     async function loadPlayerInfo() {
         if (!currentTabId) return;
 
@@ -644,8 +654,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    const count = response.count || 0;
-                    currentPlayers = response.players || [];
+                    currentPlayers = filterEligiblePlayers(response.players || []);
+                    const count = currentPlayers.length;
                     renderPlayerChips(currentPlayers);
                     const locked = updateTargetStatus();
 
@@ -711,11 +721,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderPlayerChips(players) {
+        const safePlayers = filterEligiblePlayers(players || []);
         playerMetaById = new Map();
         if (!playerChipList) return;
         playerChipList.textContent = '';
 
-        if (!players || players.length === 0) {
+        if (!safePlayers || safePlayers.length === 0) {
             selectedPlayerId = null;
             const empty = document.createElement('div');
             empty.className = 'player-empty-state';
@@ -737,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        players.forEach((player, index) => {
+        safePlayers.forEach((player, index) => {
             playerMetaById.set(generatePlayerId(player, index), player);
         });
 

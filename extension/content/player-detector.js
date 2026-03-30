@@ -184,6 +184,11 @@
     const detectedPlayers = new Map(); // element -> { type, platform, quality, enhanced }
     let playerCount = 0;
     let boyfriendTvInlinePlayerData = undefined;
+    const MIN_VIDEO_WIDTH = 120;
+    const MIN_VIDEO_HEIGHT = 80;
+    const MIN_GENERIC_IFRAME_WIDTH = 320;
+    const MIN_GENERIC_IFRAME_HEIGHT = 180;
+    const MIN_GENERIC_IFRAME_AREA = 70000;
 
     function parseQualityLabel(label) {
         const normalized = String(label || '').trim().toLowerCase();
@@ -280,6 +285,224 @@
         }
 
         return width <= 340 && height <= 300 && /zoneid=|banner|advert|bftv-ntv/.test(signature);
+    }
+
+    function buildElementSignature(element, source = '') {
+        if (!element) return '';
+        return [
+            element.className || '',
+            element.id || '',
+            element.getAttribute?.('aria-label') || '',
+            element.getAttribute?.('title') || '',
+            element.getAttribute?.('data-testid') || '',
+            source || ''
+        ].join(' ').toLowerCase();
+    }
+
+    function hasPreviewIndicators(signature) {
+        return /preview|thumbnail|hover-preview|hoverpreview|placeholder|cover|teaser/.test(signature);
+    }
+
+    function hasAdIndicators(signature, element = null) {
+        if (/(^|[\W_])(ad|ads|advert|banner|sponsor|promo|vast|preroll|midroll|instream|zoneid)([\W_]|$)/.test(signature)) {
+            return true;
+        }
+        if (/exoclick|juicyads|trafficjunky|doubleclick|googlesyndication|adservice|adsystem|magsrv|popads/i.test(signature)) {
+            return true;
+        }
+        if (!element?.closest) return false;
+        return Boolean(element.closest('[data-ad], [data-ads], [class*="sponsor"], [class*="banner"], [id*="sponsor"], [id*="banner"], [class*="ad-"], [id*="ad-"]'));
+    }
+
+    function isElementEffectivelyVisible(element) {
+        if (!element) return false;
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+            return false;
+        }
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    function normalizeMediaUrl(url) {
+        const normalized = String(url || '').trim();
+        if (!normalized) return '';
+        if (/^(about:blank|data:|javascript:|blob:|mediastream:)/i.test(normalized)) {
+            return '';
+        }
+        return normalized;
+    }
+
+    function getVideoPlayableSource(video) {
+        if (!video) return '';
+        const sourceCandidates = Array.from(video.querySelectorAll?.('source[src]') || [])
+            .map((source) => source.src || source.getAttribute('src') || '');
+        for (const candidate of [
+            video.currentSrc || '',
+            video.src || '',
+            ...sourceCandidates,
+            video.getAttribute?.('src') || '',
+            video.dataset?.src || ''
+        ]) {
+            const normalized = normalizeMediaUrl(candidate);
+            if (normalized) return normalized;
+        }
+        return '';
+    }
+
+    function evaluateVideoEligibility(video) {
+        const rect = video.getBoundingClientRect();
+        const style = window.getComputedStyle(video);
+        const signature = buildElementSignature(video, [
+            video.currentSrc || '',
+            video.src || '',
+            video.poster || ''
+        ].join(' '));
+        const isHidden = style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0;
+        if (isHidden || rect.width <= 0 || rect.height <= 0) {
+            return { eligible: false, reason: 'hidden', isSuspectedAd: false, signalScore: -1000 };
+        }
+
+        if (rect.width < MIN_VIDEO_WIDTH || rect.height < MIN_VIDEO_HEIGHT) {
+            return { eligible: false, reason: 'tiny', isSuspectedAd: false, signalScore: -800 };
+        }
+
+        if (hasPreviewIndicators(signature)) {
+            return { eligible: false, reason: 'preview', isSuspectedAd: false, signalScore: -1200 };
+        }
+
+        if (hasAdIndicators(signature, video)) {
+            return { eligible: false, reason: 'ad-indicator', isSuspectedAd: true, signalScore: -5000 };
+        }
+
+        const duration = Number(video.duration || 0);
+        const autoplayTrap = video.autoplay && video.muted && !video.controls &&
+            (video.loop || (duration > 0 && duration < 2) || rect.width < 360 || rect.height < 240);
+        if (autoplayTrap) {
+            return { eligible: false, reason: 'trap-profile', isSuspectedAd: true, signalScore: -4500 };
+        }
+
+        const playableSource = getVideoPlayableSource(video);
+        const area = rect.width * rect.height;
+        if (!playableSource && video.readyState < 1 && video.paused && !video.controls) {
+            return { eligible: false, reason: 'weak-signal', isSuspectedAd: false, signalScore: -1400 };
+        }
+        if (!video.controls && video.paused && video.muted && duration <= 0 && area < 220000) {
+            return { eligible: false, reason: 'weak-signal-muted', isSuspectedAd: false, signalScore: -1600 };
+        }
+        if (!video.controls && duration > 0 && duration < 2) {
+            return { eligible: false, reason: 'short-loop', isSuspectedAd: true, signalScore: -3000 };
+        }
+
+        const signalScore = Math.round(
+            area * 0.001 +
+            (video.controls ? 300 : 0) +
+            (!video.muted ? 500 : 0) +
+            (!video.paused ? 1200 : 0) +
+            (playableSource ? 400 : 0)
+        );
+
+        return { eligible: true, reason: 'eligible', isSuspectedAd: false, signalScore };
+    }
+
+    function evaluateIframeEligibility(iframe, effectiveSrc, platform) {
+        const rect = iframe.getBoundingClientRect();
+        if (!isElementEffectivelyVisible(iframe)) {
+            return { eligible: false, reason: 'hidden', isSuspectedAd: false, signalScore: -1000 };
+        }
+
+        const normalizedSrc = normalizeMediaUrl(effectiveSrc);
+        if (!normalizedSrc) {
+            return { eligible: false, reason: 'missing-src', isSuspectedAd: false, signalScore: -1200 };
+        }
+
+        const signature = buildElementSignature(iframe, normalizedSrc);
+        if (hasPreviewIndicators(signature)) {
+            return { eligible: false, reason: 'preview', isSuspectedAd: false, signalScore: -1200 };
+        }
+
+        if (isLikelyAdIframe(iframe, normalizedSrc) || hasAdIndicators(signature, iframe)) {
+            return { eligible: false, reason: 'ad-indicator', isSuspectedAd: true, signalScore: -6000 };
+        }
+
+        const hasIframeIntent = /player|embed|video|watch|stream|media|play/i.test(normalizedSrc);
+        const hasClassIntent = /player|video/i.test(`${iframe.className || ''} ${iframe.id || ''}`);
+        const allow = String(iframe.getAttribute('allow') || '').toLowerCase();
+        const hasFeatureIntent = /autoplay|fullscreen|picture-in-picture/.test(allow);
+        const hasStrongSignal = platform !== 'generic' || hasIframeIntent || hasClassIntent || hasFeatureIntent;
+        if (!hasStrongSignal) {
+            return { eligible: false, reason: 'weak-signal', isSuspectedAd: false, signalScore: -1500 };
+        }
+
+        const area = rect.width * rect.height;
+        if (platform === 'generic') {
+            const tooSmall = rect.width < MIN_GENERIC_IFRAME_WIDTH || rect.height < MIN_GENERIC_IFRAME_HEIGHT || area < MIN_GENERIC_IFRAME_AREA;
+            if (tooSmall) {
+                return { eligible: false, reason: 'generic-too-small', isSuspectedAd: false, signalScore: -2000 };
+            }
+        }
+
+        if (rect.width < MIN_VIDEO_WIDTH || rect.height < MIN_VIDEO_HEIGHT) {
+            return { eligible: false, reason: 'tiny', isSuspectedAd: false, signalScore: -900 };
+        }
+
+        const signalScore = Math.round(
+            area * 0.001 +
+            (platform !== 'generic' ? 700 : 0) +
+            (hasIframeIntent ? 600 : 0) +
+            (hasFeatureIntent ? 180 : 0)
+        );
+
+        return { eligible: true, reason: 'eligible', isSuspectedAd: false, signalScore };
+    }
+
+    function evaluateCustomContainerEligibility(element, platform, boyfriendTvPayload) {
+        const rect = element.getBoundingClientRect();
+        if (!isElementEffectivelyVisible(element)) {
+            return { eligible: false, reason: 'hidden', isSuspectedAd: false, signalScore: -900 };
+        }
+
+        const signature = buildElementSignature(element);
+        if (hasPreviewIndicators(signature)) {
+            return { eligible: false, reason: 'preview', isSuspectedAd: false, signalScore: -1200 };
+        }
+        if (hasAdIndicators(signature, element)) {
+            return { eligible: false, reason: 'ad-indicator', isSuspectedAd: true, signalScore: -5500 };
+        }
+
+        if (boyfriendTvPayload?.iframeSrc) {
+            if (hasAdIndicators(buildElementSignature(element, boyfriendTvPayload.iframeSrc), element)) {
+                return { eligible: false, reason: 'ad-indicator', isSuspectedAd: true, signalScore: -5500 };
+            }
+            const boostedScore = Math.round(
+                rect.width * rect.height * 0.001 +
+                (boyfriendTvPayload?.quality?.height || 0) * 3 +
+                5000
+            );
+            return { eligible: true, reason: 'eligible', isSuspectedAd: false, signalScore: boostedScore };
+        }
+
+        const descendants = Array.from(element.querySelectorAll('video, iframe'))
+            .filter((child) => isElementEffectivelyVisible(child));
+        if (descendants.length === 0) {
+            return { eligible: false, reason: 'no-playable-child', isSuspectedAd: false, signalScore: -1300 };
+        }
+
+        const validDescendants = descendants.filter((child) => detectedPlayers.has(child));
+
+        if (validDescendants.length === 0) {
+            return { eligible: false, reason: 'child-rejected', isSuspectedAd: false, signalScore: -1700 };
+        }
+
+        if (platform === 'unknown' && validDescendants.length > 2) {
+            return { eligible: false, reason: 'ambiguous-container', isSuspectedAd: false, signalScore: -1800 };
+        }
+
+        const signalScore = Math.round(
+            rect.width * rect.height * 0.001 +
+            validDescendants.length * 1000
+        );
+        return { eligible: true, reason: 'eligible', isSuspectedAd: false, signalScore };
     }
 
     /**
@@ -390,23 +613,10 @@
         videoElements.forEach(video => {
             if (detectedPlayers.has(video)) return;
 
-            // Skip videos that are clearly not main content (tiny, hidden, or zero-size)
-            const rect = video.getBoundingClientRect();
-            const isVisible = rect.width > 0 && rect.height > 0;
-            const isTiny = rect.width < 120 || rect.height < 80;
-
-            // Videos with display:none or visibility:hidden or very small
-            const style = window.getComputedStyle(video);
-            const isHidden = style.display === 'none' || style.visibility === 'hidden';
-
-            // Allow off-viewport videos but skip truly hidden/tiny ones
-            if (isHidden || (isVisible && isTiny)) return;
-
-            // Score the video to help rank it later
-            const area = rect.width * rect.height;
-            const hasAudio = !video.muted;
-            const isPlaying = !video.paused;
-            const score = area * 0.001 + (hasAudio ? 500 : 0) + (isPlaying ? 300 : 0) + (video.src ? 100 : 0);
+            const eligibility = evaluateVideoEligibility(video);
+            if (!eligibility.eligible) {
+                return;
+            }
 
             const { type, platform } = identifyPlayerType(video);
             const quality = detectPlaybackQuality(video);
@@ -418,7 +628,11 @@
                 quality,
                 enhanced: false,
                 stableId,
-                score: Math.round(score),
+                score: Number(eligibility.signalScore || 0),
+                signalScore: Number(eligibility.signalScore || 0),
+                eligible: true,
+                eligibilityReason: eligibility.reason || 'eligible',
+                isSuspectedAd: eligibility.isSuspectedAd === true,
                 detectedAt: Date.now()
             });
             
@@ -460,18 +674,10 @@
             const effectiveSrc = src || lazySrc;
 
             const { type, platform } = identifyPlayerType(iframe);
-            if (isLikelyAdIframe(iframe, effectiveSrc)) return;
-
-            // 只偵測看起來像播放器的 iframe
-            const isLikelyPlayer = /player|embed|video|watch|stream|media/i.test(effectiveSrc) ||
-                /player|video/i.test(iframe.className || '') ||
-                /player|video/i.test(iframe.id || '') ||
-                (iframe.width && parseInt(iframe.width) > 300) ||
-                (iframe.height && parseInt(iframe.height) > 200);
-            if (platform === 'generic' && !isLikelyPlayer) return;
+            const eligibility = evaluateIframeEligibility(iframe, effectiveSrc, platform);
+            if (!eligibility.eligible) return;
 
             const iframeRect = iframe.getBoundingClientRect();
-            const iframeArea = iframeRect.width * iframeRect.height;
             const stableId = generateStableId(iframe);
             detectedPlayers.set(iframe, {
                 type,
@@ -479,7 +685,11 @@
                 quality: null,
                 enhanced: false,
                 stableId,
-                score: Math.round(iframeArea * 0.001 + (platform !== 'generic' ? 400 : 0)),
+                score: Number(eligibility.signalScore || Math.round(iframeRect.width * iframeRect.height * 0.001)),
+                signalScore: Number(eligibility.signalScore || 0),
+                eligible: true,
+                eligibilityReason: eligibility.reason || 'eligible',
+                isSuspectedAd: eligibility.isSuspectedAd === true,
                 detectedAt: Date.now()
             });
 
@@ -512,7 +722,6 @@
         // 添加通用模式
         allSelectors.push(
             '.video-player', '.player-container', '.video-container',
-            '[id*="player"]:not(input)', '[class*="player"]:not(input)',
             '[class*="video-wrapper"]',
             '[data-testid="videoPlayer"]',
             '[data-testid="videoComponent"]'
@@ -534,19 +743,16 @@
                         : null;
                     if (!hasVideoChild && !boyfriendTvPayload) return;
 
+                    const { type, platform } = identifyPlayerType(element);
+                    const eligibility = evaluateCustomContainerEligibility(element, platform, boyfriendTvPayload);
+                    if (!eligibility.eligible) return;
+
                     // If the direct child video/iframe is already detected as a standalone entry,
                     // still register the CONTAINER but link it — skip only if the container itself is already registered
                     // (already handled by seen.has(element) check above)
 
-                    const { type, platform } = identifyPlayerType(element);
                     const stableId = generateStableId(element);
-                    const rect = element.getBoundingClientRect();
-                    const area = rect.width * rect.height;
-                    const score = Math.round(
-                        area * 0.001 +
-                        (boyfriendTvPayload?.quality?.height || 0) * 3 +
-                        (boyfriendTvPayload?.iframeSrc ? 5000 : 0)
-                    );
+                    const score = Number(eligibility.signalScore || 0);
                     
                     detectedPlayers.set(element, {
                         type,
@@ -555,6 +761,10 @@
                         enhanced: false,
                         stableId,
                         score,
+                        signalScore: score,
+                        eligible: true,
+                        eligibilityReason: eligibility.reason || 'eligible',
+                        isSuspectedAd: eligibility.isSuspectedAd === true,
                         sourcePayload: boyfriendTvPayload ? {
                             iframeSrc: boyfriendTvPayload.iframeSrc,
                             poster: boyfriendTvPayload.poster,
@@ -610,6 +820,7 @@
             document.dispatchEvent(new CustomEvent('shieldPlayersDetected', {
                 detail: {
                     players: Array.from(detectedPlayers.keys()),
+                    eligiblePlayers: Array.from(detectedPlayers.keys()),
                     info: getPlayersInfo()
                 }
             }));
@@ -625,22 +836,6 @@
         const info = [];
         detectedPlayers.forEach((data, element) => {
             const stableId = data.stableId;
-
-            let isSuspectedAd = false;
-            if (element.tagName === 'VIDEO') {
-                const videoWidth = element.videoWidth || 0;
-                const videoHeight = element.videoHeight || 0;
-                if ((videoWidth > 0 || videoHeight > 0) && (videoWidth < 320 || videoHeight < 240)) {
-                    isSuspectedAd = true;
-                }
-                const duration = element.duration;
-                if (!Number.isNaN(duration) && duration < 2) {
-                    isSuspectedAd = true;
-                }
-            }
-            if (element.closest && element.closest('[class*="ad"], [id*="ad"], [class*="sponsor"], [data-ad]')) {
-                isSuspectedAd = true;
-            }
             info.push({
                 id: stableId,
                 index: info.length,
@@ -653,7 +848,10 @@
                 score: Number(data.score || 0),
                 isPrimaryCandidate: data.isPrimaryCandidate === true,
                 hasDirectSource: Boolean(data.sourcePayload?.iframeSrc || data.sourcePayload?.videoSrc || element.dataset?.shieldResolvedIframeSrc || element.dataset?.shieldResolvedVideoSrc),
-                isSuspectedAd
+                isSuspectedAd: data.isSuspectedAd === true,
+                eligible: data.eligible !== false,
+                eligibilityReason: data.eligibilityReason || 'eligible',
+                signalScore: Number(data.signalScore || data.score || 0)
             });
         });
         info.sort((left, right) => (Number(right.score || 0) - Number(left.score || 0)));

@@ -41,6 +41,59 @@
 
     const shouldRunAggressiveOverlayCleanup = !isCompatibilityModeSite();
 
+    function getDetectorEntries() {
+        const entries = window.__ShieldPlayerDetector?.getPlayers?.();
+        if (entries instanceof Map) return entries;
+        return null;
+    }
+
+    function buildInfoIndex(infoList) {
+        const index = new Map();
+        if (!Array.isArray(infoList)) return index;
+        infoList.forEach((entry) => {
+            const key = String(entry?.id || '').trim();
+            if (!key) return;
+            index.set(key, entry);
+        });
+        return index;
+    }
+
+    function resolvePlayerMeta(player, infoIndex = null) {
+        if (!player) return null;
+        const playerId = resolvePlayerControlId(player);
+        if (infoIndex instanceof Map && playerId && infoIndex.has(playerId)) {
+            return infoIndex.get(playerId);
+        }
+
+        const detectorEntries = getDetectorEntries();
+        if (!(detectorEntries instanceof Map)) {
+            return null;
+        }
+
+        if (detectorEntries.has(player)) {
+            return detectorEntries.get(player);
+        }
+
+        if (!playerId) return null;
+        for (const [, meta] of detectorEntries.entries()) {
+            if (String(meta?.stableId || '') === playerId) {
+                return meta;
+            }
+        }
+        return null;
+    }
+
+    function isEligiblePlayer(player, infoIndex = null) {
+        const meta = resolvePlayerMeta(player, infoIndex);
+        if (!meta) {
+            if (player?.dataset?.shieldId) return false;
+            return true;
+        }
+        if (meta.eligible === false) return false;
+        if (meta.isSuspectedAd === true) return false;
+        return true;
+    }
+
     /**
      * 為播放器添加視覺標示（精簡版 - 無視覺干擾）
      */
@@ -122,6 +175,10 @@
      */
     function addPopupButton(player) {
         if (!IS_TOP_FRAME) return;
+        if (!isEligiblePlayer(player)) {
+            player.dataset.popupButtonAttached = 'skipped';
+            return;
+        }
         if (player.dataset.popupButtonAttached === 'true') return;
         if (shouldSkipPopupButton(player)) {
             player.dataset.popupButtonAttached = 'skipped';
@@ -1460,8 +1517,12 @@
     /**
      * 處理所有偵測到的播放器
      */
-    function processPlayers(players) {
+    function processPlayers(players, infoList = null) {
+        const infoIndex = buildInfoIndex(infoList);
         players.forEach(player => {
+            if (!isEligiblePlayer(player, infoIndex)) {
+                return;
+            }
             enhancePlayer(player);
             if (cleanupEnabled && shouldRunAggressiveOverlayCleanup) {
                 removeOverlays(player);
@@ -1569,9 +1630,10 @@
 
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {
-            const players = event.detail.players;
+            const players = event.detail.eligiblePlayers || event.detail.players || [];
+            const info = event.detail.info || [];
             console.log(`📡 收到播放器偵測事件: ${players.length} 個播放器`);
-            processPlayers(players);
+            processPlayers(players, info);
         });
 
         // 處理 iframes (最小干預)

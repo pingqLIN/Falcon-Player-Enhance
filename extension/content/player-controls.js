@@ -69,17 +69,33 @@
     let abLoopActive = false;
     let abLoopVideo = null;
 
+    function isManagedVideo(video) {
+        if (!video || !document.contains(video)) return false;
+        if (video.dataset.shieldFakeRemoved) return false;
+        if (video.dataset.shieldId) return true;
+        return Boolean(video.closest('.shield-detected-player, .shield-detected-container, [data-shield-id]'));
+    }
+
+    function getManagedVideos() {
+        const allVideos = Array.from(document.querySelectorAll('video')).filter((video) => !video.dataset.shieldFakeRemoved);
+        const shieldVideos = allVideos.filter((video) => isManagedVideo(video));
+        if (shieldVideos.length > 0) {
+            return shieldVideos;
+        }
+        return allVideos;
+    }
+
     /**
      * 取得當前活躍的影片元素
      */
     function getActiveVideo() {
         // 優先使用已設定的活躍影片
-        if (activeVideo && document.contains(activeVideo)) {
+        if (activeVideo && document.contains(activeVideo) && !activeVideo.dataset.shieldFakeRemoved) {
             return activeVideo;
         }
         
         // 尋找正在播放的影片
-        const videos = document.querySelectorAll('video');
+        const videos = getManagedVideos();
         for (const video of videos) {
             if (!video.paused) {
                 activeVideo = video;
@@ -108,7 +124,7 @@
     function enforceSingleActiveVideo(currentVideo) {
         if (!currentVideo || !document.contains(currentVideo)) return;
 
-        document.querySelectorAll('video').forEach((video) => {
+        getManagedVideos().forEach((video) => {
             if (video === currentVideo) return;
             if (video.paused) return;
             video.pause();
@@ -340,7 +356,7 @@
                 return { hasExplicitTarget, video: null, missing: true };
             }
         } else if (typeof message?.playerIndex === 'number') {
-            const videos = document.querySelectorAll('video');
+            const videos = getManagedVideos();
             video = videos[message.playerIndex] || null;
             if (!video) {
                 return { hasExplicitTarget, video: null, missing: true };
@@ -707,7 +723,7 @@
         
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {
-            const players = event.detail.players || [];
+            const players = event.detail.eligiblePlayers || event.detail.players || [];
             players.forEach(player => {
                 const video = player.tagName === 'VIDEO' ? player : player.querySelector('video');
                 if (video) {
@@ -719,7 +735,7 @@
         
         // 處理已存在的影片
         setTimeout(() => {
-            document.querySelectorAll('video').forEach(video => {
+            getManagedVideos().forEach(video => {
                 bindExclusivePlayback(video);
                 createSpeedControlUI(video);
             });
@@ -728,7 +744,7 @@
         // 點擊影片時設為活躍
         document.addEventListener('click', (e) => {
             const video = e.target.closest('video') || e.target.closest('.shield-detected-container')?.querySelector('video');
-            if (video) {
+            if (video && isManagedVideo(video)) {
                 activeVideo = video;
             }
         }, true);
