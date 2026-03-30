@@ -384,8 +384,8 @@
 
         const playableSource = getVideoPlayableSource(video);
         const area = rect.width * rect.height;
-        if (!playableSource && video.readyState < 1 && video.paused && !video.controls) {
-            return { eligible: false, reason: 'weak-signal', isSuspectedAd: false, signalScore: -1400 };
+        if (!playableSource && video.readyState < 1 && video.paused && duration <= 0) {
+            return { eligible: false, reason: 'placeholder', isSuspectedAd: false, signalScore: -1500 };
         }
         if (!video.controls && video.paused && video.muted && duration <= 0 && area < 220000) {
             return { eligible: false, reason: 'weak-signal-muted', isSuspectedAd: false, signalScore: -1600 };
@@ -868,40 +868,90 @@
         }
     }
 
+    function isMediaMutationTarget(node) {
+        if (!node || node.nodeType !== 1) return false;
+        if (node.tagName === 'VIDEO' || node.tagName === 'IFRAME') return true;
+        if (node.matches?.('.shield-detected-container, [data-testid="videoPlayer"], [data-testid="videoComponent"]')) {
+            return true;
+        }
+        return Boolean(node.querySelector?.('video, iframe'));
+    }
+
+    function createDetectionScheduler(delay = 300) {
+        let debounceTimer = null;
+        return () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                detectAllPlayers();
+            }, delay);
+        };
+    }
+
     /**
      * 使用 MutationObserver 監聽 DOM 變化
      */
     function observeDOMChanges() {
-        let debounceTimer = null;
-        
+        const scheduleDetect = createDetectionScheduler(300);
         const observer = new MutationObserver((mutations) => {
             let shouldRedetect = false;
 
             for (const mutation of mutations) {
-                if (mutation.addedNodes.length > 0) {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                     for (const node of mutation.addedNodes) {
-                        if (node.nodeType === 1) { // Element
-                            if (node.tagName === 'VIDEO' || node.tagName === 'IFRAME' ||
-                                node.querySelector?.('video, iframe')) {
-                                shouldRedetect = true;
-                                break;
-                            }
+                        if (isMediaMutationTarget(node)) {
+                            shouldRedetect = true;
+                            break;
                         }
                     }
                 }
+
+                if (!shouldRedetect && mutation.type === 'attributes') {
+                    if (isMediaMutationTarget(mutation.target)) {
+                        shouldRedetect = true;
+                    }
+                }
+
                 if (shouldRedetect) break;
             }
 
             if (shouldRedetect) {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(detectAllPlayers, 300);
+                scheduleDetect();
             }
         });
 
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
+            attributes: true,
+            attributeFilter: [
+                'src',
+                'poster',
+                'class',
+                'style',
+                'width',
+                'height',
+                'controls',
+                'muted',
+                'autoplay',
+                'loop',
+                'hidden',
+                'data-src',
+                'data-lazy-src',
+                'data-original'
+            ]
         });
+
+        document.addEventListener('loadedmetadata', (event) => {
+            if (event.target?.tagName === 'VIDEO') {
+                scheduleDetect();
+            }
+        }, true);
+
+        document.addEventListener('load', (event) => {
+            if (event.target?.tagName === 'IFRAME') {
+                scheduleDetect();
+            }
+        }, true);
 
         console.log('👀 [Detector] MutationObserver 已啟動');
     }

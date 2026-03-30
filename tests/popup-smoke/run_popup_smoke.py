@@ -567,6 +567,15 @@ def open_test_page(context: BrowserContext, base_url: str, timeout_ms: int) -> P
     return page
 
 
+def build_popup_smoke_video_sources(base_url: str) -> list[str]:
+    root = str(base_url).rstrip("/")
+    return [
+        f"{root}/assets/falcon-smoke.webm?v=2",
+        f"{root}/assets/falcon-smoke.webm?v=3",
+        f"{root}/assets/falcon-smoke.webm?v=4",
+    ]
+
+
 def hover_and_open_first_popup(page: Page, context: BrowserContext, timeout_ms: int) -> dict[str, Any]:
     return open_popup_for_selector(page, context, "#player1 video", timeout_ms, expect_target_match=False)
 
@@ -892,6 +901,13 @@ def run_popup_player_state_restore(
             setSlider('temperature-slider', 24);
         }"""
     )
+    popup_page.wait_for_function(
+        """() => {
+            const video = document.querySelector('video');
+            return Boolean(video && Number(video.currentTime || 0) >= 12);
+        }""",
+        timeout=timeout_ms,
+    )
     time.sleep(settle_ms / 1000)
     old_popup_url = str(popup_window["tabs"][0]["url"])
     close_popup_player_window(context, int(popup_window["id"]))
@@ -988,11 +1004,7 @@ def run_multi_popup_distinct_windows(
     page.wait_for_timeout(settle_ms)
     first_payload = parse_popup_payload_from_url(str(first_window["tabs"][0]["url"]))
     second_video_src = next(
-        src for src in [
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        ]
+        src for src in build_popup_smoke_video_sources(base_url)
         if src != str(first_payload["videoSrc"])
     )
     second_window = open_popup_player_via_background(

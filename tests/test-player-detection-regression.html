@@ -41,6 +41,17 @@
             background: rgba(9, 14, 24, 0.78);
         }
 
+        .summary h2 {
+            margin: 0 0 10px;
+            font-size: 1rem;
+        }
+
+        .summary-list {
+            margin: 12px 0 0;
+            padding-left: 18px;
+            color: #d8e3ff;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -76,11 +87,45 @@
             font-size: 0.9rem;
         }
 
+        .case[data-expected="rejected"] .expect {
+            background: rgba(248, 113, 113, 0.12);
+            color: #fecaca;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            background: rgba(148, 163, 184, 0.18);
+            color: #dbeafe;
+        }
+
+        .status-chip.pass {
+            background: rgba(34, 197, 94, 0.16);
+            color: #bbf7d0;
+        }
+
+        .status-chip.fail {
+            background: rgba(248, 113, 113, 0.16);
+            color: #fecaca;
+        }
+
         .player-shell {
             position: relative;
             border-radius: 16px;
             overflow: hidden;
             background: #000;
+        }
+
+        .custom-shell {
+            padding: 12px;
+            background:
+                radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 40%),
+                linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.94));
         }
 
         video,
@@ -144,6 +189,25 @@
             height: 180px;
         }
 
+        .small-real-video {
+            width: 176px;
+            height: 100px;
+            border-radius: 10px;
+        }
+
+        .delayed-shell {
+            min-height: 220px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.8));
+        }
+
+        .delayed-shell video,
+        .delayed-shell iframe {
+            max-width: 100%;
+            border-radius: 12px;
+        }
+
         code {
             color: #fde68a;
         }
@@ -156,41 +220,47 @@
         <p>這個頁面混合了「真正播放器」與「看起來像播放器、但不應該被偵測」的元素，方便手動驗證無干擾播放器的 eligibility gating。</p>
 
         <div class="summary" id="summary">
-            等待擴充功能掃描中...
+            <h2>等待擴充功能掃描中...</h2>
+            <div id="summary-text">初始化 regression matrix。</div>
+            <ul class="summary-list" id="summary-list"></ul>
         </div>
 
         <div class="grid">
-            <section class="case">
+            <section class="case" data-case-id="real-html5" data-expected="eligible">
                 <h2>Case 1: 真正 HTML5 播放器</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
                 <p>這個應該被偵測，並可出現 `shield` 標記與無干擾播放器按鈕。</p>
                 <div class="player-shell">
-                    <video controls preload="metadata" poster="https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217">
-                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+                    <video controls preload="metadata">
+                        <source src="./assets/falcon-smoke.webm?v=regression-1" type="video/webm">
                     </video>
                 </div>
                 <div class="expect">預期：應被偵測為播放器。</div>
             </section>
 
-            <section class="case">
+            <section class="case" data-case-id="fake-container" data-expected="rejected">
                 <h2>Case 2: 假播放器容器</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
                 <p>class 名稱故意包含 <code>player</code>，但裡面沒有 video / iframe。</p>
                 <div class="fake-player video-player promo-player">CLICK TO WATCH</div>
                 <div class="expect">預期：不應被偵測，不應出現任何圖示。</div>
             </section>
 
-            <section class="case">
+            <section class="case" data-case-id="preview-thumb" data-expected="rejected">
                 <h2>Case 3: Preview 縮圖影片</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
                 <p>這是小尺寸、靜音、自動播放的預覽縮圖，不應進入候選名單。</p>
                 <div class="preview-wrap hover-preview">
                     <video class="preview-video" muted autoplay loop playsinline preload="metadata">
-                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4" type="video/mp4">
+                        <source src="./assets/falcon-smoke.webm?v=regression-preview" type="video/webm">
                     </video>
                 </div>
                 <div class="expect">預期：不應被偵測，不應被快捷鍵當主播放器。</div>
             </section>
 
-            <section class="case">
+            <section class="case" data-case-id="ad-iframe" data-expected="rejected">
                 <h2>Case 4: 廣告 iframe</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
                 <p>容器與來源都帶有 ad / banner 訊號，應被排除。</p>
                 <div class="ad-slot banner sponsor-frame" data-ad="true">
                     <iframe
@@ -201,28 +271,132 @@
                 <div class="expect">預期：不應被偵測，不應進 popup list。</div>
             </section>
 
-            <section class="case">
+            <section class="case" data-case-id="trap-video" data-expected="rejected">
                 <h2>Case 5: Trap 影片</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
                 <p>中等尺寸，但為 muted + autoplay + loop + no controls 的陷阱型態。</p>
                 <div class="player-shell">
                     <video class="trap-video" muted autoplay loop playsinline preload="metadata">
-                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" type="video/mp4">
+                        <source src="./assets/falcon-smoke.webm?v=regression-trap" type="video/webm">
                     </video>
                 </div>
                 <div class="expect">預期：不應被視為主要播放器。</div>
+            </section>
+
+            <section class="case" data-case-id="small-real-video" data-expected="eligible">
+                <h2>Case 6: 小尺寸但真實可播放影片</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>尺寸接近邊界，但有 controls 與真實來源，應保留為有效播放器。</p>
+                <div class="player-shell custom-shell">
+                    <video class="small-real-video" controls preload="metadata">
+                        <source src="./assets/falcon-smoke.webm?v=regression-small-real" type="video/webm">
+                    </video>
+                </div>
+                <div class="expect">預期：應被偵測，驗證小尺寸真影片不會被誤殺。</div>
+            </section>
+
+            <section class="case" data-case-id="delayed-video" data-expected="eligible">
+                <h2>Case 7: 延遲注入來源的播放器</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>初始只有空白 <code>video controls</code> 佔位元素，稍後才插入 source。應在來源出現後才被偵測。</p>
+                <div class="player-shell delayed-shell">
+                    <video id="delayed-player" controls preload="metadata" width="480" height="270"></video>
+                </div>
+                <div class="expect">預期：延遲注入 source 後應被偵測，驗證 attribute-driven redetect。</div>
+            </section>
+
+            <section class="case" data-case-id="lazy-iframe" data-expected="eligible">
+                <h2>Case 8: 延遲設定 src 的 generic iframe</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>這個 iframe 先不帶 src，稍後才補上含 <code>player/embed</code> 的來源，應在更新後被 detector 接住。</p>
+                <div class="player-shell delayed-shell">
+                    <iframe
+                        id="lazy-player-frame"
+                        title="lazy playable frame"
+                        width="640"
+                        height="360"
+                        allow="autoplay; fullscreen; picture-in-picture"></iframe>
+                </div>
+                <div class="expect">預期：來源更新後應被偵測為 generic playable iframe。</div>
+            </section>
+
+            <section class="case" data-case-id="custom-shell" data-expected="eligible">
+                <h2>Case 9: 自訂 shell 內含真實 media child</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>容器本身長得像 player shell，內部才有真實影片。這類 custom container 不應被新的 eligibility 規則誤拒。</p>
+                <div class="player-shell custom-shell video-player-shell">
+                    <div class="video-player chrome-shell">
+                        <video controls preload="metadata">
+                            <source src="./assets/falcon-smoke.webm?v=regression-custom-shell" type="video/webm">
+                        </video>
+                    </div>
+                </div>
+                <div class="expect">預期：應被偵測，驗證 custom container + playable child 邊界。</div>
             </section>
         </div>
     </div>
 
     <script>
+        const CASE_STATUS_LABELS = {
+            pass: "PASS",
+            fail: "FAIL",
+            pending: "等待掃描"
+        };
+
+        function activateDelayedFixtures() {
+            const delayedVideo = document.getElementById("delayed-player");
+            if (delayedVideo && !delayedVideo.querySelector("source")) {
+                const source = document.createElement("source");
+                source.src = "./assets/falcon-smoke.webm?v=regression-delayed-video";
+                source.type = "video/webm";
+                delayedVideo.appendChild(source);
+                delayedVideo.load();
+            }
+
+            const lazyFrame = document.getElementById("lazy-player-frame");
+            if (lazyFrame && !lazyFrame.getAttribute("src")) {
+                lazyFrame.src = "https://example.com/player/embed/movie-01?kind=video";
+            }
+        }
+
+        function hasCaseDetection(section) {
+            return Boolean(section.querySelector("[data-shield-id], .shield-detected-player, .shield-detected-container"));
+        }
+
+        function buildCaseReport(section) {
+            const expected = section.dataset.expected;
+            const actualEligible = hasCaseDetection(section);
+            const pass = expected === "eligible" ? actualEligible : !actualEligible;
+            return {
+                caseId: section.dataset.caseId || "",
+                title: section.querySelector("h2")?.textContent || "",
+                expected,
+                actualEligible,
+                pass
+            };
+        }
+
+        function renderCaseStatus(report) {
+            const section = document.querySelector(`[data-case-id="${report.caseId}"]`);
+            const statusNode = section?.querySelector("[data-case-status]");
+            if (!statusNode) return;
+
+            statusNode.classList.remove("pass", "fail");
+            statusNode.textContent = `${report.pass ? CASE_STATUS_LABELS.pass : CASE_STATUS_LABELS.fail} · expected=${report.expected}, actual=${report.actualEligible ? "eligible" : "rejected"}`;
+            statusNode.classList.add(report.pass ? "pass" : "fail");
+        }
+
         function collectReport() {
             const detected = Array.from(document.querySelectorAll("[data-shield-id]"));
             const popupButtons = document.querySelectorAll(".shield-popup-player-btn").length;
             const managedVideos = detected.filter((node) => node.tagName === "VIDEO" || node.querySelector("video"));
+            const caseReports = Array.from(document.querySelectorAll(".case[data-case-id]")).map(buildCaseReport);
             return {
                 detectedCount: detected.length,
                 popupButtons,
                 managedVideoCount: managedVideos.length,
+                caseReports,
+                passedCases: caseReports.filter((item) => item.pass).length,
                 detectedTags: detected.map((node) => ({
                     tag: node.tagName,
                     id: node.dataset.shieldId || "",
@@ -233,13 +407,31 @@
             };
         }
 
+        function renderSummary(report) {
+            const summaryText = document.getElementById("summary-text");
+            const summaryList = document.getElementById("summary-list");
+            if (!summaryText || !summaryList) return;
+
+            summaryText.textContent =
+                `cases=${report.caseReports.length}, passed=${report.passedCases}, detected=${report.detectedCount}, managedVideos=${report.managedVideoCount}, popupButtons=${report.popupButtons}`;
+
+            summaryList.innerHTML = "";
+            report.caseReports.forEach((item) => {
+                renderCaseStatus(item);
+                const line = document.createElement("li");
+                line.textContent = `${item.pass ? "PASS" : "FAIL"} - ${item.title}`;
+                summaryList.appendChild(line);
+            });
+        }
+
         window.addEventListener("load", () => {
+            setTimeout(activateDelayedFixtures, 1200);
             setTimeout(() => {
                 const report = collectReport();
-                document.getElementById("summary").textContent =
-                    `detected=${report.detectedCount}, managedVideos=${report.managedVideoCount}, popupButtons=${report.popupButtons}`;
+                renderSummary(report);
+                window.__regressionReport = report;
                 console.log("[regression-test]", report);
-            }, 2500);
+            }, 4500);
         });
     </script>
 </body>

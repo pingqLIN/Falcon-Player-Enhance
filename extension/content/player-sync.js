@@ -17,6 +17,7 @@
     let contextValid = true; // Extension context 是否仍有效
     const activeIntervals = new Set(); // 追蹤所有計時器，以便失效時一併清除
     let activeObserver = null;  // 追蹤 MutationObserver，以便失效時停止
+    let setupTimer = null;
 
     /**
      * 檢查 extension context 是否仍有效
@@ -280,10 +281,50 @@
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
+    function getDetectorEntries() {
+        const entries = window.__ShieldPlayerDetector?.getPlayers?.();
+        if (entries instanceof Map) return entries;
+        return null;
+    }
+
+    function isManagedVideo(video) {
+        if (!(video instanceof HTMLVideoElement)) return false;
+        if (video.dataset.shieldFakeRemoved) return false;
+
+        const entries = getDetectorEntries();
+        if (entries instanceof Map) {
+            const directMeta = entries.get(video);
+            if (directMeta) {
+                return directMeta.eligible !== false && directMeta.isSuspectedAd !== true;
+            }
+
+            const container = video.closest('.shield-detected-container');
+            if (container && entries.has(container)) {
+                const containerMeta = entries.get(container);
+                return containerMeta?.eligible !== false && containerMeta?.isSuspectedAd !== true;
+            }
+        }
+
+        if (video.dataset.shieldPlayerType) return true;
+        return Boolean(video.closest('.shield-detected-container'));
+    }
+
+    function getManagedVideos() {
+        return Array.from(document.querySelectorAll('video')).filter(isManagedVideo);
+    }
+
+    function scheduleManagedVideoSetup(delay = 180) {
+        clearTimeout(setupTimer);
+        setupTimer = setTimeout(() => {
+            getManagedVideos().forEach(setupVideoSync);
+        }, delay);
+    }
+
     /**
      * 設定影片同步監聽
      */
     function setupVideoSync(video) {
+        if (!isManagedVideo(video)) return;
         if (video.dataset.shieldSyncSetup === 'true') return;
         video.dataset.shieldSyncSetup = 'true';
         
@@ -416,7 +457,7 @@
         
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {
-            const players = event.detail.players || [];
+            const players = event.detail.eligiblePlayers || event.detail.players || [];
             players.forEach(player => {
                 const video = player.tagName === 'VIDEO' ? player : player.querySelector('video');
                 if (video) {
@@ -427,9 +468,7 @@
         
         // 處理已存在的影片
         setTimeout(() => {
-            document.querySelectorAll('video').forEach(video => {
-                setupVideoSync(video);
-            });
+            getManagedVideos().forEach(setupVideoSync);
         }, 1500);
         
         // 監聽新增的影片
@@ -439,9 +478,11 @@
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType === 1) {
                         if (node.tagName === 'VIDEO') {
-                            setupVideoSync(node);
+                            scheduleManagedVideoSetup();
                         } else if (node.querySelector) {
-                            node.querySelectorAll('video').forEach(setupVideoSync);
+                            if (node.querySelector('video')) {
+                                scheduleManagedVideoSetup();
+                            }
                         }
                     }
                 }

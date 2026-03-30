@@ -86,6 +86,7 @@
   let lastPlaybackPersistAt = 0;
   let remoteRestoreInFlight = false;
   let remoteRestoreApplied = false;
+  let remoteFallbackTriggered = false;
 
   const visualState = { ...DEFAULT_VISUAL_STATE };
 
@@ -309,6 +310,30 @@
     `;
     playbackState.textContent = 'Error';
     playbackState.classList.remove('active');
+  }
+
+  function canFallbackToRemoteMode() {
+    if (remoteFallbackTriggered) return false;
+    return Number(currentParams?.sourceTabId || 0) > 0;
+  }
+
+  function switchToRemoteMode(reason = '') {
+    if (!canFallbackToRemoteMode()) return false;
+    remoteFallbackTriggered = true;
+    currentParams = {
+      ...(currentParams || {}),
+      remoteControlPreferred: true
+    };
+    schedulePopupRuntimeStatePersist(true);
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('remote', '1');
+    if (Number(currentParams?.sourceTabId || 0) > 0) {
+      nextUrl.searchParams.set('sourceTabId', String(Number(currentParams.sourceTabId)));
+    }
+    window.location.replace(nextUrl.toString());
+    console.warn('Popup player direct video load failed, switching to remote mode:', reason);
+    return true;
   }
 
   function formatTime(seconds) {
@@ -705,7 +730,6 @@
 
   function createVideoPlayer(src, poster) {
     const video = document.createElement('video');
-    video.src = src;
     video.autoplay = true;
     video.controls = false;
     video.playsInline = true;
@@ -717,6 +741,9 @@
     if (poster) {
       video.poster = poster;
     }
+
+    let restoredPlaybackApplied = false;
+    let restoredTimeApplied = false;
 
     const syncPlaybackUI = () => {
       const hasDuration = Number.isFinite(video.duration) && video.duration > 0;
@@ -751,13 +778,18 @@
       if (!restoredPopupState?.playback) return;
 
       const playback = restoredPopupState.playback;
-      video.volume = clampNumber(playback.volume, 0, 1, 1);
-      video.muted = playback.muted === true;
-      video.playbackRate = clampNumber(playback.playbackRate, 0.25, 4, 1);
-      if (Number.isFinite(video.duration) && video.duration > 0) {
-        video.currentTime = Math.min(video.duration, clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0));
+      if (!restoredPlaybackApplied) {
+        video.volume = clampNumber(playback.volume, 0, 1, 1);
+        video.muted = playback.muted === true;
+        video.playbackRate = clampNumber(playback.playbackRate, 0.25, 4, 1);
+        restoredPlaybackApplied = true;
+        schedulePopupRuntimeStatePersist(true);
       }
-      schedulePopupRuntimeStatePersist(true);
+      if (!restoredTimeApplied && Number.isFinite(video.duration) && video.duration > 0) {
+        video.currentTime = Math.min(video.duration, clampNumber(playback.currentTime, 0, Number.MAX_SAFE_INTEGER, 0));
+        restoredTimeApplied = true;
+        schedulePopupRuntimeStatePersist(true);
+      }
     };
 
     video.addEventListener('loadedmetadata', () => {
@@ -767,10 +799,18 @@
         fitWindowToVideo(video).catch(() => {});
       }
     });
-    video.addEventListener('durationchange', syncPlaybackUI);
+    video.addEventListener('durationchange', () => {
+      applyRestoredVideoState();
+      syncPlaybackUI();
+    });
     video.addEventListener('timeupdate', () => {
       syncPlaybackUI();
       notePlaybackProgressForPersistence();
+    });
+    video.addEventListener('seeking', syncPlaybackUI);
+    video.addEventListener('seeked', () => {
+      syncPlaybackUI();
+      schedulePopupRuntimeStatePersist(true);
     });
     video.addEventListener('play', () => {
       syncPlaybackUI();
@@ -795,10 +835,19 @@
       btnPip.textContent = t('popupPlayerPip');
     });
     video.addEventListener('error', () => {
+      const errorCode = Number(video.error?.code || 0);
+      if (errorCode > 0 && switchToRemoteMode(`video_error_${errorCode}`)) {
+        playbackState.textContent = 'Switching to Remote...';
+        playbackState.classList.remove('active');
+        return;
+      }
       playbackState.textContent = 'Error';
       playbackState.classList.remove('active');
     });
 
+    video.src = src;
+    video.load();
+    applyRestoredVideoState();
     video.play().catch(() => {
       syncPlaybackUI();
     });
