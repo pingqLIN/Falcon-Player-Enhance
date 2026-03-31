@@ -40,6 +40,7 @@ PY_COMPILE_FILES = [
     "tests/inject-blocker/run_inject_blocker_overlay_regression.py",
     "tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py",
     "tests/anti-popup/run_anti_popup_compatibility_fallback_regression.py",
+    "tests/site-state/run_site_state_bridge_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
     "tests/site-registry/run_site_registry_contract_regression.py",
     "tests/release-gate/run_phase5_acceptance_gate.py",
@@ -225,6 +226,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "id": "G-06",
             "label": "Whitelist Consistency",
             "steps": [
+                build_browser_command("tests/site-state/run_site_state_bridge_regression.py", headless),
                 build_browser_command("tests/site-state/run_site_state_helper_regression.py", headless),
                 build_browser_command("tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py", headless),
             ],

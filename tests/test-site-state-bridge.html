@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon Site State Bridge Regression</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, sans-serif;
+      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      color: #e5e7eb;
+    }
+
+    main {
+      width: min(760px, calc(100vw - 48px));
+      padding: 32px;
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    pre {
+      margin: 20px 0 0;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.8);
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Falcon Site State Bridge Regression</h1>
+    <p>This page records every <code>__SHIELD_SITE_STATE__</code> message emitted by the document_start bridge.</p>
+    <pre id="report">waiting…</pre>
+  </main>
+
+  <script>
+    window.__bridgeMessages = [];
+
+    function syncReport() {
+      const report = document.getElementById('report');
+      report.textContent = JSON.stringify(window.__bridgeMessages, null, 2);
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.source !== window) return;
+      if (event.data?.type !== '__SHIELD_SITE_STATE__') return;
+      window.__bridgeMessages.push({
+        whitelistDomains: Array.isArray(event.data?.payload?.whitelistDomains)
+          ? [...event.data.payload.whitelistDomains]
+          : [],
+        whitelistEnhanceOnly: event.data?.payload?.whitelistEnhanceOnly !== false
+      });
+      syncReport();
+    });
+  </script>
+</body>
+</html>

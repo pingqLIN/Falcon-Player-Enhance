@@ -79,8 +79,7 @@ def set_whitelist_state(page: Page, whitelist: list[str], whitelist_enhance_only
     )
 
 
-def inspect_page(page: Page, url: str, wait_ms: int) -> dict[str, object]:
-    page.goto(url, wait_until="domcontentloaded")
+def inspect_current_page(page: Page, wait_ms: int) -> dict[str, object]:
     page.wait_for_timeout(wait_ms)
     return page.evaluate(
         """() => {
@@ -105,30 +104,49 @@ def inspect_page(page: Page, url: str, wait_ms: int) -> dict[str, object]:
     )
 
 
+def inspect_page(page: Page, url: str, wait_ms: int) -> dict[str, object]:
+    page.goto(url, wait_until="domcontentloaded")
+    return inspect_current_page(page, wait_ms)
+
+
 def build_report(base_url: str, page: Page, wait_ms: int) -> dict[str, object]:
     host_url = base_url.replace("127.0.0.1", "javboys.com")
+
+    set_whitelist_state(page, ["youtube.com", "www.javboys.com"], True)
+    whitelist_mode = inspect_page(page, host_url, wait_ms)
+
+    set_whitelist_state(page, ["youtube.com", "www.javboys.com"], False)
+    strict_mode = inspect_current_page(page, wait_ms)
+
+    set_whitelist_state(page, ["youtube.com", "www.javboys.com"], True)
+    whitelist_restored = inspect_current_page(page, wait_ms)
 
     set_whitelist_state(page, ["youtube.com"], True)
     non_whitelist = inspect_page(page, host_url, wait_ms)
 
-    set_whitelist_state(page, ["youtube.com", "javboys.com"], True)
-    whitelist_mode = inspect_page(page, host_url, wait_ms)
-
     checks = {
-        "nonWhitelistInjectedStyle": bool(non_whitelist["styleElementPresent"]),
-        "nonWhitelistMessageHidden": (not bool(non_whitelist["messagePresent"])) or non_whitelist["messageDisplay"] == "none",
         "whitelistSkippedStyle": not bool(whitelist_mode["styleElementPresent"]),
         "whitelistMessageVisible": bool(whitelist_mode["messagePresent"]) and whitelist_mode["messageDisplay"] != "none",
-        "iframeStillVisible": whitelist_mode["frameDisplay"] != "none" and whitelist_mode["frameVisibility"] != "hidden",
-        "antiAntiblockInitDone": bool(non_whitelist["antiAntiblockInitDone"]) and bool(whitelist_mode["antiAntiblockInitDone"]),
+        "strictModeInjectedStyle": bool(strict_mode["styleElementPresent"]),
+        "strictModeMessageHidden": (not bool(strict_mode["messagePresent"])) or strict_mode["messageDisplay"] == "none",
+        "strictModeIframeVisible": strict_mode["frameDisplay"] != "none" and strict_mode["frameVisibility"] != "hidden",
+        "whitelistRestoreRemovedStyle": not bool(whitelist_restored["styleElementPresent"]),
+        "whitelistRestoreMessageVisible": bool(whitelist_restored["messagePresent"]) and whitelist_restored["messageDisplay"] != "none",
+        "whitelistRestoreIframeVisible": whitelist_restored["frameDisplay"] != "none" and whitelist_restored["frameVisibility"] != "hidden",
+        "nonWhitelistInjectedStyle": bool(non_whitelist["styleElementPresent"]),
+        "nonWhitelistMessageHidden": (not bool(non_whitelist["messagePresent"])) or non_whitelist["messageDisplay"] == "none",
+        "nonWhitelistIframeVisible": non_whitelist["frameDisplay"] != "none" and non_whitelist["frameVisibility"] != "hidden",
+        "antiAntiblockInitDone": bool(non_whitelist["antiAntiblockInitDone"]) and bool(whitelist_mode["antiAntiblockInitDone"]) and bool(strict_mode["antiAntiblockInitDone"]) and bool(whitelist_restored["antiAntiblockInitDone"]),
     }
 
     return {
         "ok": all(checks.values()),
         "checks": checks,
         "pages": {
-            "nonWhitelist": non_whitelist,
-            "whitelistMode": whitelist_mode
+            "whitelistMode": whitelist_mode,
+            "strictMode": strict_mode,
+            "whitelistRestored": whitelist_restored,
+            "nonWhitelist": non_whitelist
         }
     }
 

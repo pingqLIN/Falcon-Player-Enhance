@@ -29,7 +29,7 @@
 | G-03 | Popup Reliability | Companion / Standalone | compatibility fallback, release gate unification | `python tests/popup-smoke/run_popup_smoke.py --headless --cases popup-open-local-video pin-close-reopen popup-player-state-restore` + `--cases multi-popup-distinct-windows` | 兩批 case 全 PASS；已知視窗尺寸殘留可列 Warning 但不可 Blocker |
 | G-04 | Cosmetic Filter | Companion / Standalone | getSiteRegistry contract | `python tests/cosmetic-filter/run_cosmetic_filter_regression.py --headless` | global + site-specific selector 行為正確，無跨站外溢 |
 | G-05 | Inject Overlay | Companion / Standalone | compatibility fallback, getSiteRegistry contract | `python tests/inject-blocker/run_inject_blocker_overlay_regression.py --headless` | overlay 移除成功且安全內容可見 |
-| G-06 | Whitelist Consistency | Companion / Standalone | whitelist-state divergence | `python tests/site-state/run_site_state_helper_regression.py --headless` + `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless` | canonical helper 與 anti-antiblock 行為一致；non-whitelist / whitelist / strict-mode 切換皆符合預期 |
+| G-06 | Whitelist Consistency | Companion / Standalone | whitelist-state divergence | `python tests/site-state/run_site_state_bridge_regression.py --headless` + `python tests/site-state/run_site_state_helper_regression.py --headless` + `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless` | MAIN-world bridge、canonical helper 與 anti-antiblock 行為一致；non-whitelist / whitelist / strict-mode 與 whitelist restore（strict -> whitelist）切換皆符合預期 |
 | G-07 | AI Candidate Governance | AI-Expanded | release gate unification | candidate/review/decision 記錄抽查 | 每筆 candidate 有 accept/reject 決策與理由，不可直接寫入 baseline |
 
 ## 3. 阻斷規則

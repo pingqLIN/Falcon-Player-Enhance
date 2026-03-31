@@ -75,6 +75,8 @@ Phase 5 明確不做：
 - divergence 偵測條件與修復流程
 - anti-antiblock / related scripts 行為一致性規範
 - `document_idle / ISOLATED` canonical helper (`site-state-helper.js`)
+- `document_start / MAIN` bridge regression (`run_site_state_bridge_regression.py`)
+- anti-antiblock live update regression（whitelist -> strict -> whitelist restore）
 - `tests/site-state/run_site_state_helper_regression.py`
 
 驗收：

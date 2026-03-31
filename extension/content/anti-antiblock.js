@@ -322,6 +322,24 @@ function removeAdblockMessages() {
         '#adblock-warning'
     ];
     
+    const rememberInlineStyle = (el) => ({
+        display: el.style.display,
+        visibility: el.style.visibility,
+        opacity: el.style.opacity,
+        pointerEvents: el.style.pointerEvents
+    });
+
+    const hideMessage = (el) => {
+        if (!hiddenAdblockMessages.has(el)) {
+            hiddenAdblockMessages.set(el, rememberInlineStyle(el));
+        }
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+        el.dataset.shieldAntiAntiblockHidden = '1';
+    };
+
     const removeMessages = () => {
         selectors.forEach(selector => {
             try {
@@ -334,8 +352,7 @@ function removeAdblockMessages() {
                         text.includes('ad-block') ||
                         text.includes('disable') ||
                         text.includes('whitelist')) {
-                        el.style.display = 'none';
-                        el.remove();
+                        hideMessage(el);
                     }
                 });
             } catch (e) {}
@@ -350,12 +367,48 @@ function removeAdblockMessages() {
     }
     
     // 持續監控
-    const observer = new MutationObserver(removeMessages);
-    document.addEventListener('DOMContentLoaded', () => {
-        observer.observe(document.body, { childList: true, subtree: true });
+    if (!adblockMessageObserver) {
+        adblockMessageObserver = new MutationObserver(removeMessages);
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!document.body || !adblockMessageObserver) return;
+            adblockMessageObserver.observe(document.body, { childList: true, subtree: true });
+        });
+        if (document.body) {
+            adblockMessageObserver.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    if (!adblockMessageIntervalId) {
+        adblockMessageIntervalId = window.setInterval(removeMessages, 2000);
+    }
+}
+
+function restoreAdblockMessages() {
+    hiddenAdblockMessages.forEach((style, el) => {
+        if (!el?.isConnected) return;
+        if (style.display) el.style.display = style.display;
+        else el.style.removeProperty('display');
+        if (style.visibility) el.style.visibility = style.visibility;
+        else el.style.removeProperty('visibility');
+        if (style.opacity) el.style.opacity = style.opacity;
+        else el.style.removeProperty('opacity');
+        if (style.pointerEvents) el.style.pointerEvents = style.pointerEvents;
+        else el.style.removeProperty('pointer-events');
+        delete el.dataset.shieldAntiAntiblockHidden;
     });
-    
-    setInterval(removeMessages, 2000);
+    hiddenAdblockMessages.clear();
+}
+
+function stopAdblockMessageCleanup() {
+    if (adblockMessageObserver) {
+        adblockMessageObserver.disconnect();
+        adblockMessageObserver = null;
+    }
+    if (adblockMessageIntervalId) {
+        window.clearInterval(adblockMessageIntervalId);
+        adblockMessageIntervalId = 0;
+    }
+    restoreAdblockMessages();
 }
 
 // ============================================================================
@@ -709,6 +762,8 @@ function handleJavboysPlayer() {
 // 9. 重要：保護 iframe 不被阻擋偵測影響
 // ============================================================================
 function protectIframes() {
+    if (iframeProtectionBound) return;
+    iframeProtectionBound = true;
     // 監控 iframe 內容載入
     document.addEventListener('DOMContentLoaded', () => {
         const iframes = document.querySelectorAll('iframe');
@@ -790,51 +845,125 @@ function injectAdblockHideStyles() {
 // 初始化所有防護
 // ============================================================================
 
+const DEFAULT_SITE_STATE = Object.freeze({
+    whitelistDomains: [],
+    whitelistEnhanceOnly: true
+});
+
 let whitelistDomains = [];
+let whitelistEnhanceOnly = true;
+let siteStateResolver = null;
+let siteStateTimeoutId = null;
+let iframeProtectionBound = false;
+let fullCleanupActivated = false;
+let fullCleanupBootstrapped = false;
+let adblockMessageObserver = null;
+let adblockMessageIntervalId = 0;
+const hiddenAdblockMessages = new Map();
+
+function normalizeHostname(hostname) {
+    return String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
+}
 
 function normalizeDomainList(domains) {
     if (!Array.isArray(domains)) return [];
     return [...new Set(
         domains
-            .map((domain) => String(domain || '').trim().toLowerCase())
+            .map((domain) => normalizeHostname(domain))
             .filter(Boolean)
     )];
 }
 
 function isWhitelistDomain() {
-    const host = window.location.hostname.toLowerCase();
+    const host = normalizeHostname(window.location.hostname);
     return whitelistDomains.some((domain) => host === domain || host.endsWith('.' + domain));
 }
 
-// 執行期白名單保護模式狀態（可由 popup 動態切換）
-let whitelistEnhanceOnly = true;
+function removeAdblockHideStyles() {
+    document.getElementById('__shield_anti_adblock_css__')?.remove();
+}
+
+function getSiteStateSnapshot() {
+    return {
+        whitelistDomains: [...whitelistDomains],
+        whitelistEnhanceOnly
+    };
+}
+
+function applySiteState(payload = {}) {
+    whitelistDomains = normalizeDomainList(payload.whitelistDomains);
+    whitelistEnhanceOnly = payload.whitelistEnhanceOnly !== false;
+    return getSiteStateSnapshot();
+}
+
+function activateFullCleanup() {
+    if (!fullCleanupBootstrapped) {
+        fullCleanupBootstrapped = true;
+        createBaitElements();
+        interceptDetectionRequests();
+        preventConsoleClear();
+        handleJavboysPlayer();
+    }
+    if (fullCleanupActivated) return;
+    fullCleanupActivated = true;
+    injectAdblockHideStyles();
+    removeAdblockMessages();
+}
+
+function deactivateFullCleanup() {
+    if (!fullCleanupActivated) return;
+    fullCleanupActivated = false;
+    removeAdblockHideStyles();
+    stopAdblockMessageCleanup();
+}
+
+function syncProtectionMode() {
+    const onWhitelist = isWhitelistDomain();
+    if (!onWhitelist || !whitelistEnhanceOnly) {
+        activateFullCleanup();
+    } else {
+        deactivateFullCleanup();
+    }
+    protectIframes();
+}
+
+function handleSiteStatePayload(payload = null) {
+    const snapshot = applySiteState(payload || DEFAULT_SITE_STATE);
+    if (siteStateTimeoutId) {
+        window.clearTimeout(siteStateTimeoutId);
+        siteStateTimeoutId = null;
+    }
+    if (siteStateResolver) {
+        const resolve = siteStateResolver;
+        siteStateResolver = null;
+        resolve(snapshot);
+        return snapshot;
+    }
+    if (window.__antiAntiblockInitDone) {
+        syncProtectionMode();
+    }
+    return snapshot;
+}
+
+function bindSiteStateUpdates() {
+    if (window.__antiAntiblockSiteStateBound) return;
+    window.__antiAntiblockSiteStateBound = true;
+
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        if (event.data?.type !== '__SHIELD_SITE_STATE__') return;
+        handleSiteStatePayload(event.data?.payload);
+    });
+}
 
 function loadWhitelistState() {
     return new Promise((resolve) => {
-        const timer = window.setTimeout(() => {
-            whitelistDomains = [];
-            whitelistEnhanceOnly = true;
-            resolve({
-                whitelistDomains,
-                whitelistEnhanceOnly
-            });
+        siteStateResolver = resolve;
+        siteStateTimeoutId = window.setTimeout(() => {
+            siteStateTimeoutId = null;
+            siteStateResolver = null;
+            resolve(handleSiteStatePayload(DEFAULT_SITE_STATE));
         }, 800);
-
-        const handleMessage = (event) => {
-            if (event.source !== window) return;
-            if (event.data?.type !== '__SHIELD_SITE_STATE__') return;
-
-            window.removeEventListener('message', handleMessage);
-            window.clearTimeout(timer);
-            whitelistDomains = normalizeDomainList(event.data?.payload?.whitelistDomains);
-            whitelistEnhanceOnly = event.data?.payload?.whitelistEnhanceOnly !== false;
-            resolve({
-                whitelistDomains,
-                whitelistEnhanceOnly
-            });
-        };
-
-        window.addEventListener('message', handleMessage);
         window.postMessage({ type: '__SHIELD_REQUEST_SITE_STATE__' }, '*');
     });
 }
@@ -843,7 +972,11 @@ function loadWhitelistState() {
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
     chrome.runtime.onMessage.addListener((request) => {
         if (request.action === 'setWhitelistEnhanceOnly') {
-            whitelistEnhanceOnly = !!request.enabled;
+            applySiteState({
+                whitelistDomains,
+                whitelistEnhanceOnly: !!request.enabled
+            });
+            syncProtectionMode();
             log('白名單保護模式:', whitelistEnhanceOnly ? '開啟（只增強）' : '關閉（完整清除）');
         }
     });
@@ -852,31 +985,17 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
 async function init() {
     // 設定標記，讓 inject-blocker.js 知道此模組已載入
     window.__antiAdblockBypassLoaded = true;
+    bindSiteStateUpdates();
 
     fakeAdAPIs();
     blockAdblockDetection();
     fakeDetectionLibraries();
 
     await loadWhitelistState();
-
-    // 白名單網站 + 保護模式開啟：只執行欺騙 API，跳過所有元件移除操作
-    const onWhitelist = isWhitelistDomain();
-
-    if (!onWhitelist || !whitelistEnhanceOnly) {
-        // 非白名單，或使用者關閉保護模式：執行完整清除
-        injectAdblockHideStyles();
-        createBaitElements();
-        interceptDetectionRequests();
-        preventConsoleClear();
-        removeAdblockMessages();
-        handleJavboysPlayer();
-    }
-
-    // 無論白名單與否，iframe 保護都要執行（確保播放器可見）
-    protectIframes();
+    syncProtectionMode();
     window.__antiAntiblockInitDone = true;
 
-    log('Anti-Antiblock 模組已載入', onWhitelist ? '（白名單模式：僅增強）' : '');
+    log('Anti-Antiblock 模組已載入', isWhitelistDomain() ? '（白名單模式：僅增強）' : '');
 }
 
 // 立即執行（在任何其他腳本之前）

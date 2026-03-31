@@ -8,24 +8,51 @@
 (function () {
     'use strict';
 
+    let state = {
+        whitelistDomains: [],
+        whitelistEnhanceOnly: true
+    };
+
+    function normalizeHostname(hostname) {
+        return String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
+    }
+
     function normalizeDomainList(domains) {
         if (!Array.isArray(domains)) return [];
         return [...new Set(
             domains
-                .map((domain) => String(domain || '').trim().toLowerCase())
+                .map((domain) => normalizeHostname(domain))
                 .filter(Boolean)
         )];
     }
 
-    function emitSiteState() {
+    function applyState(nextState = {}) {
+        state = {
+            whitelistDomains: normalizeDomainList(nextState.whitelistDomains),
+            whitelistEnhanceOnly: nextState.whitelistEnhanceOnly !== false
+        };
+        return {
+            whitelistDomains: [...state.whitelistDomains],
+            whitelistEnhanceOnly: state.whitelistEnhanceOnly
+        };
+    }
+
+    function emitSiteState(payload = null) {
+        window.postMessage({
+            type: '__SHIELD_SITE_STATE__',
+            payload: payload || {
+                whitelistDomains: [...state.whitelistDomains],
+                whitelistEnhanceOnly: state.whitelistEnhanceOnly
+            }
+        }, '*');
+    }
+
+    function loadStateFromStorage() {
         chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
-            window.postMessage({
-                type: '__SHIELD_SITE_STATE__',
-                payload: {
-                    whitelistDomains: normalizeDomainList(result.whitelist),
-                    whitelistEnhanceOnly: result.whitelistEnhanceOnly !== false
-                }
-            }, '*');
+            emitSiteState(applyState({
+                whitelistDomains: result.whitelist,
+                whitelistEnhanceOnly: result.whitelistEnhanceOnly
+            }));
         });
     }
 
@@ -35,5 +62,21 @@
         emitSiteState();
     });
 
-    emitSiteState();
+    if (chrome.storage?.onChanged?.addListener) {
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+            if (areaName !== 'local') return;
+            if (!changes.whitelist && !changes.whitelistEnhanceOnly) return;
+
+            emitSiteState(applyState({
+                whitelistDomains: changes.whitelist
+                    ? changes.whitelist.newValue
+                    : state.whitelistDomains,
+                whitelistEnhanceOnly: changes.whitelistEnhanceOnly
+                    ? changes.whitelistEnhanceOnly.newValue
+                    : state.whitelistEnhanceOnly
+            }));
+        });
+    }
+
+    loadStateFromStorage();
 })();

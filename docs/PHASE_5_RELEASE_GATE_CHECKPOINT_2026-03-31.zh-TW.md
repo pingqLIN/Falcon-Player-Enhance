@@ -28,6 +28,7 @@
 
 4. `Track C` groundwork 落地
 - 新增 `extension/content/site-state-helper.js`
+- 新增 `tests/site-state/run_site_state_bridge_regression.py`
 - `background.js` 已將 helper 納入 `document_idle / ISOLATED` content script 鏈
 - `player-enhancer.js`、`overlay-remover.js`、`fake-video-remover.js` 改為優先讀取 canonical helper
 - 新增 `tests/site-state/run_site_state_helper_regression.py`
@@ -44,13 +45,16 @@
   - `G-04` PASS
   - `G-05` PASS
   - `G-06` PASS
+- `python tests/site-state/run_site_state_bridge_regression.py --headless`
 - `python tests/site-state/run_site_state_helper_regression.py --headless`
+- `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless`
   - PASS
 
 附帶說明：
 
 - `pin-close-reopen` 的已知視窗尺寸還原差異仍維持 Warning，不升級為 Blocker
 - contract / player detection / popup smoke / cosmetic / inject / whitelist regression 已被 unified gate 串成單一入口
+- anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為
 - unified gate 對 `extension_content_scripts_not_ready` 已加入受控重試，避免偶發 extension startup 抖動污染正式驗收
 
 ## 3. 目前判斷
