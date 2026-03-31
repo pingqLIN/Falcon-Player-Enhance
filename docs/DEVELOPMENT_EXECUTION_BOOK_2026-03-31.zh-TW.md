@@ -2,7 +2,7 @@
 
 > 更新日期: 2026-03-31
 > 執行模式: YOLO mode + 主控監察 + 子代理持續開發
-> 目的: 將 `uBOL Companion` 產品邊界正式併入執行序列，並收斂 Phase 1 實作優先順序
+> 目的: 將 `uBOL Companion` 產品邊界正式併入執行序列，並啟動 Phase 5 的契約化與驗收門檻整合
 
 ## 0. 本版重點（相較 2026-03-30）
 
@@ -93,6 +93,26 @@ Phase 1 完成條件（修正版）：
 - 將候選規則導入 `candidate -> review -> baseline` 流程
 - 建立 AI player-centric 擴張的驗收指標
 
+## 4.1 Phase 5 Kickoff（新增）
+
+Phase 5 已啟動，先處理四個風險主題：
+
+- compatibility fallback
+- getSiteRegistry contract
+- whitelist-state divergence
+- release gate unification
+
+Phase 5 核心文件：
+
+- `docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
+- `docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
+
+Phase 5 執行順序：
+
+1. 先定版 contract/fallback 規格。
+2. 再做 whitelist state 一致性收斂。
+3. 最後統一 release gate，將 smoke/regression 轉為固定驗收矩陣。
+
 ## 5. 執行規範（主控監察模式）
 
 - 主控代理負責全局決策、優先序、風險裁決
@@ -114,17 +134,24 @@ Phase 1 完成條件（修正版）：
 - 風險 A: Phase 1 修補過嚴，造成 atypical 真播放器漏判
 - 風險 B: 下游模組仍有舊資料流依賴，導致行為不一致
 - 風險 C: 規劃中途插入通用 blocker 擴張，侵蝕差異化定位
+- 風險 D: compatibility fallback 在 profile 缺值時出現模組間漂移
+- 風險 E: getSiteRegistry contract 演進無規格，導致 consumer 不一致
+- 風險 F: whitelist runtime state 在 storage/bridge/MAIN world 之間發散
+- 風險 G: 測試入口分散，release gate 無單一阻斷標準
 
 對應緩解：
 
 - 持續擴充 regression fixtures（含動態載入與客製播放器）
 - 以資料流盤點清單逐項關閉舊依賴
 - 在任務受理前執行「uBOL 重疊檢核」
+- 將 Phase 5 驗收矩陣作為每輪交付前的 gate（先證據、後宣告）
 
 ## 7. 文件關聯
 
 - 策略文件：`docs/PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`
 - 路線圖：`docs/ROADMAP_UBOL_COMPANION.zh-TW.md`
 - 前版執行書：`docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-30.zh-TW.md`
+- Phase 5 計畫：`docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
+- Phase 5 驗收矩陣：`docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
 
 本版（2026-03-31）作為後續執行主依據。

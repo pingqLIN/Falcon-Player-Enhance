@@ -1,0 +1,58 @@
+# Falcon-Player-Enhance Phase 5 驗收矩陣
+
+> 更新日期: 2026-03-31
+> 狀態: Kickoff Gate Definition
+> 參照: `PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
+
+## 1. 驗收原則
+
+- 每個驗收項目必須對應至少一個模式：`Companion`、`Basic Standalone`、`AI-Expanded`
+- 每個驗收項目必須對應至少一個風險主題：
+  - compatibility fallback
+  - getSiteRegistry contract
+  - whitelist-state divergence
+  - release gate unification
+- 驗收證據以 fresh run 為準，不引用過期結果
+
+## 2. Gate Matrix
+
+| Gate ID | 類型 | 模式 | 風險主題 | 驗證方式 | 通過標準 |
+|---|---|---|---|---|---|
+| G-00 | Static | Companion / Standalone / AI-Expanded | release gate unification | `node --check`（background/content/popup-player）+ `python -m py_compile`（runner）+ `site-registry.json` parse | 全數成功，無 syntax/parse error |
+| G-01 | Contract | Companion / Standalone / AI-Expanded | getSiteRegistry contract | runtime 取得 `getSiteRegistry` 回傳並核對必要欄位 | 必要欄位皆存在，缺值時 fallback 符合規格 |
+| G-02 | Player Detection | Companion / Standalone | release gate unification | `python tests/player-detection/run_player_detection_regression.py --headless` | case matrix 全 PASS |
+| G-03 | Popup Reliability | Companion / Standalone | compatibility fallback, release gate unification | `python tests/popup-smoke/run_popup_smoke.py --headless --cases popup-open-local-video pin-close-reopen popup-player-state-restore` + `--cases multi-popup-distinct-windows` | 兩批 case 全 PASS；已知視窗尺寸殘留可列 Warning 但不可 Blocker |
+| G-04 | Cosmetic Filter | Companion / Standalone | getSiteRegistry contract | `python tests/cosmetic-filter/run_cosmetic_filter_regression.py --headless` | global + site-specific selector 行為正確，無跨站外溢 |
+| G-05 | Inject Overlay | Companion / Standalone | compatibility fallback, getSiteRegistry contract | `python tests/inject-blocker/run_inject_blocker_overlay_regression.py --headless` | overlay 移除成功且安全內容可見 |
+| G-06 | Whitelist Consistency | Companion / Standalone | whitelist-state divergence | `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless` | non-whitelist 與 whitelist 行為切換一致，iframe 保持可見 |
+| G-07 | AI Candidate Governance | AI-Expanded | release gate unification | candidate/review/decision 記錄抽查 | 每筆 candidate 有 accept/reject 決策與理由，不可直接寫入 baseline |
+
+## 3. 阻斷規則
+
+- Blocker（必須修復）
+  - G-00~G-06 任一失敗
+  - contract 缺值導致 consumer crash 或 fallback 不一致
+  - whitelist state 漂移導致 non-whitelist/whitelist 行為反轉
+
+- Warning（可先記錄再進下一里程碑）
+  - 非核心視窗尺寸回報差異（功能正確但環境差異）
+  - 舊文件未同步但不影響實際行為與測試
+
+## 4. 證據格式
+
+每次 Gate 執行紀錄至少包含：
+
+- `timestamp`
+- `commit`
+- `gate id`
+- `command`
+- `result`（PASS/FAIL）
+- `notes`（若 FAIL，需附 root cause 與修復追蹤）
+
+## 5. 退出條件（Phase 5 本階段）
+
+本階段可進入下一階段需滿足：
+
+- G-00~G-06 連續兩輪 PASS
+- G-07 有第一版可運作的審核紀錄流程
+- roadmap 與 execution book 已同步標記 Phase 5 kickoff 與 gate 規範

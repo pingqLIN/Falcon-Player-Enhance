@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon Anti-Popup Compatibility Fallback</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .stage {
+      position: relative;
+      width: 640px;
+      margin: 0 auto;
+      padding: 24px;
+      border-radius: 16px;
+      background: #1f2937;
+    }
+
+    .inset-0.fixed.pointer-events-auto {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.82);
+      color: #fbbf24;
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div id="aggressive-overlay" class="inset-0 fixed pointer-events-auto">
+      overlay should only remain on compatibility fallback hosts
+    </div>
+    <iframe
+      id="player-frame"
+      title="player frame"
+      width="560"
+      height="315"
+      srcdoc="<p>embedded player placeholder</p>"
+    ></iframe>
+  </main>
+
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get('registryMode') || 'runtimeFailure';
+      const domainsParam = params.get('compatibilityModeSites');
+      const compatibilityModeSites = domainsParam === null
+        ? ['boyfriendtv.com']
+        : domainsParam.split(',').map((domain) => domain.trim()).filter(Boolean);
+
+      window.chrome = {
+        runtime: {
+          lastError: null,
+          sendMessage(message, callback) {
+            if (message?.action !== 'getSiteRegistry') {
+              callback?.({ success: false });
+              return;
+            }
+
+            if (mode === 'runtimeFailure') {
+              this.lastError = { message: 'mock runtime failure' };
+              callback?.();
+              this.lastError = null;
+              return;
+            }
+
+            this.lastError = null;
+            callback?.({
+              success: true,
+              profiles: { compatibilityModeSites }
+            });
+          }
+        }
+      };
+    })();
+  </script>
+  <script src="/extension/content/anti-popup.js"></script>
+</body>
+</html>

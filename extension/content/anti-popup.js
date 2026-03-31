@@ -10,7 +10,10 @@
 
     // 此腳本已透過 content script matches 限定只在播放器站點載入
     const IS_PLAYER_SITE = true;
-    let compatibilityModeSites = [];
+    const DEFAULT_COMPATIBILITY_MODE_SITES = [
+        'boyfriendtv.com'
+    ];
+    let compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
     let siteProfilesLoadPromise = null;
 
     function isCompatibilityModeSite() {
@@ -38,16 +41,20 @@
                 chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
                     const runtimeFailed = chrome.runtime.lastError || !response?.success;
                     if (runtimeFailed) {
-                        compatibilityModeSites = [];
+                        compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
                         resolve(compatibilityModeSites);
                         return;
                     }
 
-                    compatibilityModeSites = normalizeDomainList(response?.profiles?.compatibilityModeSites);
+                    const profileDomains = response?.profiles?.compatibilityModeSites;
+                    const configuredDomains = normalizeDomainList(profileDomains);
+                    compatibilityModeSites = Array.isArray(profileDomains)
+                        ? configuredDomains
+                        : DEFAULT_COMPATIBILITY_MODE_SITES.slice();
                     resolve(compatibilityModeSites);
                 });
             } catch (_) {
-                compatibilityModeSites = [];
+                compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
                 resolve(compatibilityModeSites);
             }
         });

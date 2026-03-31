@@ -124,6 +124,26 @@
 - 針對高流量站點建立 player-centric AI 適配策略
 - 評估覆蓋提升與誤判成本
 
+## 6.1 Phase 5 Kickoff（2026-03-31 啟動）
+
+Phase 5 以四個風險主題為主軸進行：
+
+- compatibility fallback
+- getSiteRegistry contract
+- whitelist-state divergence
+- release gate unification
+
+對應文件：
+
+- `docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
+- `docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
+
+執行重點：
+
+- 先完成 contract 與 fallback 規格，再做模組對齊
+- 以 release gate 驅動每輪交付，不以單次修補宣告完成
+- 維持 Companion-first 邊界，不擴張到通用 blocker 職責
+
 ## 7. KPI 建議
 
 - 播放器誤判率（False Positive）
