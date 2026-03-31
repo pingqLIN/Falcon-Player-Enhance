@@ -35,8 +35,99 @@
     "poapan.xyz"
   ],
   "profiles": {
+    "compatibilityModeSites": [
+      "boyfriendtv.com"
+    ],
     "popupDirectIframeHosts": [
       "boyfriendtv.com"
-    ]
+    ],
+    "cosmeticFilter": {
+      "globalSelectors": [
+        "[class*=\"player-overlay-ad\"]",
+        "[class*=\"video-ad-overlay\"]",
+        "[class*=\"preroll\"]",
+        "[class*=\"midroll\"]",
+        "[class*=\"exoclick\"]",
+        "[class*=\"trafficjunky\"]",
+        "[class*=\"juicyads\"]",
+        "iframe[src*=\"exoclick\"]",
+        "iframe[src*=\"trafficjunky\"]"
+      ],
+      "siteSelectorGroups": [
+        {
+          "domains": [
+            "javboys.com",
+            "javboys.online"
+          ],
+          "selectors": [
+            ".ad-zone",
+            ".banner-zone",
+            "[class*=\"sponsor\"]",
+            "div[style*=\"position: fixed\"][style*=\"z-index: 9999\"]",
+            ".cvpboxOverlay",
+            ".cvpcolorbox"
+          ]
+        },
+        {
+          "domains": [
+            "missav.com",
+            "missav.ws"
+          ],
+          "selectors": [
+            "[class*=\"ad-\"]",
+            ".popup-overlay"
+          ]
+        },
+        {
+          "domains": [
+            "supjav.com"
+          ],
+          "selectors": [
+            "[class*=\"ad-\"]"
+          ]
+        },
+        {
+          "domains": [
+            "jable.tv"
+          ],
+          "selectors": [
+            ".ad-container",
+            "[class*=\"banner\"]"
+          ]
+        },
+        {
+          "domains": [
+            "avgle.com"
+          ],
+          "selectors": [
+            "[class*=\"ads-\"]"
+          ]
+        },
+        {
+          "domains": [
+            "netflav.com"
+          ],
+          "selectors": [
+            "[class*=\"ad-\"]"
+          ]
+        },
+        {
+          "domains": [
+            "pornhub.com"
+          ],
+          "selectors": [
+            ".video-ad-overlay"
+          ]
+        },
+        {
+          "domains": [
+            "xvideos.com"
+          ],
+          "selectors": [
+            ".video-ad-overlay"
+          ]
+        }
+      ]
+    }
   }
 }

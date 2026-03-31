@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 4 Checkpoint
 
 > 更新日期: 2026-03-31
-> 狀態: P4 第一個可交付切片完成
+> 狀態: P4 前兩個可交付切片完成
 > 範圍: `Standalone Baseline + Rule Generalization groundwork`
 
 ## 1. 本輪目標
@@ -53,6 +53,33 @@
 
 - `extension/content/player-enhancer.js`
 
+### 2.4 `cosmetic-filter.js` 改為讀取 canonical site-registry profile
+
+完成項目：
+
+- 移除 `PLAYER_SITE_RULES` 與 `PLAYER_AD_SELECTORS` 硬編常數
+- 新增 `profiles.cosmeticFilter.globalSelectors`
+- 新增 `profiles.cosmeticFilter.siteSelectorGroups`
+- `cosmetic-filter` 改為透過 `getSiteRegistry` 載入 canonical config
+
+對應檔案：
+
+- `extension/content/cosmetic-filter.js`
+- `extension/rules/site-registry.json`
+
+### 2.5 新增 cosmetic filter regression runner
+
+完成項目：
+
+- 新增本地 regression page，驗證 global selector 與 site-specific selector 的實際隱藏結果
+- 透過 host resolver 將 `javboys.com` 與 `missav.com` 映射到本地測試頁，避免依賴外站
+- 驗證 site-specific selector 不會在錯誤 host 上外溢
+
+對應檔案：
+
+- `tests/test-cosmetic-filter.html`
+- `tests/cosmetic-filter/run_cosmetic_filter_regression.py`
+
 ## 3. 為什麼這樣切
 
 這一刀符合舊版 Phase 4 規劃中的核心目標：
@@ -73,8 +100,10 @@
 已通過：
 
 - `node --check extension/background.js`
+- `node --check extension/content/cosmetic-filter.js`
 - `node --check extension/content/player-enhancer.js`
 - `site-registry.json` JSON parse 驗證
+- `python -m py_compile tests/cosmetic-filter/run_cosmetic_filter_regression.py`
 
 ### 4.2 Runtime 驗證
 
@@ -82,6 +111,7 @@
 
 - background runtime 可正確讀出 `popupDirectIframeHosts`
 - `shouldOpenPopupDirectly({ iframeSrc: 'https://www.boyfriendtv.com/embed/example' })` 回傳 `true`
+- `cosmetic-filter` 可正確讀取 `profiles.cosmeticFilter` 並生成 host-specific CSS
 
 ### 4.3 回歸驗證
 
@@ -89,6 +119,7 @@
 
 - `popup-open-local-video` PASS
 - `multi-popup-distinct-windows` PASS
+- `tests/cosmetic-filter/run_cosmetic_filter_regression.py` PASS
 - `test-player-detection-regression.html` 9 / 9 PASS
 
 ## 5. 尚未完成的 P4 後續項目
@@ -105,6 +136,7 @@
 
 - `site-registry` 開始承接最小行為 schema
 - popup direct host 規則不再分散硬編
-- background 與 player-enhancer 對齊到同一資料來源
+- cosmetic filter 的 player-adjacent selector 規則開始回收到 canonical source
+- background、player-enhancer、cosmetic-filter 對齊到同一資料來源
 
 這表示 `Rule Generalization` 已從概念階段，進入「小步可驗證落地」階段。

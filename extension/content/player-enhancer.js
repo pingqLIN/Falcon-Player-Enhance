@@ -8,12 +8,11 @@
     const OVERLAY_CHECK_INTERVAL = 3000; // 每 3 秒檢查一次覆蓋元素
     const FRAME_SOURCE_MESSAGE_TYPE = 'shield:frame-source';
     const IS_TOP_FRAME = window === window.top;
-    const COMPATIBILITY_MODE_SITES = [
-        'boyfriendtv.com'
-    ];
     let cleanupEnabled = false;
+    let compatibilityModeSites = [];
+    let siteProfilesLoadPromise = null;
+    let shouldRunAggressiveOverlayCleanup = true;
     let popupDirectIframeHosts = [];
-    let popupDirectIframeHostsLoadPromise = null;
 
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
@@ -46,35 +45,48 @@
 
     function isCompatibilityModeSite() {
         const host = window.location.hostname.toLowerCase();
-        return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+        return compatibilityModeSites.some((domain) => host === domain || host.endsWith('.' + domain));
     }
 
-    function loadPopupDirectIframeHosts() {
-        if (popupDirectIframeHostsLoadPromise) return popupDirectIframeHostsLoadPromise;
+    function loadSiteProfiles() {
+        if (siteProfilesLoadPromise) return siteProfilesLoadPromise;
 
-        popupDirectIframeHostsLoadPromise = new Promise((resolve) => {
+        siteProfilesLoadPromise = new Promise((resolve) => {
             try {
                 chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
                     const runtimeFailed = chrome.runtime.lastError || !response?.success;
                     if (runtimeFailed) {
+                        compatibilityModeSites = [];
                         popupDirectIframeHosts = [];
-                        resolve(popupDirectIframeHosts);
+                        shouldRunAggressiveOverlayCleanup = true;
+                        resolve({
+                            compatibilityModeSites,
+                            popupDirectIframeHosts
+                        });
                         return;
                     }
 
+                    compatibilityModeSites = normalizeDomainList(response?.profiles?.compatibilityModeSites);
                     popupDirectIframeHosts = normalizeDomainList(response?.profiles?.popupDirectIframeHosts);
-                    resolve(popupDirectIframeHosts);
+                    shouldRunAggressiveOverlayCleanup = !isCompatibilityModeSite();
+                    resolve({
+                        compatibilityModeSites,
+                        popupDirectIframeHosts
+                    });
                 });
             } catch (_) {
+                compatibilityModeSites = [];
                 popupDirectIframeHosts = [];
-                resolve(popupDirectIframeHosts);
+                shouldRunAggressiveOverlayCleanup = true;
+                resolve({
+                    compatibilityModeSites,
+                    popupDirectIframeHosts
+                });
             }
         });
 
-        return popupDirectIframeHostsLoadPromise;
+        return siteProfilesLoadPromise;
     }
-
-    const shouldRunAggressiveOverlayCleanup = !isCompatibilityModeSite();
 
     function getDetectorEntries() {
         const entries = window.__ShieldPlayerDetector?.getPlayers?.();
@@ -1653,9 +1665,6 @@
         console.log('🚀 Player Enhancer 已載入 [最小干預模式]');
         console.log('⚠️  注意: 由於瀏覽器安全限制,無法處理跨域 iframe 內部的覆蓋層');
         console.log('📌 建議: 使用 uBlock Origin 或其他擴充功能配合使用');
-        if (!shouldRunAggressiveOverlayCleanup) {
-            console.log('🧩 相容模式啟用：已停用侵入式覆蓋層清理');
-        }
 
         if (IS_TOP_FRAME) {
             bindResolvedFrameSourceListener();
@@ -1663,7 +1672,11 @@
             announceResolvedFrameSource();
         }
 
-        loadPopupDirectIframeHosts().catch(() => {});
+        loadSiteProfiles().then(() => {
+            if (!shouldRunAggressiveOverlayCleanup) {
+                console.log('🧩 相容模式啟用：已停用侵入式覆蓋層清理');
+            }
+        }).catch(() => {});
 
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {

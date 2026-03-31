@@ -44,7 +44,12 @@ let siteRegistryLoadPromise = null;
 let siteRegistryState = {
   domains: [],
   profiles: {
-    popupDirectIframeHosts: []
+    compatibilityModeSites: [],
+    popupDirectIframeHosts: [],
+    cosmeticFilter: {
+      globalSelectors: [],
+      siteSelectorGroups: []
+    }
   }
 };
 let adListLoadPromise = null;
@@ -76,13 +81,43 @@ function normalizeDomainList(domains = []) {
   )];
 }
 
+function normalizeSelectorList(selectors = []) {
+  return [...new Set(
+    (Array.isArray(selectors) ? selectors : [])
+      .map((selector) => String(selector || '').trim())
+      .filter(Boolean)
+  )];
+}
+
+function normalizeCosmeticSiteSelectorGroups(groups = []) {
+  return (Array.isArray(groups) ? groups : [])
+    .map((group) => {
+      const source = group && typeof group === 'object' ? group : {};
+      return {
+        domains: normalizeDomainList(source.domains),
+        selectors: normalizeSelectorList(source.selectors)
+      };
+    })
+    .filter((group) => group.domains.length > 0 && group.selectors.length > 0);
+}
+
+function normalizeCosmeticFilterConfig(payload = {}) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  return {
+    globalSelectors: normalizeSelectorList(source.globalSelectors),
+    siteSelectorGroups: normalizeCosmeticSiteSelectorGroups(source.siteSelectorGroups)
+  };
+}
+
 function normalizeSiteRegistry(payload = {}) {
   const source = payload && typeof payload === 'object' ? payload : {};
   const profiles = source.profiles && typeof source.profiles === 'object' ? source.profiles : {};
   return {
     domains: normalizeDomainList(source.domains),
     profiles: {
-      popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts)
+      compatibilityModeSites: normalizeDomainList(profiles.compatibilityModeSites),
+      popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts),
+      cosmeticFilter: normalizeCosmeticFilterConfig(profiles.cosmeticFilter)
     }
   };
 }
@@ -151,6 +186,14 @@ function getBuiltinEnhancedDomains() {
 
 function getPopupDirectIframeHosts() {
   return normalizeDomainList(siteRegistryState?.profiles?.popupDirectIframeHosts);
+}
+
+function getCosmeticFilterConfig() {
+  return normalizeCosmeticFilterConfig(siteRegistryState?.profiles?.cosmeticFilter);
+}
+
+function getCompatibilityModeSites() {
+  return normalizeDomainList(siteRegistryState?.profiles?.compatibilityModeSites);
 }
 
 function getEffectiveEnhancedDomains(customSites = []) {
@@ -5091,7 +5134,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         domains: getBuiltinEnhancedDomains(),
         keywords: SITE_REGISTRY.toDomainKeywords(),
         profiles: {
-          popupDirectIframeHosts: getPopupDirectIframeHosts()
+          compatibilityModeSites: getCompatibilityModeSites(),
+          popupDirectIframeHosts: getPopupDirectIframeHosts(),
+          cosmeticFilter: getCosmeticFilterConfig()
         }
       });
     })().catch((error) => {

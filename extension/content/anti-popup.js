@@ -8,15 +8,51 @@
 (function () {
     'use strict';
 
-    const COMPATIBILITY_MODE_SITES = [
-        'boyfriendtv.com'
-    ];
     // 此腳本已透過 content script matches 限定只在播放器站點載入
     const IS_PLAYER_SITE = true;
+    let compatibilityModeSites = [];
+    let siteProfilesLoadPromise = null;
 
     function isCompatibilityModeSite() {
         const host = window.location.hostname.toLowerCase();
-        return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+        return compatibilityModeSites.some((domain) => host === domain || host.endsWith('.' + domain));
+    }
+
+    function normalizeHostname(hostname) {
+        return String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
+    }
+
+    function normalizeDomainList(domains = []) {
+        return [...new Set(
+            (Array.isArray(domains) ? domains : [])
+                .map((domain) => normalizeHostname(domain))
+                .filter(Boolean)
+        )];
+    }
+
+    function loadSiteProfiles() {
+        if (siteProfilesLoadPromise) return siteProfilesLoadPromise;
+
+        siteProfilesLoadPromise = new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
+                    const runtimeFailed = chrome.runtime.lastError || !response?.success;
+                    if (runtimeFailed) {
+                        compatibilityModeSites = [];
+                        resolve(compatibilityModeSites);
+                        return;
+                    }
+
+                    compatibilityModeSites = normalizeDomainList(response?.profiles?.compatibilityModeSites);
+                    resolve(compatibilityModeSites);
+                });
+            } catch (_) {
+                compatibilityModeSites = [];
+                resolve(compatibilityModeSites);
+            }
+        });
+
+        return siteProfilesLoadPromise;
     }
 
     function isPlayerSite() {
@@ -101,7 +137,7 @@
     }
 
     // ========== 初始化 ==========
-    function init() {
+    function startProtection() {
         if (!isPlayerSite()) {
             return;
         }
@@ -135,6 +171,14 @@
         }
         
         console.log('🛡️ [Falcon-Player-Enhance] Anti-Popup (播放器版) 已啟動');
+    }
+
+    function init() {
+        loadSiteProfiles()
+            .catch(() => [])
+            .finally(() => {
+                startProtection();
+            });
     }
 
     init();

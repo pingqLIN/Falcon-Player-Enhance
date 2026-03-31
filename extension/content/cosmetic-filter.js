@@ -8,53 +8,75 @@
 (function () {
     'use strict';
 
-    const PLAYER_SITE_RULES = {
-        'javboys': [
-            '.ad-zone',
-            '.banner-zone',
-            '[class*="sponsor"]',
-            'div[style*="position: fixed"][style*="z-index: 9999"]',
-            '.cvpboxOverlay', '.cvpcolorbox'
-        ],
-        'missav': [
-            '[class*="ad-"]',
-            '.popup-overlay'
-        ],
-        'supjav': [
-            '[class*="ad-"]'
-        ],
-        'jable': [
-            '.ad-container',
-            '[class*="banner"]'
-        ],
-        'avgle': [
-            '[class*="ads-"]'
-        ],
-        'netflav': [
-            '[class*="ad-"]'
-        ],
-        'pornhub': [
-            '.video-ad-overlay'
-        ],
-        'xvideos': [
-            '.video-ad-overlay'
-        ]
+    let cosmeticFilterConfig = {
+        globalSelectors: [],
+        siteSelectorGroups: []
     };
-
-    const PLAYER_AD_SELECTORS = [
-        '[class*="player-overlay-ad"]',
-        '[class*="video-ad-overlay"]',
-        '[class*="preroll"]',
-        '[class*="midroll"]',
-        '[class*="exoclick"]',
-        '[class*="trafficjunky"]',
-        '[class*="juicyads"]',
-        'iframe[src*="exoclick"]',
-        'iframe[src*="trafficjunky"]'
-    ];
-
+    let cosmeticFilterConfigLoadPromise = null;
     let styleElement = null;
     let customRules = [];
+
+    function normalizeDomainList(domains = []) {
+        return [...new Set(
+            (Array.isArray(domains) ? domains : [])
+                .map((domain) => String(domain || '').trim().toLowerCase())
+                .filter(Boolean)
+        )];
+    }
+
+    function normalizeSelectorList(selectors = []) {
+        return [...new Set(
+            (Array.isArray(selectors) ? selectors : [])
+                .map((selector) => String(selector || '').trim())
+                .filter(Boolean)
+        )];
+    }
+
+    function normalizeCosmeticFilterConfig(payload = {}) {
+        const source = payload && typeof payload === 'object' ? payload : {};
+        const groups = Array.isArray(source.siteSelectorGroups) ? source.siteSelectorGroups : [];
+        return {
+            globalSelectors: normalizeSelectorList(source.globalSelectors),
+            siteSelectorGroups: groups
+                .map((group) => {
+                    const item = group && typeof group === 'object' ? group : {};
+                    return {
+                        domains: normalizeDomainList(item.domains),
+                        selectors: normalizeSelectorList(item.selectors)
+                    };
+                })
+                .filter((group) => group.domains.length > 0 && group.selectors.length > 0)
+        };
+    }
+
+    function isDomainOrSubdomain(hostname, domain) {
+        return hostname === domain || hostname.endsWith(`.${domain}`);
+    }
+
+    function loadCosmeticFilterConfig(force = false) {
+        if (force) {
+            cosmeticFilterConfigLoadPromise = null;
+        }
+
+        if (cosmeticFilterConfigLoadPromise) {
+            return cosmeticFilterConfigLoadPromise;
+        }
+
+        cosmeticFilterConfigLoadPromise = new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
+                if (chrome.runtime.lastError || !response?.success) {
+                    cosmeticFilterConfig = normalizeCosmeticFilterConfig();
+                    resolve(cosmeticFilterConfig);
+                    return;
+                }
+
+                cosmeticFilterConfig = normalizeCosmeticFilterConfig(response?.profiles?.cosmeticFilter);
+                resolve(cosmeticFilterConfig);
+            });
+        });
+
+        return cosmeticFilterConfigLoadPromise;
+    }
 
     async function loadCustomRules() {
         try {
@@ -70,19 +92,19 @@
         }
     }
 
-    function scheduleRuleRefresh() {
-        loadCustomRules().then(() => {
+    function scheduleRuleRefresh(force = false) {
+        Promise.all([loadCustomRules(), loadCosmeticFilterConfig(force)]).then(() => {
             injectStyles();
         });
     }
 
     function generateCSS() {
         const hostname = window.location.hostname.toLowerCase();
-        let selectors = [...PLAYER_AD_SELECTORS];
+        let selectors = [...cosmeticFilterConfig.globalSelectors];
 
-        for (const [site, rules] of Object.entries(PLAYER_SITE_RULES)) {
-            if (hostname.includes(site)) {
-                selectors = selectors.concat(rules);
+        for (const group of cosmeticFilterConfig.siteSelectorGroups) {
+            if (group.domains.some((domain) => isDomainOrSubdomain(hostname, domain))) {
+                selectors = selectors.concat(group.selectors);
             }
         }
 
@@ -116,7 +138,7 @@
 
     let pageStats = { popupsBlocked: 0, overlaysRemoved: 0 };
     let statsCallbacks = [];
-    
+
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
         if (event.data && event.data.type === '__SHIELD_PRO_PAGE_STATS__') {
@@ -133,44 +155,44 @@
         if (!changes.hiddenElements) return;
         scheduleRuleRefresh();
     });
-    
+
     function requestPageStats() {
         window.postMessage({ type: '__SHIELD_PRO_GET_STATS__' }, '*');
     }
-    
+
     function requestPageStatsAsync(timeout = 100) {
         return new Promise((resolve) => {
             const timer = setTimeout(() => {
                 resolve(pageStats);
             }, timeout);
-            
+
             statsCallbacks.push((stats) => {
                 clearTimeout(timer);
                 resolve(stats);
             });
-            
+
             requestPageStats();
         });
     }
-    
+
     setInterval(requestPageStats, 500);
     requestPageStats();
     setTimeout(requestPageStats, 50);
 
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'refreshCosmeticRules') {
-            scheduleRuleRefresh();
+            scheduleRuleRefresh(true);
             sendResponse({ success: true });
             return true;
         }
-        
+
         if (request.action === 'getPageStats') {
             requestPageStatsAsync(150).then((stats) => {
                 sendResponse(stats);
             });
             return true;
         }
-        
+
         if (request.action === 'activateElementPicker' || request.action === 'activatePicker') {
             window.dispatchEvent(new CustomEvent('__shield_pro_activate_picker__'));
             sendResponse({ success: true });
@@ -182,7 +204,7 @@
             sendResponse({ success: true });
             return true;
         }
-        
+
         if (request.action === 'disableBlocking') {
             if (styleElement) {
                 styleElement.remove();
@@ -195,7 +217,7 @@
     });
 
     async function init() {
-        await loadCustomRules();
+        await Promise.all([loadCustomRules(), loadCosmeticFilterConfig(true)]);
         injectStyles();
         console.log('🎨 [Falcon-Player-Enhance] Cosmetic Filter (播放器版) 已啟動');
     }
