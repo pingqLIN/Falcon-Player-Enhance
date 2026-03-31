@@ -12,6 +12,8 @@
         'boyfriendtv.com'
     ];
     let cleanupEnabled = false;
+    let popupDirectIframeHosts = [];
+    let popupDirectIframeHostsLoadPromise = null;
 
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
@@ -19,6 +21,14 @@
 
     function isDomainOrSubdomain(hostname, domain) {
         return hostname === domain || hostname.endsWith('.' + domain);
+    }
+
+    function normalizeDomainList(domains = []) {
+        return [...new Set(
+            (Array.isArray(domains) ? domains : [])
+                .map((domain) => normalizeHostname(domain))
+                .filter(Boolean)
+        )];
     }
 
     function resolveCleanupMode() {
@@ -37,6 +47,31 @@
     function isCompatibilityModeSite() {
         const host = window.location.hostname.toLowerCase();
         return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+    }
+
+    function loadPopupDirectIframeHosts() {
+        if (popupDirectIframeHostsLoadPromise) return popupDirectIframeHostsLoadPromise;
+
+        popupDirectIframeHostsLoadPromise = new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
+                    const runtimeFailed = chrome.runtime.lastError || !response?.success;
+                    if (runtimeFailed) {
+                        popupDirectIframeHosts = [];
+                        resolve(popupDirectIframeHosts);
+                        return;
+                    }
+
+                    popupDirectIframeHosts = normalizeDomainList(response?.profiles?.popupDirectIframeHosts);
+                    resolve(popupDirectIframeHosts);
+                });
+            } catch (_) {
+                popupDirectIframeHosts = [];
+                resolve(popupDirectIframeHosts);
+            }
+        });
+
+        return popupDirectIframeHostsLoadPromise;
     }
 
     const shouldRunAggressiveOverlayCleanup = !isCompatibilityModeSite();
@@ -779,8 +814,8 @@
         if (!normalized) return false;
 
         try {
-            const hostname = new URL(normalized).hostname.toLowerCase().replace(/^www\./, '');
-            return hostname === 'boyfriendtv.com' || hostname.endsWith('.boyfriendtv.com');
+            const hostname = normalizeHostname(new URL(normalized).hostname);
+            return popupDirectIframeHosts.some((domain) => isDomainOrSubdomain(hostname, domain));
         } catch (_) {
             return false;
         }
@@ -1627,6 +1662,8 @@
         } else {
             announceResolvedFrameSource();
         }
+
+        loadPopupDirectIframeHosts().catch(() => {});
 
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {

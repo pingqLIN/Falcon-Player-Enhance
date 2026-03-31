@@ -33,5 +33,10 @@
     "tw.news.yahoo.com",
     "news.yahoo.com",
     "poapan.xyz"
-  ]
+  ],
+  "profiles": {
+    "popupDirectIframeHosts": [
+      "boyfriendtv.com"
+    ]
+  }
 }

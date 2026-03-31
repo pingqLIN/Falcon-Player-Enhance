@@ -29,9 +29,6 @@ const CONTENT_SCRIPT_IDS = [
   'shield-docidle-isolated'
 ];
 
-const DIRECT_POPUP_IFRAME_HOSTS = [
-  'boyfriendtv.com'
-];
 const SITE_REGISTRY_RESOURCE_PATH = 'rules/site-registry.json';
 const AD_LIST_RESOURCE_PATH = 'rules/ad-list.json';
 const AI_PROVIDER_SECRET_STORAGE_KEY = 'aiProviderSecret';
@@ -44,7 +41,12 @@ const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 
 const directPopupOverlayTabs = {};
 let siteRegistryLoadPromise = null;
-let siteRegistryDomains = [];
+let siteRegistryState = {
+  domains: [],
+  profiles: {
+    popupDirectIframeHosts: []
+  }
+};
 let adListLoadPromise = null;
 let adListEntries = [];
 
@@ -74,6 +76,17 @@ function normalizeDomainList(domains = []) {
   )];
 }
 
+function normalizeSiteRegistry(payload = {}) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const profiles = source.profiles && typeof source.profiles === 'object' ? source.profiles : {};
+  return {
+    domains: normalizeDomainList(source.domains),
+    profiles: {
+      popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts)
+    }
+  };
+}
+
 async function loadSiteRegistry() {
   if (siteRegistryLoadPromise) return siteRegistryLoadPromise;
 
@@ -87,17 +100,17 @@ async function loadSiteRegistry() {
       }
 
       const payload = await response.json();
-      const domains = normalizeDomainList(payload?.domains);
-      if (domains.length === 0) {
+      const nextState = normalizeSiteRegistry(payload);
+      if (nextState.domains.length === 0) {
         throw new Error('site_registry_empty');
       }
 
-      siteRegistryDomains = domains;
-      return siteRegistryDomains;
+      siteRegistryState = nextState;
+      return siteRegistryState;
     } catch (error) {
-      siteRegistryDomains = [];
+      siteRegistryState = normalizeSiteRegistry();
       console.error('✗ 站點註冊表載入失敗:', error);
-      return siteRegistryDomains;
+      return siteRegistryState;
     }
   })();
 
@@ -133,7 +146,11 @@ async function loadAdList() {
 }
 
 function getBuiltinEnhancedDomains() {
-  return normalizeDomainList(siteRegistryDomains);
+  return normalizeDomainList(siteRegistryState.domains);
+}
+
+function getPopupDirectIframeHosts() {
+  return normalizeDomainList(siteRegistryState?.profiles?.popupDirectIframeHosts);
 }
 
 function getEffectiveEnhancedDomains(customSites = []) {
@@ -749,7 +766,7 @@ function shouldOpenPopupDirectly(payload = {}) {
 
   try {
     const hostname = normalizePopupHost(new URL(iframeSrc).hostname);
-    return DIRECT_POPUP_IFRAME_HOSTS.some((domain) => isPopupDomainOrSubdomain(hostname, domain));
+    return getPopupDirectIframeHosts().some((domain) => isPopupDomainOrSubdomain(hostname, domain));
   } catch (_) {
     return false;
   }
@@ -5072,7 +5089,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({
         success: true,
         domains: getBuiltinEnhancedDomains(),
-        keywords: SITE_REGISTRY.toDomainKeywords()
+        keywords: SITE_REGISTRY.toDomainKeywords(),
+        profiles: {
+          popupDirectIframeHosts: getPopupDirectIframeHosts()
+        }
       });
     })().catch((error) => {
       sendResponse({ success: false, error: String(error?.message || error) });
