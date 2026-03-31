@@ -57,9 +57,11 @@ const aiRuntimeState = {
 const IS_PLAYER_SITE = true;
 
 // 相容模式網站：避免侵入式攔截干擾播放器初始化
-const COMPATIBILITY_MODE_SITES = [
+const DEFAULT_COMPATIBILITY_MODE_SITES = [
     'boyfriendtv.com'
 ];
+let compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+let siteProfilesLoadPromise = null;
 
 // 已知惡意廣告域名 (播放器相關)
 const MALICIOUS_DOMAINS = [
@@ -88,7 +90,7 @@ function isPlayerSite() {
 
 function isCompatibilityModeSite() {
     const host = window.location.hostname.toLowerCase();
-    return COMPATIBILITY_MODE_SITES.some((domain) => host === domain || host.endsWith('.' + domain));
+    return compatibilityModeSites.some((domain) => host === domain || host.endsWith('.' + domain));
 }
 
 function isAdvancedPlayerProtectionEnabled() {
@@ -106,6 +108,20 @@ function hasBlockedUrlToken(value, token) {
 
     const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(normalizedToken)}([^a-z0-9]|$)`);
     return pattern.test(text);
+}
+
+function normalizeHostname(hostname) {
+    return String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
+}
+
+function normalizeDomainList(domains) {
+    if (!Array.isArray(domains)) return [];
+
+    return Array.from(new Set(
+        domains
+            .map((domain) => normalizeHostname(domain))
+            .filter(Boolean)
+    ));
 }
 
 function isBlockedUrl(url) {
@@ -1484,6 +1500,38 @@ function requestBlockingLevel() {
     } catch (e) {}
 }
 
+function requestSiteProfiles() {
+    if (siteProfilesLoadPromise) return siteProfilesLoadPromise;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+        siteProfilesLoadPromise = Promise.resolve(compatibilityModeSites);
+        return siteProfilesLoadPromise;
+    }
+
+    siteProfilesLoadPromise = new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
+                const runtimeFailed = chrome.runtime.lastError || !response?.success;
+                if (runtimeFailed) {
+                    compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+                    resolve(compatibilityModeSites);
+                    return;
+                }
+
+                const configuredDomains = normalizeDomainList(response?.profiles?.compatibilityModeSites);
+                compatibilityModeSites = configuredDomains.length > 0
+                    ? configuredDomains
+                    : DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+                resolve(compatibilityModeSites);
+            });
+        } catch (_) {
+            compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+            resolve(compatibilityModeSites);
+        }
+    });
+
+    return siteProfilesLoadPromise;
+}
+
 function setupPostMessageBridge() {
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
@@ -1498,6 +1546,7 @@ function setupPostMessageBridge() {
 
 setupMessageListener();
 setupPostMessageBridge();
+requestSiteProfiles();
 requestBlockingLevel();
 
 // ============================================================================

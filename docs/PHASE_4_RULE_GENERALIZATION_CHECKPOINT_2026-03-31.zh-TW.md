@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 4 Checkpoint
 
 > 更新日期: 2026-03-31
-> 狀態: P4 前兩個可交付切片完成
+> 狀態: P4 前三個可交付切片完成
 > 範圍: `Standalone Baseline + Rule Generalization groundwork`
 
 ## 1. 本輪目標
@@ -10,6 +10,7 @@
 
 - 將 `popup direct` host 判斷從硬編常數抽到資料層
 - 讓 `background` 與 `player-enhancer` 共用 `site-registry` 的同一份來源
+- 將 `compatibility mode` host 判斷逐步抽到 canonical `site-registry profile`
 - 保持 player-centric 與最小防護範圍，不擴張成一般型 blocker
 
 ## 2. 完成內容
@@ -80,12 +81,24 @@
 - `tests/test-cosmetic-filter.html`
 - `tests/cosmetic-filter/run_cosmetic_filter_regression.py`
 
+### 2.6 `inject-blocker.js` 改為共用 compatibility mode site profile
+
+完成項目：
+
+- 移除 `COMPATIBILITY_MODE_SITES` 作為唯一來源的做法，改為以 `DEFAULT_COMPATIBILITY_MODE_SITES` 啟動後，再向 `getSiteRegistry` 對齊
+- 新增 `requestSiteProfiles()`，在 MAIN world 初始化時讀取 `profiles.compatibilityModeSites`
+- `isCompatibilityModeSite()` 改為讀取 runtime profile 狀態，而不是永久依賴本地硬編
+
+對應檔案：
+
+- `extension/content/inject-blocker.js`
+
 ## 3. 為什麼這樣切
 
 這一刀符合舊版 Phase 4 規劃中的核心目標：
 
 - popup direct host 判斷不再重複散落
-- site profile 與 popup 行為開始共用資料來源
+- site profile 與 popup / compatibility mode 行為開始共用資料來源
 
 同時它也避免一次把整個 rule pipeline 全部打開，降低了：
 
@@ -100,6 +113,7 @@
 已通過：
 
 - `node --check extension/background.js`
+- `node --check extension/content/inject-blocker.js`
 - `node --check extension/content/cosmetic-filter.js`
 - `node --check extension/content/player-enhancer.js`
 - `site-registry.json` JSON parse 驗證
@@ -110,6 +124,7 @@
 已驗證：
 
 - background runtime 可正確讀出 `popupDirectIframeHosts`
+- background runtime 可正確讀出 `compatibilityModeSites`
 - `shouldOpenPopupDirectly({ iframeSrc: 'https://www.boyfriendtv.com/embed/example' })` 回傳 `true`
 - `cosmetic-filter` 可正確讀取 `profiles.cosmeticFilter` 並生成 host-specific CSS
 
@@ -124,7 +139,7 @@
 
 ## 5. 尚未完成的 P4 後續項目
 
-本輪只完成了 P4 的第一個切片，以下仍屬後續工作：
+本輪只完成了 P4 的前三個切片，以下仍屬後續工作：
 
 - 將更多 popup / redirect / anti-antiblock 行為抽成 typed site profiles
 - 讓 `cosmetic-filter`、`inject-blocker`、其他 site-specific 分支逐步接 canonical source
@@ -135,8 +150,8 @@
 截至 2026-03-31，本專案已完成 `Phase 4` 的第一個有效切片：
 
 - `site-registry` 開始承接最小行為 schema
-- popup direct host 規則不再分散硬編
+- popup direct host 與 compatibility mode host 規則不再分散硬編
 - cosmetic filter 的 player-adjacent selector 規則開始回收到 canonical source
-- background、player-enhancer、cosmetic-filter 對齊到同一資料來源
+- background、player-enhancer、cosmetic-filter、inject-blocker 開始對齊到同一資料來源
 
 這表示 `Rule Generalization` 已從概念階段，進入「小步可驗證落地」階段。
