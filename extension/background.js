@@ -262,7 +262,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
   {
     id: 'shield-docstart-isolated',
     matches: [],
-    js: ['content/cosmetic-filter.js', 'content/anti-popup.js'],
+    js: ['content/site-state-bridge.js', 'content/cosmetic-filter.js', 'content/anti-popup.js'],
     runAt: 'document_start',
     allFrames: true,
     persistAcrossSessions: true
