@@ -49,6 +49,9 @@ let siteRegistryState = {
     cosmeticFilter: {
       globalSelectors: [],
       siteSelectorGroups: []
+    },
+    injectBlocker: {
+      knownOverlaySelectors: []
     }
   }
 };
@@ -109,6 +112,13 @@ function normalizeCosmeticFilterConfig(payload = {}) {
   };
 }
 
+function normalizeInjectBlockerConfig(payload = {}) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  return {
+    knownOverlaySelectors: normalizeSelectorList(source.knownOverlaySelectors)
+  };
+}
+
 function normalizeSiteRegistry(payload = {}) {
   const source = payload && typeof payload === 'object' ? payload : {};
   const profiles = source.profiles && typeof source.profiles === 'object' ? source.profiles : {};
@@ -117,7 +127,8 @@ function normalizeSiteRegistry(payload = {}) {
     profiles: {
       compatibilityModeSites: normalizeDomainList(profiles.compatibilityModeSites),
       popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts),
-      cosmeticFilter: normalizeCosmeticFilterConfig(profiles.cosmeticFilter)
+      cosmeticFilter: normalizeCosmeticFilterConfig(profiles.cosmeticFilter),
+      injectBlocker: normalizeInjectBlockerConfig(profiles.injectBlocker)
     }
   };
 }
@@ -194,6 +205,10 @@ function getCosmeticFilterConfig() {
 
 function getCompatibilityModeSites() {
   return normalizeDomainList(siteRegistryState?.profiles?.compatibilityModeSites);
+}
+
+function getInjectBlockerConfig() {
+  return normalizeInjectBlockerConfig(siteRegistryState?.profiles?.injectBlocker);
 }
 
 function getEffectiveEnhancedDomains(customSites = []) {
@@ -5136,7 +5151,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         profiles: {
           compatibilityModeSites: getCompatibilityModeSites(),
           popupDirectIframeHosts: getPopupDirectIframeHosts(),
-          cosmeticFilter: getCosmeticFilterConfig()
+          cosmeticFilter: getCosmeticFilterConfig(),
+          injectBlocker: getInjectBlockerConfig()
         }
       });
     })().catch((error) => {

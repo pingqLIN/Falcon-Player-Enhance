@@ -128,6 +128,28 @@
           ]
         }
       ]
+    },
+    "injectBlocker": {
+      "knownOverlaySelectors": [
+        ".cvpboxOverlay",
+        ".cvpcolorbox",
+        "#cvpboxOverlay",
+        "#cvpcolorbox",
+        "[class*=\"cvpbox\"]",
+        "[id*=\"cvpbox\"]",
+        ".colorbox",
+        "#colorbox",
+        ".cboxOverlay",
+        "#cboxOverlay",
+        ".fancybox-overlay",
+        ".modal-backdrop.ad",
+        "[class*=\"player-overlay-ad\"]",
+        "[class*=\"video-ad-overlay\"]",
+        "[class*=\"preroll\"]",
+        "[class*=\"midroll\"]",
+        "[class*=\"ads-container\"]",
+        "[id*=\"ads-container\"]"
+      ]
     }
   }
 }

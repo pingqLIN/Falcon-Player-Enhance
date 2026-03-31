@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon Inject Blocker Overlay Regression</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #f5f5f5;
+    }
+
+    .card {
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="known-global-overlay" class="card player-overlay-ad">global overlay candidate</div>
+    <div id="known-javboys-overlay" class="card cvpboxOverlay">javboys overlay candidate</div>
+    <div id="safe-content" class="card content-card">safe content should remain visible</div>
+  </main>
+</body>
+</html>

@@ -61,6 +61,16 @@ const DEFAULT_COMPATIBILITY_MODE_SITES = [
     'boyfriendtv.com'
 ];
 let compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+const DEFAULT_KNOWN_OVERLAY_SELECTORS = [
+    '.cvpboxOverlay', '.cvpcolorbox', '#cvpboxOverlay', '#cvpcolorbox',
+    '[class*="cvpbox"]', '[id*="cvpbox"]',
+    '.colorbox', '#colorbox', '.cboxOverlay', '#cboxOverlay',
+    '.fancybox-overlay', '.modal-backdrop.ad',
+    '[class*="player-overlay-ad"]', '[class*="video-ad-overlay"]',
+    '[class*="preroll"]', '[class*="midroll"]',
+    '[class*="ads-container"]', '[id*="ads-container"]'
+];
+let knownOverlaySelectors = DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
 let siteProfilesLoadPromise = null;
 
 // 已知惡意廣告域名 (播放器相關)
@@ -120,6 +130,16 @@ function normalizeDomainList(domains) {
     return Array.from(new Set(
         domains
             .map((domain) => normalizeHostname(domain))
+            .filter(Boolean)
+    ));
+}
+
+function normalizeSelectorList(selectors) {
+    if (!Array.isArray(selectors)) return [];
+
+    return Array.from(new Set(
+        selectors
+            .map((selector) => String(selector || '').trim())
             .filter(Boolean)
     ));
 }
@@ -1098,23 +1118,9 @@ if (isAdvancedPlayerProtectionEnabled()) {
 // ============================================================================
 // 🔵 DEFENSE #16: 特定覆蓋層移除 (播放器網站)
 // ============================================================================
-const KNOWN_OVERLAY_SELECTORS = [
-    // javboys.online 播放器
-    '.cvpboxOverlay', '.cvpcolorbox', '#cvpboxOverlay', '#cvpcolorbox',
-    '[class*="cvpbox"]', '[id*="cvpbox"]',
-    // 通用廣告覆蓋
-    '.colorbox', '#colorbox', '.cboxOverlay', '#cboxOverlay',
-    '.fancybox-overlay', '.modal-backdrop.ad',
-    // 播放器廣告
-    '[class*="player-overlay-ad"]', '[class*="video-ad-overlay"]',
-    '[class*="preroll"]', '[class*="midroll"]',
-    // 覆蓋式廣告容器
-    '[class*="ads-container"]', '[id*="ads-container"]'
-];
-
 function removeKnownOverlays() {
     let removed = 0;
-    KNOWN_OVERLAY_SELECTORS.forEach(selector => {
+    knownOverlaySelectors.forEach(selector => {
         try {
             document.querySelectorAll(selector).forEach(el => {
                 if (el && el.parentNode) {
@@ -1503,7 +1509,10 @@ function requestBlockingLevel() {
 function requestSiteProfiles() {
     if (siteProfilesLoadPromise) return siteProfilesLoadPromise;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-        siteProfilesLoadPromise = Promise.resolve(compatibilityModeSites);
+        siteProfilesLoadPromise = Promise.resolve({
+            compatibilityModeSites,
+            knownOverlaySelectors
+        });
         return siteProfilesLoadPromise;
     }
 
@@ -1513,19 +1522,34 @@ function requestSiteProfiles() {
                 const runtimeFailed = chrome.runtime.lastError || !response?.success;
                 if (runtimeFailed) {
                     compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
-                    resolve(compatibilityModeSites);
+                    knownOverlaySelectors = DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+                    resolve({
+                        compatibilityModeSites,
+                        knownOverlaySelectors
+                    });
                     return;
                 }
 
                 const configuredDomains = normalizeDomainList(response?.profiles?.compatibilityModeSites);
+                const configuredSelectors = normalizeSelectorList(response?.profiles?.injectBlocker?.knownOverlaySelectors);
                 compatibilityModeSites = configuredDomains.length > 0
                     ? configuredDomains
                     : DEFAULT_COMPATIBILITY_MODE_SITES.slice();
-                resolve(compatibilityModeSites);
+                knownOverlaySelectors = configuredSelectors.length > 0
+                    ? configuredSelectors
+                    : DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+                resolve({
+                    compatibilityModeSites,
+                    knownOverlaySelectors
+                });
             });
         } catch (_) {
             compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
-            resolve(compatibilityModeSites);
+            knownOverlaySelectors = DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+            resolve({
+                compatibilityModeSites,
+                knownOverlaySelectors
+            });
         }
     });
 
