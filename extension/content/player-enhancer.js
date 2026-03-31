@@ -30,16 +30,48 @@
         )];
     }
 
+    function applyCleanupModeFromState(state = null) {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.shouldRunCleanup) {
+            cleanupEnabled = helper.shouldRunCleanup(window.location.hostname);
+            return cleanupEnabled;
+        }
+
+        const hostname = normalizeHostname(window.location.hostname);
+        const whitelist = Array.isArray(state?.whitelistDomains) ? state.whitelistDomains : [];
+        const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
+        const whitelistEnhanceOnly = state?.whitelistEnhanceOnly !== false;
+        cleanupEnabled = !(onWhitelist && whitelistEnhanceOnly);
+        return cleanupEnabled;
+    }
+
     function resolveCleanupMode() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.load) {
+            return helper.load().then((state) => applyCleanupModeFromState(state));
+        }
+
         return new Promise((resolve) => {
             chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
-                const hostname = normalizeHostname(window.location.hostname);
-                const whitelist = Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [];
-                const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
-                const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-                cleanupEnabled = !(onWhitelist && whitelistEnhanceOnly);
-                resolve(cleanupEnabled);
+                resolve(applyCleanupModeFromState({
+                    whitelistDomains: Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [],
+                    whitelistEnhanceOnly: result.whitelistEnhanceOnly
+                }));
             });
+        });
+    }
+
+    function bindCleanupModeUpdates() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (!helper?.subscribe) return;
+        helper.subscribe((state) => {
+            const previous = cleanupEnabled;
+            const next = applyCleanupModeFromState(state);
+            if (previous || !next) return;
+            startOverlayMonitoring();
+            if (shouldRunAggressiveOverlayCleanup) {
+                removeParentPageOverlays();
+            }
         });
     }
 
@@ -1671,6 +1703,7 @@
         } else {
             announceResolvedFrameSource();
         }
+        bindCleanupModeUpdates();
 
         loadSiteProfiles().then(() => {
             if (!shouldRunAggressiveOverlayCleanup) {

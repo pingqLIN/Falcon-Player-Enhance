@@ -29,16 +29,46 @@
         return hostname === domain || hostname.endsWith('.' + domain);
     }
 
+    function applyBlockingModeFromState(state = null) {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.shouldRunCleanup) {
+            blockingEnabled = helper.shouldRunCleanup(window.location.hostname);
+            return blockingEnabled;
+        }
+
+        const hostname = normalizeHostname(window.location.hostname);
+        const whitelist = Array.isArray(state?.whitelistDomains) ? state.whitelistDomains : [];
+        const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
+        const whitelistEnhanceOnly = state?.whitelistEnhanceOnly !== false;
+        blockingEnabled = !(onWhitelist && whitelistEnhanceOnly);
+        return blockingEnabled;
+    }
+
     function resolveBlockingMode() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.load) {
+            return helper.load().then((state) => applyBlockingModeFromState(state));
+        }
+
         return new Promise((resolve) => {
             chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
-                const hostname = normalizeHostname(window.location.hostname);
-                const whitelist = Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [];
-                const onWhitelist = whitelist.some((domain) => isDomainOrSubdomain(hostname, domain));
-                const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
-                blockingEnabled = !(onWhitelist && whitelistEnhanceOnly);
-                resolve(blockingEnabled);
+                resolve(applyBlockingModeFromState({
+                    whitelistDomains: Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [],
+                    whitelistEnhanceOnly: result.whitelistEnhanceOnly
+                }));
             });
+        });
+    }
+
+    function bindBlockingModeUpdates() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (!helper?.subscribe) return;
+        helper.subscribe((state) => {
+            const previous = blockingEnabled;
+            const next = applyBlockingModeFromState(state);
+            if (previous || !next) return;
+            scheduleProcessLoop();
+            setTimeout(processAllPlayers, 100);
         });
     }
 
@@ -670,6 +700,7 @@
      * 初始化
      */
     async function init() {
+        bindBlockingModeUpdates();
         await resolveBlockingMode();
         if (!blockingEnabled) {
             console.log('⚪ Overlay Remover: 白名單增強模式，已停用基礎覆蓋層清理');

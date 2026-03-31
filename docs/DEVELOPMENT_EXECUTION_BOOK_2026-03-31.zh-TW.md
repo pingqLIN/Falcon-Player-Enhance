@@ -106,6 +106,8 @@ Phase 5 核心文件：
 
 - `docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 - `docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
+- `docs/PHASE_5_RELEASE_GATE_CHECKPOINT_2026-03-31.zh-TW.md`
+- `tests/release-gate/run_phase5_acceptance_gate.py`
 
 Phase 5 執行順序：
 

@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 執行計畫
 
 > 更新日期: 2026-03-31
-> 狀態: Kickoff
+> 狀態: Kickoff（Track A/B/C/D groundwork landed）
 > 參照: `PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`、`STANDALONE_BASELINE_RULESET_2026-03-31.zh-TW.md`、`PHASE_4_GLOBAL_REVIEW_2026-03-31.zh-TW.md`
 
 ## 1. Phase 5 目標
@@ -74,6 +74,8 @@ Phase 5 明確不做：
 - whitelist runtime state diagram
 - divergence 偵測條件與修復流程
 - anti-antiblock / related scripts 行為一致性規範
+- `document_idle / ISOLATED` canonical helper (`site-state-helper.js`)
+- `tests/site-state/run_site_state_helper_regression.py`
 
 驗收：
 
@@ -89,6 +91,7 @@ Phase 5 明確不做：
 交付：
 
 - `PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
+- `tests/release-gate/run_phase5_acceptance_gate.py`
 - gate 執行順序與阻斷條件（Blocker / Warning）
 
 驗收：

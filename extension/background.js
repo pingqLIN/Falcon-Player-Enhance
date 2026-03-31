@@ -228,6 +228,7 @@ const BASIC_GLOBAL_CONTENT_SCRIPT_DEFINITIONS = [
     matches: ['<all_urls>'],
     css: ['content/styles.css', 'content/player-overlay-fix.css'],
     js: [
+      'content/site-state-helper.js',
       'content/player-detector.js',
       'content/fake-video-remover.js',
       'content/overlay-remover.js',
@@ -272,6 +273,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
     matches: [],
     css: ['content/styles.css', 'content/player-overlay-fix.css'],
     js: [
+      'content/site-state-helper.js',
       'content/player-detector.js',
       'content/fake-video-remover.js',
       'content/overlay-remover.js',
