@@ -69,17 +69,17 @@ Falcon-Player-Enhance 已完成 `Phase 1` 到 `Phase 3` 的核心收斂，產品
 ## 目前還沒做完的事
 
 - `Basic Standalone Protection` 的正式 baseline 清單
-- `Standalone Baseline + Rule Generalization` 第一階段
+- 更完整的 `Standalone Baseline + Rule Generalization` 收斂
 - `AI candidate -> review -> baseline` 正式受控流程
 - popup 實際視窗尺寸在所有環境中的更精準還原
 
 ## 下一步
 
-下一階段將進入 `P4 / Standalone Baseline + Rule Generalization groundwork`，優先處理：
+`P4` 已啟動第一個切片，下一步將持續推進 `Standalone Baseline + Rule Generalization groundwork`，優先處理：
 
-1. 把 `popup direct` host 判斷從硬編常數抽到資料層
-2. 讓站點 profile 與 popup / detector 規則鏈有更一致的來源
-3. 只做 player-centric 與最小防護收斂，不擴張成一般型 blocker
+1. 將更多 popup / redirect / anti-antiblock 行為整理成 typed site profiles
+2. 建立 `Standalone Baseline` 的正式最小規則清單與 canonical source
+3. 持續只做 player-centric 與最小防護收斂，不擴張成一般型 blocker
 
 ## 參考文件
 
@@ -87,3 +87,38 @@ Falcon-Player-Enhance 已完成 `Phase 1` 到 `Phase 3` 的核心收斂，產品
 - `docs/ROADMAP_UBOL_COMPANION.zh-TW.md`
 - `docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md`
 - `docs/PHASE_1_2_3_GLOBAL_REVIEW_2026-03-31.zh-TW.md`
+- `docs/PHASE_4_RULE_GENERALIZATION_CHECKPOINT_2026-03-31.zh-TW.md`
+
+## 證據附錄
+
+### Commit 基線
+
+- `d7de8bd` `docs: define uBOL companion strategy and execution plan`
+- `0f1819d` `feat: stabilize player eligibility and popup smoke coverage`
+- `243813d` `docs: add phase 1-3 global review checkpoint`
+- `378c73e` `docs: add phase summary and p4 checkpoint`
+- `c51f83b` `feat: generalize popup direct host profiles`
+
+### 驗證命令
+
+```bash
+node --check extension/content/player-detector.js
+node --check extension/content/player-sync.js
+node --check extension/popup-player/popup-player.js
+node --check extension/background.js
+node --check extension/content/player-enhancer.js
+
+python tests/popup-smoke/run_popup_smoke.py --headless --cases popup-open-local-video pin-close-reopen popup-player-state-restore
+python tests/popup-smoke/run_popup_smoke.py --headless --cases multi-popup-distinct-windows
+python tests/player-detection/run_player_detection_regression.py --headless
+```
+
+### 最新結果
+
+- popup smoke:
+  - `popup-open-local-video` PASS
+  - `pin-close-reopen` PASS
+  - `popup-player-state-restore` PASS
+  - `multi-popup-distinct-windows` PASS
+- player detection regression:
+  - `passedCases = 9`
