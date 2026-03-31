@@ -25,8 +25,9 @@ Falcon-Player-Enhance 已完成 `Phase 1` 到 `Phase 3` 的核心收斂，產品
 
 ### 2. popup player 可靠性補強
 
-- 完成 popup direct / pin / reopen / state restore 主線穩定化
+- 完成 popup direct / pin / reopen / state restore 主線驗證
 - 直載影片失敗時，加入 remote fallback，避免功能直接失效
+- popup 視窗尺寸的更精準還原，仍保留為後續項目
 
 ### 3. 驗證基線重建
 
@@ -59,7 +60,7 @@ Falcon-Player-Enhance 已完成 `Phase 1` 到 `Phase 3` 的核心收斂，產品
 
 ## 這輪最重要的技術判斷
 
-原本 `popup_player_video_not_ready` 的主要成因，不是 popup-player 核心邏輯崩壞，而是測試頁使用的遠端 MP4 在 headless Chromium 環境中不穩定。
+本輪驗證觀察到，`popup_player_video_not_ready` 的主要因素不是 popup-player 核心邏輯崩壞，而是測試頁使用的遠端 MP4 在 headless Chromium 環境中不穩定。
 
 因此修正採雙軌：
 
