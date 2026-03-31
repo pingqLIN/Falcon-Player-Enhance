@@ -34,6 +34,7 @@ NODE_CHECK_FILES = [
 
 PY_COMPILE_FILES = [
     "docs/take-screenshots.py",
+    "tests/ai/run_candidate_review_regression.py",
     "tests/popup-smoke/run_popup_smoke.py",
     "tests/player-detection/run_player_detection_regression.py",
     "tests/cosmetic-filter/run_cosmetic_filter_regression.py",
@@ -49,7 +50,7 @@ PY_COMPILE_FILES = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run Falcon Phase 5 acceptance gates (G-00 to G-06) with fresh evidence."
+        description="Run Falcon Phase 5 acceptance gates (G-00 to G-07) with fresh evidence."
     )
     parser.add_argument(
         "--headless",
@@ -229,6 +230,13 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
                 build_browser_command("tests/site-state/run_site_state_bridge_regression.py", headless),
                 build_browser_command("tests/site-state/run_site_state_helper_regression.py", headless),
                 build_browser_command("tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py", headless),
+            ],
+        },
+        {
+            "id": "G-07",
+            "label": "AI Candidate Governance",
+            "steps": [
+                build_browser_command("tests/ai/run_candidate_review_regression.py", headless),
             ],
         },
     ]

@@ -380,6 +380,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = document.createElement('div');
             item.className = 'policy-host-item';
             const providerLabel = getProviderLabel(String(candidate.provider || 'lmstudio'));
+            const latestDecision = candidate.latestDecision || null;
+            const decisionLabel = latestDecision
+                ? `${latestDecision.decision}${latestDecision.reason ? ` · ${latestDecision.reason}` : ''}`
+                : 'pending review';
             item.innerHTML = `
                 <div class="policy-host-main">
                     <span class="policy-host-name">${escapeHtml(candidate.hostname || 'unknown-host')}</span>
@@ -389,12 +393,44 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="policy-chip">${escapeHtml(providerLabel)}</span>
                     <span class="policy-chip">Selectors · ${Number(candidate.selectorCount || 0)}</span>
                     <span class="policy-chip">Domains · ${Number(candidate.domainCount || 0)}</span>
+                    <span class="policy-chip ${latestDecision ? `candidate-review-chip candidate-review-${escapeHtml(latestDecision.decision || 'pending')}` : ''}">Review · ${escapeHtml(decisionLabel)}</span>
                 </div>
                 <div class="policy-host-meta">
                     <span>${escapeHtml(candidate.summary || 'No summary')}</span>
                 </div>
+                <div class="candidate-review-actions">
+                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="accepted">Accept</button>
+                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="rejected">Reject</button>
+                </div>
             `;
             lmstudioCandidateList.appendChild(item);
+        });
+
+        lmstudioCandidateList.querySelectorAll('.btn-candidate-review').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const hostname = button.dataset.hostname || '';
+                const decision = button.dataset.decision || '';
+                const defaultReason = decision === 'accepted' ? 'manual_review_accept' : 'manual_review_reject';
+                const reason = window.prompt('Optional review note', defaultReason);
+                if (reason === null) return;
+                button.disabled = true;
+                try {
+                    const response = await runtimeMessage({
+                        action: 'reviewAiRuleCandidate',
+                        hostname,
+                        decision,
+                        reason: reason.trim() || defaultReason
+                    });
+                    if (!response?.success) {
+                        setLmStudioStatus(response?.error || 'Failed to save candidate review.', true);
+                        return;
+                    }
+                    setLmStudioStatus(`Candidate review saved for ${hostname}.`);
+                    await loadPolicyGateOverview();
+                } finally {
+                    button.disabled = false;
+                }
+            });
         });
     }
 
@@ -430,9 +466,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 lmstudioCandidateSummary.textContent = 'No generated rule candidates yet.';
             } else {
                 const top = candidateList[0];
+                const reviewSummary = snapshot.provider?.candidateReviewSummary || {};
                 lmstudioCandidateSummary.textContent =
                     `Generated ${candidateList.length} host candidate set(s). Latest: ${top.hostname} ` +
-                    `(selectors=${top.selectorCount || 0}, domains=${top.domainCount || 0})`;
+                    `(selectors=${top.selectorCount || 0}, domains=${top.domainCount || 0}, ` +
+                    `accepted=${Number(reviewSummary.acceptedCount || 0)}, rejected=${Number(reviewSummary.rejectedCount || 0)})`;
             }
         }
         renderLmStudioCandidates(candidateList);

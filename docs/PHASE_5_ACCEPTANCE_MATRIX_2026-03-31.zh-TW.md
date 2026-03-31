@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 驗收矩陣
 
 > 更新日期: 2026-03-31
-> 狀態: Kickoff Gate Definition
+> 狀態: Track E v1 Gate Automated
 > 參照: `PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 
 ## 1. 驗收原則
@@ -30,12 +30,12 @@
 | G-04 | Cosmetic Filter | Companion / Standalone | getSiteRegistry contract | `python tests/cosmetic-filter/run_cosmetic_filter_regression.py --headless` | global + site-specific selector 行為正確，無跨站外溢 |
 | G-05 | Inject Overlay | Companion / Standalone | compatibility fallback, getSiteRegistry contract | `python tests/inject-blocker/run_inject_blocker_overlay_regression.py --headless` | overlay 移除成功且安全內容可見 |
 | G-06 | Whitelist Consistency | Companion / Standalone | whitelist-state divergence | `python tests/site-state/run_site_state_bridge_regression.py --headless` + `python tests/site-state/run_site_state_helper_regression.py --headless` + `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless` | MAIN-world bridge、canonical helper 與 anti-antiblock 行為一致；non-whitelist / whitelist / strict-mode 與 whitelist restore（strict -> whitelist）切換皆符合預期 |
-| G-07 | AI Candidate Governance | AI-Expanded | release gate unification | candidate/review/decision 記錄抽查 | 每筆 candidate 有 accept/reject 決策與理由，不可直接寫入 baseline |
+| G-07 | AI Candidate Governance | AI-Expanded | release gate unification | `python tests/ai/run_candidate_review_regression.py --headless`（或 `npm run test:ai:candidate-review -- --headless`） | accept/reject 決策與 reason 皆可追溯；dashboard candidate 可手動審核；`baseline/confirmedPatterns` 不可被 candidate review 流程直接改寫 |
 
 ## 3. 阻斷規則
 
 - Blocker（必須修復）
-- G-00~G-06 任一失敗
+- G-00~G-07 任一失敗
 - contract 缺值導致 consumer crash 或 fallback 不一致
 - whitelist state 漂移導致 non-whitelist/whitelist 行為反轉
 
@@ -60,6 +60,5 @@
 
 本階段可進入下一階段需滿足：
 
-- G-00~G-06 連續兩輪 PASS
-- G-07 有第一版可運作的審核紀錄流程
+- G-00~G-07 連續兩輪 PASS
 - roadmap 與 execution book 已同步標記 Phase 5 kickoff 與 gate 規範

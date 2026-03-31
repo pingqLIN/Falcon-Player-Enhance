@@ -36,6 +36,7 @@ const AI_KNOWLEDGE_VERSION = 1;
 const AI_KNOWLEDGE_MAX_OBSERVATIONS = 300;
 const AI_KNOWLEDGE_MAX_CANDIDATES = 160;
 const AI_KNOWLEDGE_MAX_TEACH_SESSIONS = 200;
+const AI_CANDIDATE_REVIEW_MAX_DECISIONS = 200;
 const TEACHING_CONFIRMATION_THRESHOLD = 3;
 const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 
@@ -391,6 +392,7 @@ let aiState = {
   providerState: null,
   providerAdvisories: {},
   generatedRuleCandidates: {},
+  candidateReviewLog: [],
   knowledgeStore: null
 };
 
@@ -465,6 +467,7 @@ async function initStorage(reason = 'update') {
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
+    'aiCandidateReviewLog',
     'aiKnowledgeStore',
     'theme'
   ]);
@@ -579,6 +582,10 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.aiGeneratedRuleCandidates !== 'object' || result.aiGeneratedRuleCandidates === null) {
     patch.aiGeneratedRuleCandidates = {};
+  }
+
+  if (!Array.isArray(result.aiCandidateReviewLog)) {
+    patch.aiCandidateReviewLog = [];
   }
 
   if (!result.theme) {
@@ -1382,6 +1389,7 @@ async function loadAiState() {
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
+    'aiCandidateReviewLog',
     'aiKnowledgeStore'
   ]);
   const storedSettings = normalizeAiProviderSettings(result.aiProviderSettings || {});
@@ -1413,6 +1421,7 @@ async function loadAiState() {
       ? result.aiProviderAdvisories
       : {};
   aiState.generatedRuleCandidates = normalizeGeneratedRuleCandidates(result.aiGeneratedRuleCandidates || {});
+  aiState.candidateReviewLog = normalizeCandidateReviewLog(result.aiCandidateReviewLog || []);
   const knowledgeBeforeSeed = JSON.stringify(result.aiKnowledgeStore || {});
   aiState.knowledgeStore = normalizeAiKnowledgeStore(result.aiKnowledgeStore || {});
   seedAiKnowledgeStore();
@@ -1443,6 +1452,7 @@ async function persistAiState() {
     aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
     aiProviderAdvisories: aiState.providerAdvisories || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+    aiCandidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
     aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
   });
   await persistProviderSecretToSession(aiState.providerSecret);
@@ -1901,6 +1911,66 @@ function normalizeGeneratedRuleCandidates(input = {}) {
   return output;
 }
 
+function normalizeCandidateReviewDecision(input = {}) {
+  if (!input || typeof input !== 'object') return null;
+  const hostname = getHostname(input.hostname);
+  const decision = ['accepted', 'rejected'].includes(String(input.decision || '').trim())
+    ? String(input.decision || '').trim()
+    : '';
+  if (!hostname || !decision) return null;
+
+  return {
+    id: String(input.id || `review_${Math.random().toString(36).slice(2, 10)}`),
+    hostname,
+    decision,
+    reason: String(input.reason || '').trim().slice(0, 280),
+    provider: String(input.provider || 'unknown'),
+    model: String(input.model || ''),
+    generatedAt: Number(input.generatedAt || 0),
+    selectorCount: Math.max(0, Number(input.selectorCount || 0)),
+    domainCount: Math.max(0, Number(input.domainCount || 0)),
+    actor: String(input.actor || 'dashboard_manual_review'),
+    decidedAt: Number(input.decidedAt || getNow())
+  };
+}
+
+function normalizeCandidateReviewLog(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map(normalizeCandidateReviewDecision)
+    .filter(Boolean)
+    .sort((a, b) => Number(b.decidedAt || 0) - Number(a.decidedAt || 0))
+    .slice(0, AI_CANDIDATE_REVIEW_MAX_DECISIONS);
+}
+
+function recordCandidateReviewDecision(hostname, input = {}) {
+  const normalizedHost = getHostname(hostname);
+  if (!normalizedHost) return null;
+
+  const candidateSet = normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {})[normalizedHost];
+  if (!candidateSet) return null;
+
+  const decision = normalizeCandidateReviewDecision({
+    hostname: normalizedHost,
+    decision: input.decision,
+    reason: input.reason,
+    provider: candidateSet.provider,
+    model: candidateSet.model,
+    generatedAt: candidateSet.generatedAt,
+    selectorCount: Array.isArray(candidateSet.selectorRules) ? candidateSet.selectorRules.length : 0,
+    domainCount: Array.isArray(candidateSet.domainRules) ? candidateSet.domainRules.length : 0,
+    actor: input.actor || 'dashboard_manual_review',
+    decidedAt: input.decidedAt || getNow()
+  });
+  if (!decision) return null;
+
+  aiState.candidateReviewLog = normalizeCandidateReviewLog([
+    decision,
+    ...(Array.isArray(aiState.candidateReviewLog) ? aiState.candidateReviewLog : [])
+  ]);
+  return decision;
+}
+
 function normalizeAdListEntry(input = {}, index = 0) {
   if (!input || typeof input !== 'object') return null;
   const kind = ['domain', 'selector', 'pattern', 'token', 'iframe_host', 'click_signature'].includes(String(input.kind || '').trim())
@@ -1976,6 +2046,11 @@ function normalizeKnowledgeCandidate(input = {}) {
   const hostname = getHostname(input.hostname);
   const selector = String(input.selector || '').trim();
   if (!hostname || !selector) return null;
+  const reviewStatus = ['pending_review', 'accepted', 'rejected'].includes(String(input.reviewStatus || '').trim())
+    ? String(input.reviewStatus || '').trim()
+    : input.promoted === true
+    ? 'accepted'
+    : 'pending_review';
   return {
     id: String(input.id || `cand_${Math.random().toString(36).slice(2, 10)}`),
     hostname,
@@ -1986,7 +2061,10 @@ function normalizeKnowledgeCandidate(input = {}) {
     observations: Math.max(1, Number(input.observations || 1)),
     requiredObservations: Math.max(1, Number(input.requiredObservations || AUTO_LEARNING_PROMOTION_THRESHOLD)),
     lastSeenAt: Number(input.lastSeenAt || getNow()),
-    promoted: input.promoted === true
+    promoted: reviewStatus === 'accepted' || input.promoted === true,
+    reviewStatus,
+    reviewReason: String(input.reviewReason || '').trim(),
+    reviewedAt: Number(input.reviewedAt || 0)
   };
 }
 
@@ -2024,21 +2102,28 @@ function buildDefaultAiKnowledgeStore() {
       observationCount: 0,
       teachSessionCount: 0,
       promotedCandidateCount: 0,
+      readyForReviewCount: 0,
+      pendingReviewCount: 0,
       userVerifiedCount: 0
     }
   };
 }
 
 function recalculateAiKnowledgeStats(store) {
+  const candidates = Array.isArray(store.candidates) ? store.candidates : [];
   return {
     ...store,
     stats: {
       seedCount: store.seeds.length,
       confirmedCount: store.confirmedPatterns.length,
-      candidateCount: store.candidates.length,
+      candidateCount: candidates.length,
       observationCount: store.observations.length,
       teachSessionCount: store.teachSessions.length,
-      promotedCandidateCount: store.candidates.filter((item) => item.promoted === true).length,
+      promotedCandidateCount: candidates.filter((item) => item.promoted === true).length,
+      readyForReviewCount: candidates.filter((item) =>
+        item.reviewStatus === 'pending_review' && Number(item.observations || 0) >= Number(item.requiredObservations || AUTO_LEARNING_PROMOTION_THRESHOLD)
+      ).length,
+      pendingReviewCount: candidates.filter((item) => item.reviewStatus === 'pending_review').length,
       userVerifiedCount: store.confirmedPatterns.filter((item) => item.userVerified === true).length
     },
     lastUpdatedAt: getNow()
@@ -2085,7 +2170,9 @@ function upsertKnowledgeCandidate(store, candidate) {
       ...current,
       confidence: Math.max(current.confidence, normalized.confidence),
       observations: current.observations + 1,
-      lastSeenAt: getNow()
+      lastSeenAt: getNow(),
+      reviewStatus: current.reviewStatus || 'pending_review',
+      reviewReason: current.reviewReason || ''
     };
   } else {
     next.candidates.unshift(normalized);
@@ -2105,7 +2192,14 @@ function promoteKnowledgeCandidate(store, candidate) {
     item.hostname === normalized.hostname &&
     item.selector === normalized.selector &&
     item.category === normalized.category
-      ? { ...item, promoted: true, observations: Math.max(item.observations, normalized.observations) }
+      ? {
+          ...item,
+          promoted: true,
+          observations: Math.max(item.observations, normalized.observations),
+          reviewStatus: 'accepted',
+          reviewedAt: getNow(),
+          reviewReason: item.reviewReason || 'manual_review_accept'
+        }
       : item
   );
   const confirmed = normalizeKnowledgePattern({
@@ -4334,14 +4428,6 @@ function commitTeachObservation(hostname, features = {}, classification = {}, us
       lastSeenAt: getNow()
     };
     store = upsertKnowledgeCandidate(store, candidate);
-    const promotedCandidate = store.candidates.find((item) =>
-      item.hostname === normalizedHost &&
-      item.selector === observation.selector &&
-      item.category === category
-    );
-    if (promotedCandidate && promotedCandidate.observations >= promotedCandidate.requiredObservations) {
-      store = promoteKnowledgeCandidate(store, promotedCandidate);
-    }
   }
 
   aiState.knowledgeStore = recalculateAiKnowledgeStats(store);
@@ -4461,6 +4547,14 @@ function buildAiInsightsSnapshot() {
   const nowTs = getNow();
   const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
   const providerState = normalizeAiProviderState(aiState.providerState || {});
+  const candidateReviewLog = normalizeCandidateReviewLog(aiState.candidateReviewLog || []);
+  const latestCandidateDecisionBySignature = candidateReviewLog.reduce((result, item) => {
+    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
+    if (!result[key]) {
+      result[key] = item;
+    }
+    return result;
+  }, {});
   const advisoryHosts = Object.values(aiState.providerAdvisories || {})
     .filter((item) => item && typeof item === 'object')
     .slice(0, 20)
@@ -4482,7 +4576,15 @@ function buildAiInsightsSnapshot() {
       model: String(item.model || ''),
       selectorCount: Array.isArray(item.selectorRules) ? item.selectorRules.length : 0,
       domainCount: Array.isArray(item.domainRules) ? item.domainRules.length : 0,
-      summary: String(item.summary || '')
+      summary: String(item.summary || ''),
+      latestDecision: latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`]
+        ? {
+            decision: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decision || ''),
+            reason: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reason || ''),
+            decidedAt: Number(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decidedAt || 0),
+            actor: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || '')
+          }
+        : null
     }));
 
   const activeFallbackHosts = Object.values(aiState.hostFallbacks || {})
@@ -4524,15 +4626,24 @@ function buildAiInsightsSnapshot() {
       settings: providerSettings,
       state: providerState,
       advisoryHosts,
-      generatedRuleCandidates
+      generatedRuleCandidates,
+      candidateReviewSummary: {
+        totalDecisions: candidateReviewLog.length,
+        acceptedCount: candidateReviewLog.filter((item) => item.decision === 'accepted').length,
+        rejectedCount: candidateReviewLog.filter((item) => item.decision === 'rejected').length,
+        latestDecisionAt: Number(candidateReviewLog[0]?.decidedAt || 0)
+      }
     },
     knowledge: {
       seedCount: Number(knowledge.stats.seedCount || 0),
       confirmedCount: Number(knowledge.stats.confirmedCount || 0),
       candidateCount: Number(knowledge.stats.candidateCount || 0),
       observationCount: Number(knowledge.stats.observationCount || 0),
-      teachSessionCount: Number(knowledge.stats.teachSessionCount || 0)
+      teachSessionCount: Number(knowledge.stats.teachSessionCount || 0),
+      readyForReviewCount: Number(knowledge.stats.readyForReviewCount || 0),
+      pendingReviewCount: Number(knowledge.stats.pendingReviewCount || 0)
     },
+    candidateReviewLog: candidateReviewLog.slice(0, 50),
     activeFallbackHosts,
     hostMetrics,
     highRiskHosts: profiles
@@ -4702,6 +4813,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     aiState.hostFallbacks = {};
     aiState.providerAdvisories = {};
     aiState.generatedRuleCandidates = {};
+    aiState.candidateReviewLog = [];
     aiState.knowledgeStore = buildDefaultAiKnowledgeStore();
     seedAiKnowledgeStore();
     scheduleAiPersist();
@@ -4908,6 +5020,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         providerState: normalizeAiProviderState(aiState.providerState || {}),
         providerAdvisories: aiState.providerAdvisories || {},
         generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+        candidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
         knowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
       }
     });
@@ -4917,7 +5030,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getAiRuleCandidates') {
     sendResponse({
       success: true,
-      candidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {})
+      candidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+      reviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || [])
+    });
+    return true;
+  }
+
+  if (request.action === 'reviewAiRuleCandidate') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    const hostname = getHostname(request.hostname);
+    (async () => {
+      const decision = recordCandidateReviewDecision(hostname, {
+        decision: request.decision,
+        reason: request.reason,
+        actor: 'dashboard_manual_review'
+      });
+      if (!decision) {
+        sendResponse({ success: false, error: 'invalid_candidate_review' });
+        return;
+      }
+      await persistAiState();
+      sendResponse({
+        success: true,
+        decision,
+        snapshot: buildAiInsightsSnapshot()
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
     });
     return true;
   }

@@ -728,6 +728,33 @@ kbd {
     background-color: var(--bg-card);
 }
 
+.candidate-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.btn-candidate-review {
+    min-width: 92px;
+}
+
+.candidate-review-chip {
+    font-weight: 600;
+}
+
+.candidate-review-accepted {
+    color: #0f5132;
+    border-color: rgba(25, 135, 84, 0.35);
+    background-color: rgba(25, 135, 84, 0.12);
+}
+
+.candidate-review-rejected {
+    color: #842029;
+    border-color: rgba(220, 53, 69, 0.35);
+    background-color: rgba(220, 53, 69, 0.12);
+}
+
 /* ═══════════════════════════════════════════════════════
    NEW COMPONENTS — Dashboard 4-tab refactor
    ═══════════════════════════════════════════════════════ */

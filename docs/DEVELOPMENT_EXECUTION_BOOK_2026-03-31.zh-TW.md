@@ -4,6 +4,9 @@
 > 執行模式: YOLO mode + 主控監察 + 子代理持續開發
 > 目的: 將 `uBOL Companion` 產品邊界正式併入執行序列，並啟動 Phase 5 的契約化與驗收門檻整合
 
+> 補充（2026-04-01）：
+- Phase 5 Track E candidate governance v1 已落地，`G-07` 已納入自動化 release gate
+
 ## 0. 本版重點（相較 2026-03-30）
 
 本版不是重述舊計畫，而是新增一個關鍵決策：
@@ -90,7 +93,8 @@ Phase 1 完成條件（修正版）：
 ### P2（中期）
 
 - 定義 Standalone 最小防護 baseline 清單
-- 將候選規則導入 `candidate -> review -> baseline` 流程
+- Track E v1 已完成 `candidate -> review decision log`（accept/reject + reason）
+- 下一步將候選規則導入 `candidate -> review -> baseline` 受控流程（不可直接改寫 `confirmedPatterns`）
 - 建立 AI player-centric 擴張的驗收指標
 
 ## 4.1 Phase 5 Kickoff（新增）
@@ -113,7 +117,8 @@ Phase 5 執行順序：
 
 1. 先定版 contract/fallback 規格。
 2. 再做 whitelist state 一致性收斂。
-3. 最後統一 release gate，將 smoke/regression 轉為固定驗收矩陣。
+3. 統一 release gate，將 smoke/regression 轉為固定驗收矩陣（含 `G-07` 自動化）。
+4. 在 Track E v1 基礎上收斂 governance 深化流程（decision log schema、baseline 合併邊界、rollback）。
 
 ## 5. 執行規範（主控監察模式）
 
@@ -140,6 +145,7 @@ Phase 5 執行順序：
 - 風險 E: getSiteRegistry contract 演進無規格，導致 consumer 不一致
 - 風險 F: whitelist runtime state 在 storage/bridge/MAIN world 之間發散
 - 風險 G: 測試入口分散，release gate 無單一阻斷標準
+- 風險 H: candidate governance 雖已 v1 化，但 baseline 升級流程若無受控邊界，可能導致規則汙染
 
 對應緩解：
 
@@ -147,6 +153,7 @@ Phase 5 執行順序：
 - 以資料流盤點清單逐項關閉舊依賴
 - 在任務受理前執行「uBOL 重疊檢核」
 - 將 Phase 5 驗收矩陣作為每輪交付前的 gate（先證據、後宣告）
+- 以 `run_candidate_review_regression.py` + `G-07` 固化 candidate governance 最小證據鏈
 
 ## 7. 文件關聯
 
@@ -155,5 +162,6 @@ Phase 5 執行順序：
 - 前版執行書：`docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-30.zh-TW.md`
 - Phase 5 計畫：`docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 - Phase 5 驗收矩陣：`docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
+- Track E 檢查點：`docs/PHASE_5_TRACK_E_CANDIDATE_GOVERNANCE_CHECKPOINT_2026-03-31.zh-TW.md`
 
 本版（2026-03-31）作為後續執行主依據。

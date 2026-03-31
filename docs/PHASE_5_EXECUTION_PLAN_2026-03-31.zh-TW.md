@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 執行計畫
 
 > 更新日期: 2026-03-31
-> 狀態: Kickoff（Track A/B/C/D groundwork landed）
+> 狀態: Track A/B/C/D groundwork landed + Track E candidate governance v1
 > 參照: `PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`、`STANDALONE_BASELINE_RULESET_2026-03-31.zh-TW.md`、`PHASE_4_GLOBAL_REVIEW_2026-03-31.zh-TW.md`
 
 ## 1. Phase 5 目標
@@ -105,17 +105,21 @@ Phase 5 明確不做：
 
 目標：
 
-- 建立 `candidate -> review -> accepted baseline` 的最小可行流程
+- 建立 `candidate -> review decision log` 的最小可行流程，先確保治理可追溯與可回退，再進入 baseline 合併階段
 
 交付：
 
-- AI candidate 決策紀錄格式
-- 可回退策略與責任歸屬
+- background 記錄 AI candidate review decision（accept/reject + reason）
+- dashboard generated candidates 可手動審核
+- `tests/ai/run_candidate_review_regression.py`
+- `package.json` 腳本：`test:ai:candidate-review`
+- `G-07` 併入 unified release gate 自動化執行
 
 驗收：
 
-- AI 規則不經審核不進 baseline
-- 每次接受/拒絕都有可追溯證據
+- 每次接受/拒絕都有可追溯證據（decision + reason）
+- candidate review 不可直接改寫 `baseline/confirmedPatterns`
+- `G-07` 可在 `tests/release-gate/run_phase5_acceptance_gate.py` 中自動重跑
 
 ## 4. 里程碑
 
@@ -132,7 +136,7 @@ Phase 5 明確不做：
 ## M3（Week 3）
 
 - 完成 Track D gate 統一
-- 啟動 Track E 的 AI candidate 審核流程第一版
+- 完成 Track E 的 AI candidate 審核流程第一版並自動化 `G-07`
 
 ## 5. 決策與協作模式
 

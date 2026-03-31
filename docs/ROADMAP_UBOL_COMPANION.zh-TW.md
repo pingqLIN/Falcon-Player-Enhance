@@ -4,6 +4,9 @@
 > 更新日期：2026-03-31
 > 參照：`PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`
 
+> 補充（2026-04-01）：
+- Phase 5 Track E candidate governance v1 已落地，`G-07` 已納入 release gate 自動化
+
 ## 1. 路線圖目標
 
 本路線圖將功能發展分成四個桶位，確保 Falcon 走向與 uBOL 互補而非重疊。
@@ -91,7 +94,8 @@
 
 ### D2. 中長期（Q3~Q4）
 
-- 建立 candidate -> review -> baseline 的規則升級流程
+- Track E v1 已完成 `candidate -> review decision log` 與自動化 gate
+- 下一步建立 `candidate -> review -> baseline` 的受控規則升級流程（含 rollback）
 - 擴展到更廣站點，但維持 Companion 模式優先
 
 ### D3. 成熟期
@@ -120,7 +124,7 @@
 
 ### M3（8 ~ 16 週）
 
-- 導入 AI candidate review pipeline 第一版
+- 完成 AI candidate review pipeline 第一版（含 `G-07` 自動化）
 - 針對高流量站點建立 player-centric AI 適配策略
 - 評估覆蓋提升與誤判成本
 
@@ -143,6 +147,7 @@ Phase 5 以四個風險主題為主軸進行：
 - 先完成 contract 與 fallback 規格，再做模組對齊
 - 以 release gate 驅動每輪交付，不以單次修補宣告完成
 - 維持 Companion-first 邊界，不擴張到通用 blocker 職責
+- `G-07` 已自動化，後續聚焦治理流程深化而非手動抽查
 
 ## 7. KPI 建議
 
