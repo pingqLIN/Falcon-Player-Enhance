@@ -739,6 +739,11 @@ kbd {
     min-width: 92px;
 }
 
+.btn-candidate-promote,
+.btn-candidate-rollback {
+    min-width: 92px;
+}
+
 .candidate-review-chip {
     font-weight: 600;
 }
@@ -753,6 +758,18 @@ kbd {
     color: #842029;
     border-color: rgba(220, 53, 69, 0.35);
     background-color: rgba(220, 53, 69, 0.12);
+}
+
+.candidate-review-promoted {
+    color: #0c5460;
+    border-color: rgba(13, 202, 240, 0.35);
+    background-color: rgba(13, 202, 240, 0.12);
+}
+
+.candidate-review-rolledback {
+    color: #664d03;
+    border-color: rgba(255, 193, 7, 0.35);
+    background-color: rgba(255, 193, 7, 0.12);
 }
 
 /* ═══════════════════════════════════════════════════════

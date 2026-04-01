@@ -35,12 +35,15 @@ NODE_CHECK_FILES = [
 PY_COMPILE_FILES = [
     "docs/take-screenshots.py",
     "tests/ai/run_candidate_review_regression.py",
+    "tests/ai/run_candidate_promotion_regression.py",
     "tests/popup-smoke/run_popup_smoke.py",
     "tests/player-detection/run_player_detection_regression.py",
     "tests/cosmetic-filter/run_cosmetic_filter_regression.py",
     "tests/inject-blocker/run_inject_blocker_overlay_regression.py",
     "tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py",
     "tests/anti-popup/run_anti_popup_compatibility_fallback_regression.py",
+    "tests/content-scripts/run_basic_content_script_exclusion_regression.py",
+    "tests/rules/run_filter_rules_contract.py",
     "tests/site-state/run_site_state_bridge_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
     "tests/site-registry/run_site_registry_contract_regression.py",
@@ -201,7 +204,11 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
         {
             "id": "G-01",
             "label": "Contract",
-            "steps": [build_browser_command("tests/site-registry/run_site_registry_contract_regression.py", headless)],
+            "steps": [
+                build_browser_command("tests/site-registry/run_site_registry_contract_regression.py", headless),
+                build_browser_command("tests/content-scripts/run_basic_content_script_exclusion_regression.py", headless),
+                [sys.executable, "tests/rules/run_filter_rules_contract.py"],
+            ],
         },
         {
             "id": "G-02",
@@ -237,6 +244,13 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "label": "AI Candidate Governance",
             "steps": [
                 build_browser_command("tests/ai/run_candidate_review_regression.py", headless),
+            ],
+        },
+        {
+            "id": "G-08",
+            "label": "AI Controlled Promotion",
+            "steps": [
+                build_browser_command("tests/ai/run_candidate_promotion_regression.py", headless),
             ],
         },
     ]

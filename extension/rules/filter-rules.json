@@ -1465,5 +1465,24 @@
         "xmlhttprequest"
       ]
     }
+  },
+  {
+    "id": 1101,
+    "priority": 100,
+    "action": {
+      "type": "allow"
+    },
+    "condition": {
+      "initiatorDomains": [
+        "lovable.dev",
+        "auth.lovable.dev"
+      ],
+      "resourceTypes": [
+        "script",
+        "xmlhttprequest",
+        "image",
+        "sub_frame"
+      ]
+    }
   }
 ]

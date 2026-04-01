@@ -381,9 +381,15 @@ document.addEventListener('DOMContentLoaded', () => {
             item.className = 'policy-host-item';
             const providerLabel = getProviderLabel(String(candidate.provider || 'lmstudio'));
             const latestDecision = candidate.latestDecision || null;
+            const latestPromotion = candidate.latestPromotion || null;
             const decisionLabel = latestDecision
                 ? `${latestDecision.decision}${latestDecision.reason ? ` · ${latestDecision.reason}` : ''}`
                 : 'pending review';
+            const promotionLabel = !latestPromotion
+                ? 'not promoted'
+                : latestPromotion.active
+                ? `active · ${latestPromotion.confirmedPatternIds?.length || 0} added`
+                : 'rolled back';
             item.innerHTML = `
                 <div class="policy-host-main">
                     <span class="policy-host-name">${escapeHtml(candidate.hostname || 'unknown-host')}</span>
@@ -394,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="policy-chip">Selectors · ${Number(candidate.selectorCount || 0)}</span>
                     <span class="policy-chip">Domains · ${Number(candidate.domainCount || 0)}</span>
                     <span class="policy-chip ${latestDecision ? `candidate-review-chip candidate-review-${escapeHtml(latestDecision.decision || 'pending')}` : ''}">Review · ${escapeHtml(decisionLabel)}</span>
+                    <span class="policy-chip ${latestPromotion ? `candidate-review-chip ${latestPromotion.active ? 'candidate-review-promoted' : 'candidate-review-rolledback'}` : ''}">Promotion · ${escapeHtml(promotionLabel)}</span>
                 </div>
                 <div class="policy-host-meta">
                     <span>${escapeHtml(candidate.summary || 'No summary')}</span>
@@ -401,6 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="candidate-review-actions">
                     <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="accepted">Accept</button>
                     <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="rejected">Reject</button>
+                    <button class="btn-secondary btn-candidate-promote" data-hostname="${escapeHtml(candidate.hostname || '')}" ${latestDecision?.decision === 'accepted' && !latestPromotion?.active ? '' : 'disabled'}>Promote</button>
+                    <button class="btn-secondary btn-candidate-rollback" data-promotion-id="${escapeHtml(latestPromotion?.promotionId || '')}" ${latestPromotion?.active ? '' : 'disabled'}>Rollback</button>
                 </div>
             `;
             lmstudioCandidateList.appendChild(item);
@@ -426,6 +435,58 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     setLmStudioStatus(`Candidate review saved for ${hostname}.`);
+                    await loadPolicyGateOverview();
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+
+        lmstudioCandidateList.querySelectorAll('.btn-candidate-promote').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const hostname = button.dataset.hostname || '';
+                const rawEvidence = window.prompt('Evidence refs / note (comma-separated)', 'dashboard_manual_promotion');
+                if (rawEvidence === null) return;
+                const evidenceRefs = rawEvidence.split(',').map((item) => item.trim()).filter(Boolean);
+                button.disabled = true;
+                try {
+                    const response = await runtimeMessage({
+                        action: 'promoteAiRuleCandidate',
+                        hostname,
+                        reason: evidenceRefs[0] || 'dashboard_manual_promotion',
+                        evidenceRefs
+                    });
+                    if (!response?.success) {
+                        setLmStudioStatus(response?.error || 'Failed to promote candidate.', true);
+                        return;
+                    }
+                    setLmStudioStatus(`Candidate promoted for ${hostname}.`);
+                    await loadPolicyGateOverview();
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+
+        lmstudioCandidateList.querySelectorAll('.btn-candidate-rollback').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const promotionId = button.dataset.promotionId || '';
+                const rawEvidence = window.prompt('Rollback evidence / note (comma-separated)', 'dashboard_manual_rollback');
+                if (rawEvidence === null) return;
+                const evidenceRefs = rawEvidence.split(',').map((item) => item.trim()).filter(Boolean);
+                button.disabled = true;
+                try {
+                    const response = await runtimeMessage({
+                        action: 'rollbackAiCandidatePromotion',
+                        promotionId,
+                        reason: evidenceRefs[0] || 'dashboard_manual_rollback',
+                        evidenceRefs
+                    });
+                    if (!response?.success) {
+                        setLmStudioStatus(response?.error || 'Failed to roll back candidate promotion.', true);
+                        return;
+                    }
+                    setLmStudioStatus('Candidate promotion rolled back.');
                     await loadPolicyGateOverview();
                 } finally {
                     button.disabled = false;
@@ -467,10 +528,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const top = candidateList[0];
                 const reviewSummary = snapshot.provider?.candidateReviewSummary || {};
+                const promotionSummary = snapshot.provider?.candidatePromotionSummary || {};
                 lmstudioCandidateSummary.textContent =
                     `Generated ${candidateList.length} host candidate set(s). Latest: ${top.hostname} ` +
                     `(selectors=${top.selectorCount || 0}, domains=${top.domainCount || 0}, ` +
-                    `accepted=${Number(reviewSummary.acceptedCount || 0)}, rejected=${Number(reviewSummary.rejectedCount || 0)})`;
+                    `accepted=${Number(reviewSummary.acceptedCount || 0)}, rejected=${Number(reviewSummary.rejectedCount || 0)}, ` +
+                    `promotions=${Number(promotionSummary.activePromotions || 0)}/${Number(promotionSummary.totalPromotions || 0)})`;
             }
         }
         renderLmStudioCandidates(candidateList);

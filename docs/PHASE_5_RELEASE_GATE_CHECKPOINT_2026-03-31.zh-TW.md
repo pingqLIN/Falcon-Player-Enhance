@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 Release Gate Checkpoint
 
-> 更新日期: 2026-03-31
-> 狀態: Track A/B/C/D groundwork + Track E v1 verified
+> 更新日期: 2026-04-01
+> 狀態: Track A/B/C/D groundwork + Track E v1/v2 verified
 > 關聯文件:
 > - `docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 > - `docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
@@ -10,7 +10,7 @@
 
 ## 1. 本輪完成項目
 
-本輪 Phase 5 完成五個可交付成果：
+本輪 Phase 5 完成六個可交付成果：
 
 1. `Track A / B` groundwork 落地
 - `anti-popup.js` 補上 compatibility fallback 預設值與缺值保底
@@ -41,6 +41,15 @@
 - 新增 package script: `npm run test:ai:candidate-review -- --headless`
 - `G-07` 已併入 unified gate 自動化執行
 
+6. `Track E v2` 與 lovable safe-domain exemption 落地
+- background 已可執行 controlled promotion / rollback，並匯出 promotion / rollback evidence chain
+- dashboard generated candidates 已可手動 promotion / rollback
+- 新增 `tests/ai/run_candidate_promotion_regression.py`
+- 新增 `tests/content-scripts/run_basic_content_script_exclusion_regression.py`
+- 新增 `tests/rules/run_filter_rules_contract.py`
+- `lovable.dev` / `auth.lovable.dev` 已加入 basic content script exclusion 與 DNR allow contract
+- `G-08` 已併入 unified gate 自動化執行
+
 ## 2. 驗證結果
 
 本輪 fresh verification：
@@ -54,11 +63,15 @@
   - `G-05` PASS
   - `G-06` PASS
   - `G-07` PASS
+  - `G-08` PASS
 - `python tests/site-state/run_site_state_bridge_regression.py --headless`
 - `python tests/site-state/run_site_state_helper_regression.py --headless`
 - `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless`
-- `python tests/ai/run_candidate_review_regression.py --headless`
-  - PASS
+- `python tests/ai/run_candidate_review_regression.py --headless` PASS
+- `python tests/ai/run_candidate_promotion_regression.py --headless` PASS
+- `python tests/site-registry/run_site_registry_contract_regression.py --headless` PASS
+- `python tests/content-scripts/run_basic_content_script_exclusion_regression.py --headless` PASS
+- `python tests/rules/run_filter_rules_contract.py` PASS
 
 附帶說明：
 
@@ -66,6 +79,8 @@
 - contract / player detection / popup smoke / cosmetic / inject / whitelist regression 已被 unified gate 串成單一入口
 - anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為
 - candidate governance 已驗證 accept/reject + reason 可追溯，且 `baseline/confirmedPatterns` 不因 candidate review 直接變更
+- controlled promotion 已驗證 decision -> promotion -> rollback evidence chain 可追溯，且 rollback 可將 `confirmedPatterns` 還原
+- lovable safe-domain exemption 已驗證 runtime contract、registered content script excludeMatches 與 DNR allow rule 三層一致
 - unified gate 對 `extension_content_scripts_not_ready` 已加入受控重試，避免偶發 extension startup 抖動污染正式驗收
 
 ## 3. 目前判斷
@@ -76,14 +91,14 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - `Track B` 已有第一版 contract 驗證
 - `Track D` 已有可重跑 release gate
 - `Track C` 已有第一版 canonical helper、跨模組 consumer 對齊與 regression，但尚未涵蓋所有 consumer
-- `Track E` 已完成 candidate/review/decision v1，並納入 release gate 自動化
+- `Track E` 已完成 candidate/review/decision v1 與 controlled promotion / rollback v2，並納入 release gate 自動化
 
 換句話說，Phase 5 現在已具備「每輪交付可統一驗證」的基礎，也完成 Track E v1；下一步重點是治理流程深化與規則升級邊界管理。
 
 ## 4. 風險與缺點
 
 - `overlay-remover.js`、`fake-video-remover.js`、`player-enhancer.js` 已優先改讀 canonical helper，但其他 consumer 尚未全部收斂
-- `G-07` 雖已自動化，但目前仍是 v1 治理流程（manual review + decision log），尚未進入受控 baseline 合併機制
+- lovable exemption 目前先採 host-level 豁免；若後續確認只需 selector 細粒度例外，可再回頭收窄
 - GitHub push 問題目前降級為非阻塞項，先以本地 commit 與驗證鏈為主
 
 ## 5. 下一階段建議
@@ -96,8 +111,8 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - 擴充至少一個跨模組 consistency regression
 
 2. `Track E: AI Candidate Governance`
-- 強化 decision log 結構（責任人、版本、關聯證據）
-- 定義 candidate 升級到 baseline 的受控流程與 rollback 機制
+- 將 promotion evidence 與 reviewer trace 再補到更完整匯出格式
+- 盤點是否需要 promotion queue / multi-reviewer policy
 
 3. `Release Evidence Export`
 - 讓 unified gate 支援輸出 JSON artifact 到指定路徑，方便回填到外部專案與里程碑記錄

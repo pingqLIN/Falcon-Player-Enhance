@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 執行計畫
 
-> 更新日期: 2026-03-31
-> 狀態: Track A/B/C/D groundwork landed + Track E candidate governance v1
+> 更新日期: 2026-04-01
+> 狀態: Track A/B/C/D groundwork landed + Track E v1/v2 verified
 > 參照: `PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`、`STANDALONE_BASELINE_RULESET_2026-03-31.zh-TW.md`、`PHASE_4_GLOBAL_REVIEW_2026-03-31.zh-TW.md`
 
 ## 1. Phase 5 目標
@@ -101,25 +101,27 @@ Phase 5 明確不做：
 - 每次 Phase 5 交付可用同一套 gate 重跑
 - 文件、程式、測試證據三者一致
 
-## 3.5 Track E: AI-Expanded 審核流程化
+## 3.5 Track E: AI-Expanded Governance v2
 
 目標：
 
-- 建立 `candidate -> review decision log` 的最小可行流程，先確保治理可追溯與可回退，再進入 baseline 合併階段
+- 在 Track E v1 基礎上建立 `candidate -> review -> controlled promotion -> rollback` 的受控治理鏈
+- 明確建立 decision schema v2，確保每次升級與回退都可追溯到同一條 evidence chain
 
 交付：
 
-- background 記錄 AI candidate review decision（accept/reject + reason）
-- dashboard generated candidates 可手動審核
-- `tests/ai/run_candidate_review_regression.py`
-- `package.json` 腳本：`test:ai:candidate-review`
-- `G-07` 併入 unified release gate 自動化執行
+- decision schema v2 已落地（decision log 含 `decisionId`、`evidenceRefs`、`schemaVersion`）
+- controlled promotion 已落地（`accepted` candidate 才可 promotion，且需保留 `decisionId` linkage）
+- rollback path 已落地（以 `promotionId` 回退，保留 rollback log 與 evidence refs，且僅回退該 promotion 新增的 `confirmedPatterns`）
+- Track E v2 驗證腳本已落地（promotion + rollback）
+- `G-08` 已併入 unified release gate（Track E v2）
 
 驗收：
 
-- 每次接受/拒絕都有可追溯證據（decision + reason）
-- candidate review 不可直接改寫 `baseline/confirmedPatterns`
-- `G-07` 可在 `tests/release-gate/run_phase5_acceptance_gate.py` 中自動重跑
+- 每次 `promotion` 都要關聯到已接受 decision 與對應 evidence
+- decision/promotion/rollback 三者需形成可查詢的單向鏈
+- rollback 後 baseline 必須可還原到 promotion 前快照
+- `G-08` 能在 unified gate 中固定重跑
 
 ## 4. 里程碑
 
@@ -138,6 +140,12 @@ Phase 5 明確不做：
 - 完成 Track D gate 統一
 - 完成 Track E 的 AI candidate 審核流程第一版並自動化 `G-07`
 
+## M4（Week 4）
+
+- 完成 Track E v2 的 decision schema hardening 與 evidence linkage
+- 完成 controlled promotion 規範與 rollback path 驗證
+- 將 `G-08` 併入 unified release gate
+
 ## 5. 決策與協作模式
 
 - 主控監察員：負責全局決策、風險裁決、最終整合
@@ -149,6 +157,6 @@ Phase 5 明確不做：
 Phase 5 在本階段可宣告完成需同時滿足：
 
 - 四個風險主題均有對應規格與驗收證據
-- acceptance matrix 全部關鍵項目 PASS
+- acceptance matrix 全部關鍵項目 PASS（含 `G-08`）
 - roadmap / execution book / phase docs 一致引用同一套邊界語言
 - 外部審查 findings 已關閉或有明確 backlog 與風險註記

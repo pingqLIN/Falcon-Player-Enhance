@@ -38,6 +38,10 @@
     "compatibilityModeSites": [
       "boyfriendtv.com"
     ],
+    "basicProtectionExcludedDomains": [
+      "lovable.dev",
+      "auth.lovable.dev"
+    ],
     "popupDirectIframeHosts": [
       "boyfriendtv.com"
     ],

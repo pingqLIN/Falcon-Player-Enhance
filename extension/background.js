@@ -37,6 +37,8 @@ const AI_KNOWLEDGE_MAX_OBSERVATIONS = 300;
 const AI_KNOWLEDGE_MAX_CANDIDATES = 160;
 const AI_KNOWLEDGE_MAX_TEACH_SESSIONS = 200;
 const AI_CANDIDATE_REVIEW_MAX_DECISIONS = 200;
+const AI_CANDIDATE_PROMOTION_MAX_RECORDS = 200;
+const AI_CANDIDATE_ROLLBACK_MAX_RECORDS = 200;
 const TEACHING_CONFIRMATION_THRESHOLD = 3;
 const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 
@@ -46,6 +48,7 @@ let siteRegistryState = {
   domains: [],
   profiles: {
     compatibilityModeSites: [],
+    basicProtectionExcludedDomains: [],
     popupDirectIframeHosts: [],
     cosmeticFilter: {
       globalSelectors: [],
@@ -127,6 +130,7 @@ function normalizeSiteRegistry(payload = {}) {
     domains: normalizeDomainList(source.domains),
     profiles: {
       compatibilityModeSites: normalizeDomainList(profiles.compatibilityModeSites),
+      basicProtectionExcludedDomains: normalizeDomainList(profiles.basicProtectionExcludedDomains),
       popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts),
       cosmeticFilter: normalizeCosmeticFilterConfig(profiles.cosmeticFilter),
       injectBlocker: normalizeInjectBlockerConfig(profiles.injectBlocker)
@@ -206,6 +210,10 @@ function getCosmeticFilterConfig() {
 
 function getCompatibilityModeSites() {
   return normalizeDomainList(siteRegistryState?.profiles?.compatibilityModeSites);
+}
+
+function getBasicProtectionExcludedDomains() {
+  return normalizeDomainList(siteRegistryState?.profiles?.basicProtectionExcludedDomains);
 }
 
 function getInjectBlockerConfig() {
@@ -393,6 +401,8 @@ let aiState = {
   providerAdvisories: {},
   generatedRuleCandidates: {},
   candidateReviewLog: [],
+  candidatePromotionLog: [],
+  candidateRollbackLog: [],
   knowledgeStore: null
 };
 
@@ -1390,6 +1400,8 @@ async function loadAiState() {
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
     'aiCandidateReviewLog',
+    'aiCandidatePromotionLog',
+    'aiCandidateRollbackLog',
     'aiKnowledgeStore'
   ]);
   const storedSettings = normalizeAiProviderSettings(result.aiProviderSettings || {});
@@ -1422,6 +1434,8 @@ async function loadAiState() {
       : {};
   aiState.generatedRuleCandidates = normalizeGeneratedRuleCandidates(result.aiGeneratedRuleCandidates || {});
   aiState.candidateReviewLog = normalizeCandidateReviewLog(result.aiCandidateReviewLog || []);
+  aiState.candidatePromotionLog = normalizeCandidatePromotionLog(result.aiCandidatePromotionLog || []);
+  aiState.candidateRollbackLog = normalizeCandidateRollbackLog(result.aiCandidateRollbackLog || []);
   const knowledgeBeforeSeed = JSON.stringify(result.aiKnowledgeStore || {});
   aiState.knowledgeStore = normalizeAiKnowledgeStore(result.aiKnowledgeStore || {});
   seedAiKnowledgeStore();
@@ -1453,6 +1467,8 @@ async function persistAiState() {
     aiProviderAdvisories: aiState.providerAdvisories || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
     aiCandidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
+    aiCandidatePromotionLog: normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []),
+    aiCandidateRollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []),
     aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
   });
   await persistProviderSecretToSession(aiState.providerSecret);
@@ -1552,9 +1568,13 @@ async function registerContentScriptsNow() {
 
     const { customSites = [] } = await chrome.storage.local.get(['customSites']);
     const enhancedPatterns = getEffectiveEnhancedMatchPatterns(customSites);
+    const basicExcludedPatterns = toDomainMatchPatterns(getBasicProtectionExcludedDomains());
     const basicDefinitions = BASIC_GLOBAL_CONTENT_SCRIPT_DEFINITIONS.map((definition) => ({
       ...definition,
-      excludeMatches: enhancedPatterns
+      excludeMatches: normalizeDomainList([
+        ...enhancedPatterns,
+        ...basicExcludedPatterns
+      ])
     }));
     const enhancedDefinitions = ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS
       .map((definition) => ({
@@ -1930,8 +1950,18 @@ function normalizeCandidateReviewDecision(input = {}) {
     selectorCount: Math.max(0, Number(input.selectorCount || 0)),
     domainCount: Math.max(0, Number(input.domainCount || 0)),
     actor: String(input.actor || 'dashboard_manual_review'),
-    decidedAt: Number(input.decidedAt || getNow())
+    decidedAt: Number(input.decidedAt || getNow()),
+    schemaVersion: String(input.schemaVersion || 'track_e_v2'),
+    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs)
   };
+}
+
+function normalizeEvidenceRefs(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function normalizeCandidateReviewLog(input = []) {
@@ -1941,6 +1971,15 @@ function normalizeCandidateReviewLog(input = []) {
     .filter(Boolean)
     .sort((a, b) => Number(b.decidedAt || 0) - Number(a.decidedAt || 0))
     .slice(0, AI_CANDIDATE_REVIEW_MAX_DECISIONS);
+}
+
+function getLatestCandidateReviewDecision(hostname, generatedAt) {
+  const normalizedHost = getHostname(hostname);
+  if (!normalizedHost) return null;
+  return normalizeCandidateReviewLog(aiState.candidateReviewLog || []).find((item) =>
+    item.hostname === normalizedHost &&
+    Number(item.generatedAt || 0) === Number(generatedAt || 0)
+  ) || null;
 }
 
 function recordCandidateReviewDecision(hostname, input = {}) {
@@ -1960,7 +1999,8 @@ function recordCandidateReviewDecision(hostname, input = {}) {
     selectorCount: Array.isArray(candidateSet.selectorRules) ? candidateSet.selectorRules.length : 0,
     domainCount: Array.isArray(candidateSet.domainRules) ? candidateSet.domainRules.length : 0,
     actor: input.actor || 'dashboard_manual_review',
-    decidedAt: input.decidedAt || getNow()
+    decidedAt: input.decidedAt || getNow(),
+    evidenceRefs: input.evidenceRefs
   });
   if (!decision) return null;
 
@@ -1969,6 +2009,250 @@ function recordCandidateReviewDecision(hostname, input = {}) {
     ...(Array.isArray(aiState.candidateReviewLog) ? aiState.candidateReviewLog : [])
   ]);
   return decision;
+}
+
+function buildConfirmedPatternId(hostname, kind, value) {
+  return `pat_${String(hostname || '')}_${String(kind || '')}_${String(value || '')}`
+    .replace(/[^a-z0-9_:-]+/gi, '_')
+    .slice(0, 160);
+}
+
+function buildPromotionPatternsForCandidate(candidateSet) {
+  const normalizedHost = getHostname(candidateSet?.hostname);
+  if (!normalizedHost) return [];
+
+  const selectorPatterns = (Array.isArray(candidateSet?.selectorRules) ? candidateSet.selectorRules : [])
+    .map((item) => normalizeKnowledgePattern({
+      id: buildConfirmedPatternId(normalizedHost, 'selector', item.selector),
+      kind: 'selector',
+      value: String(item?.selector || '').trim(),
+      category: 'provider_candidate',
+      confidence: 0.8,
+      source: `${String(candidateSet?.provider || 'provider')}_candidate_promotion`,
+      hostnames: [normalizedHost],
+      hitCount: 1,
+      userVerified: true,
+      createdAt: getNow(),
+      updatedAt: getNow()
+    }))
+    .filter(Boolean);
+  const domainPatterns = (Array.isArray(candidateSet?.domainRules) ? candidateSet.domainRules : [])
+    .map((item) => normalizeKnowledgePattern({
+      id: buildConfirmedPatternId(normalizedHost, 'pattern', item.pattern),
+      kind: 'pattern',
+      value: String(item?.pattern || '').trim(),
+      category: 'provider_candidate',
+      confidence: 0.78,
+      source: `${String(candidateSet?.provider || 'provider')}_candidate_promotion`,
+      hostnames: [normalizedHost],
+      hitCount: 1,
+      userVerified: true,
+      createdAt: getNow(),
+      updatedAt: getNow()
+    }))
+    .filter(Boolean);
+
+  return [...selectorPatterns, ...domainPatterns];
+}
+
+function normalizeCandidatePromotionRecord(input = {}) {
+  if (!input || typeof input !== 'object') return null;
+  const hostname = getHostname(input.hostname);
+  const promotionId = String(input.promotionId || input.id || '').trim();
+  if (!hostname || !promotionId) return null;
+  return {
+    promotionId,
+    hostname,
+    provider: String(input.provider || 'unknown'),
+    model: String(input.model || ''),
+    generatedAt: Number(input.generatedAt || 0),
+    decisionId: String(input.decisionId || '').trim(),
+    selectorCount: Math.max(0, Number(input.selectorCount || 0)),
+    domainCount: Math.max(0, Number(input.domainCount || 0)),
+    confirmedPatternIds: Array.isArray(input.confirmedPatternIds)
+      ? input.confirmedPatternIds.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 48)
+      : [],
+    reusedPatternIds: Array.isArray(input.reusedPatternIds)
+      ? input.reusedPatternIds.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 48)
+      : [],
+    reason: String(input.reason || '').trim().slice(0, 280),
+    actor: String(input.actor || 'dashboard_manual_promotion'),
+    promotedAt: Number(input.promotedAt || getNow()),
+    schemaVersion: String(input.schemaVersion || 'track_e_v2'),
+    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs)
+  };
+}
+
+function normalizeCandidatePromotionLog(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map(normalizeCandidatePromotionRecord)
+    .filter(Boolean)
+    .sort((a, b) => Number(b.promotedAt || 0) - Number(a.promotedAt || 0))
+    .slice(0, AI_CANDIDATE_PROMOTION_MAX_RECORDS);
+}
+
+function normalizeCandidateRollbackRecord(input = {}) {
+  if (!input || typeof input !== 'object') return null;
+  const hostname = getHostname(input.hostname);
+  const rollbackId = String(input.rollbackId || input.id || '').trim();
+  const promotionId = String(input.promotionId || '').trim();
+  if (!hostname || !rollbackId || !promotionId) return null;
+  return {
+    rollbackId,
+    promotionId,
+    hostname,
+    confirmedPatternIds: Array.isArray(input.confirmedPatternIds)
+      ? input.confirmedPatternIds.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 48)
+      : [],
+    reason: String(input.reason || '').trim().slice(0, 280),
+    actor: String(input.actor || 'dashboard_manual_rollback'),
+    rolledBackAt: Number(input.rolledBackAt || getNow()),
+    schemaVersion: String(input.schemaVersion || 'track_e_v2'),
+    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs)
+  };
+}
+
+function normalizeCandidateRollbackLog(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map(normalizeCandidateRollbackRecord)
+    .filter(Boolean)
+    .sort((a, b) => Number(b.rolledBackAt || 0) - Number(a.rolledBackAt || 0))
+    .slice(0, AI_CANDIDATE_ROLLBACK_MAX_RECORDS);
+}
+
+function getRolledBackPromotionIds() {
+  return new Set(
+    normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []).map((item) => item.promotionId)
+  );
+}
+
+function getLatestCandidatePromotion(hostname, generatedAt) {
+  const normalizedHost = getHostname(hostname);
+  if (!normalizedHost) return null;
+  const rolledBackIds = getRolledBackPromotionIds();
+  const promotion = normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []).find((item) =>
+    item.hostname === normalizedHost &&
+    Number(item.generatedAt || 0) === Number(generatedAt || 0)
+  );
+  if (!promotion) return null;
+  return {
+    ...promotion,
+    active: !rolledBackIds.has(promotion.promotionId)
+  };
+}
+
+function recordCandidatePromotion(hostname, input = {}) {
+  const normalizedHost = getHostname(hostname);
+  if (!normalizedHost) return { success: false, error: 'invalid_hostname' };
+
+  const candidateSet = normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {})[normalizedHost];
+  if (!candidateSet) return { success: false, error: 'candidate_not_found' };
+
+  const decision = getLatestCandidateReviewDecision(normalizedHost, candidateSet.generatedAt);
+  if (!decision || decision.decision !== 'accepted') {
+    return { success: false, error: 'candidate_requires_accepted_review' };
+  }
+
+  const latestPromotion = getLatestCandidatePromotion(normalizedHost, candidateSet.generatedAt);
+  if (latestPromotion?.active) {
+    return { success: false, error: 'candidate_already_promoted' };
+  }
+
+  const patterns = buildPromotionPatternsForCandidate(candidateSet);
+  if (patterns.length === 0) {
+    return { success: false, error: 'candidate_has_no_promotable_rules' };
+  }
+
+  const store = normalizeAiKnowledgeStore(aiState.knowledgeStore || {});
+  const nextConfirmedPatterns = [...store.confirmedPatterns];
+  const confirmedPatternIds = [];
+  const reusedPatternIds = [];
+  patterns.forEach((pattern) => {
+    const existing = nextConfirmedPatterns.find((item) => item.id === pattern.id);
+    if (existing) {
+      reusedPatternIds.push(existing.id);
+      return;
+    }
+    nextConfirmedPatterns.unshift(pattern);
+    confirmedPatternIds.push(pattern.id);
+  });
+
+  aiState.knowledgeStore = recalculateAiKnowledgeStats({
+    ...store,
+    confirmedPatterns: nextConfirmedPatterns
+  });
+
+  const promotion = normalizeCandidatePromotionRecord({
+    promotionId: `promo_${Math.random().toString(36).slice(2, 10)}`,
+    hostname: normalizedHost,
+    provider: candidateSet.provider,
+    model: candidateSet.model,
+    generatedAt: candidateSet.generatedAt,
+    decisionId: decision.id,
+    selectorCount: candidateSet.selectorRules.length,
+    domainCount: candidateSet.domainRules.length,
+    confirmedPatternIds,
+    reusedPatternIds,
+    reason: input.reason,
+    actor: input.actor || 'dashboard_manual_promotion',
+    promotedAt: input.promotedAt || getNow(),
+    evidenceRefs: Array.from(new Set([
+      ...normalizeEvidenceRefs(decision.evidenceRefs),
+      ...normalizeEvidenceRefs(input.evidenceRefs)
+    ]))
+  });
+
+  aiState.candidatePromotionLog = normalizeCandidatePromotionLog([
+    promotion,
+    ...(Array.isArray(aiState.candidatePromotionLog) ? aiState.candidatePromotionLog : [])
+  ]);
+
+  return {
+    success: true,
+    promotion
+  };
+}
+
+function recordCandidateRollback(promotionId, input = {}) {
+  const normalizedPromotionId = String(promotionId || '').trim();
+  if (!normalizedPromotionId) return { success: false, error: 'invalid_promotion_id' };
+
+  const promotion = normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []).find((item) => item.promotionId === normalizedPromotionId);
+  if (!promotion) return { success: false, error: 'promotion_not_found' };
+
+  const rolledBackIds = getRolledBackPromotionIds();
+  if (rolledBackIds.has(normalizedPromotionId)) {
+    return { success: false, error: 'promotion_already_rolled_back' };
+  }
+
+  const store = normalizeAiKnowledgeStore(aiState.knowledgeStore || {});
+  aiState.knowledgeStore = recalculateAiKnowledgeStats({
+    ...store,
+    confirmedPatterns: store.confirmedPatterns.filter((item) => !promotion.confirmedPatternIds.includes(item.id))
+  });
+
+  const rollback = normalizeCandidateRollbackRecord({
+    rollbackId: `rollback_${Math.random().toString(36).slice(2, 10)}`,
+    promotionId: promotion.promotionId,
+    hostname: promotion.hostname,
+    confirmedPatternIds: promotion.confirmedPatternIds,
+    reason: input.reason,
+    actor: input.actor || 'dashboard_manual_rollback',
+    rolledBackAt: input.rolledBackAt || getNow(),
+    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs)
+  });
+
+  aiState.candidateRollbackLog = normalizeCandidateRollbackLog([
+    rollback,
+    ...(Array.isArray(aiState.candidateRollbackLog) ? aiState.candidateRollbackLog : [])
+  ]);
+
+  return {
+    success: true,
+    rollback
+  };
 }
 
 function normalizeAdListEntry(input = {}, index = 0) {
@@ -4548,10 +4832,23 @@ function buildAiInsightsSnapshot() {
   const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
   const providerState = normalizeAiProviderState(aiState.providerState || {});
   const candidateReviewLog = normalizeCandidateReviewLog(aiState.candidateReviewLog || []);
+  const candidatePromotionLog = normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []);
+  const candidateRollbackLog = normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []);
+  const rolledBackPromotionIds = new Set(candidateRollbackLog.map((item) => item.promotionId));
   const latestCandidateDecisionBySignature = candidateReviewLog.reduce((result, item) => {
     const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
     if (!result[key]) {
       result[key] = item;
+    }
+    return result;
+  }, {});
+  const latestCandidatePromotionBySignature = candidatePromotionLog.reduce((result, item) => {
+    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
+    if (!result[key]) {
+      result[key] = {
+        ...item,
+        active: !rolledBackPromotionIds.has(item.promotionId)
+      };
     }
     return result;
   }, {});
@@ -4580,9 +4877,27 @@ function buildAiInsightsSnapshot() {
       latestDecision: latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`]
         ? {
             decision: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decision || ''),
+            decisionId: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].id || ''),
             reason: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reason || ''),
             decidedAt: Number(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decidedAt || 0),
-            actor: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || '')
+            actor: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || ''),
+            evidenceRefs: normalizeEvidenceRefs(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].evidenceRefs || [])
+          }
+        : null,
+      latestPromotion: latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`]
+        ? {
+            promotionId: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].promotionId || ''),
+            decisionId: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decisionId || ''),
+            promotedAt: Number(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].promotedAt || 0),
+            actor: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || ''),
+            active: latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].active === true,
+            evidenceRefs: normalizeEvidenceRefs(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].evidenceRefs || []),
+            confirmedPatternIds: Array.isArray(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].confirmedPatternIds)
+              ? latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].confirmedPatternIds
+              : [],
+            reusedPatternIds: Array.isArray(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reusedPatternIds)
+              ? latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reusedPatternIds
+              : []
           }
         : null
     }));
@@ -4632,6 +4947,13 @@ function buildAiInsightsSnapshot() {
         acceptedCount: candidateReviewLog.filter((item) => item.decision === 'accepted').length,
         rejectedCount: candidateReviewLog.filter((item) => item.decision === 'rejected').length,
         latestDecisionAt: Number(candidateReviewLog[0]?.decidedAt || 0)
+      },
+      candidatePromotionSummary: {
+        totalPromotions: candidatePromotionLog.length,
+        activePromotions: candidatePromotionLog.filter((item) => !rolledBackPromotionIds.has(item.promotionId)).length,
+        totalRollbacks: candidateRollbackLog.length,
+        latestPromotionAt: Number(candidatePromotionLog[0]?.promotedAt || 0),
+        latestRollbackAt: Number(candidateRollbackLog[0]?.rolledBackAt || 0)
       }
     },
     knowledge: {
@@ -4644,6 +4966,8 @@ function buildAiInsightsSnapshot() {
       pendingReviewCount: Number(knowledge.stats.pendingReviewCount || 0)
     },
     candidateReviewLog: candidateReviewLog.slice(0, 50),
+    candidatePromotionLog: candidatePromotionLog.slice(0, 50),
+    candidateRollbackLog: candidateRollbackLog.slice(0, 50),
     activeFallbackHosts,
     hostMetrics,
     highRiskHosts: profiles
@@ -4814,6 +5138,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     aiState.providerAdvisories = {};
     aiState.generatedRuleCandidates = {};
     aiState.candidateReviewLog = [];
+    aiState.candidatePromotionLog = [];
+    aiState.candidateRollbackLog = [];
     aiState.knowledgeStore = buildDefaultAiKnowledgeStore();
     seedAiKnowledgeStore();
     scheduleAiPersist();
@@ -5021,6 +5347,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         providerAdvisories: aiState.providerAdvisories || {},
         generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
         candidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
+        candidatePromotionLog: normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []),
+        candidateRollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []),
         knowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
       }
     });
@@ -5031,7 +5359,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({
       success: true,
       candidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
-      reviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || [])
+      reviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
+      promotionLog: normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []),
+      rollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || [])
     });
     return true;
   }
@@ -5056,6 +5386,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({
         success: true,
         decision,
+        snapshot: buildAiInsightsSnapshot()
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (request.action === 'promoteAiRuleCandidate') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      const result = recordCandidatePromotion(request.hostname, {
+        reason: request.reason,
+        actor: 'dashboard_manual_promotion',
+        evidenceRefs: request.evidenceRefs
+      });
+      if (!result?.success) {
+        sendResponse({ success: false, error: result?.error || 'invalid_candidate_promotion' });
+        return;
+      }
+      await persistAiState();
+      sendResponse({
+        success: true,
+        promotion: result.promotion,
+        snapshot: buildAiInsightsSnapshot()
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (request.action === 'rollbackAiCandidatePromotion') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      const result = recordCandidateRollback(request.promotionId, {
+        reason: request.reason,
+        actor: 'dashboard_manual_rollback',
+        evidenceRefs: request.evidenceRefs
+      });
+      if (!result?.success) {
+        sendResponse({ success: false, error: result?.error || 'invalid_candidate_rollback' });
+        return;
+      }
+      await persistAiState();
+      sendResponse({
+        success: true,
+        rollback: result.rollback,
         snapshot: buildAiInsightsSnapshot()
       });
     })().catch((error) => {
@@ -5294,6 +5678,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         keywords: SITE_REGISTRY.toDomainKeywords(),
         profiles: {
           compatibilityModeSites: getCompatibilityModeSites(),
+          basicProtectionExcludedDomains: getBasicProtectionExcludedDomains(),
           popupDirectIframeHosts: getPopupDirectIframeHosts(),
           cosmeticFilter: getCosmeticFilterConfig(),
           injectBlocker: getInjectBlockerConfig()

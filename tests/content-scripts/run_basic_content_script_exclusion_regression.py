@@ -20,7 +20,7 @@ import run_popup_smoke as smoke  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run getSiteRegistry contract regression through a real extension page."
+        description="Verify shield-basic-docidle excludes known login-safe domains."
     )
     parser.add_argument(
         "--extension-dir",
@@ -46,19 +46,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def fetch_site_registry_contract(page, extension_id: str) -> dict[str, object]:
+def fetch_registered_contract(page, extension_id: str) -> dict[str, object]:
     page.goto(f"chrome-extension://{extension_id}/dashboard/dashboard.html", wait_until="domcontentloaded")
     page.wait_for_timeout(1200)
     return page.evaluate(
         """async () => {
-            const result = await chrome.runtime.sendMessage({ action: 'getSiteRegistry' });
+            const definitions = await chrome.scripting.getRegisteredContentScripts({
+                ids: ['shield-basic-docidle']
+            });
+            const definition = Array.isArray(definitions) ? definitions[0] || {} : {};
             return {
-                success: Boolean(result?.success),
-                popupDirectIframeHosts: result?.profiles?.popupDirectIframeHosts || [],
-                compatibilityModeSites: result?.profiles?.compatibilityModeSites || [],
-                basicProtectionExcludedDomains: result?.profiles?.basicProtectionExcludedDomains || [],
-                injectBlockerKnownOverlaySelectors: result?.profiles?.injectBlocker?.knownOverlaySelectors || [],
-                cosmeticFilterGlobalSelectors: result?.profiles?.cosmeticFilter?.globalSelectors || []
+                id: definition.id || '',
+                matches: definition.matches || [],
+                excludeMatches: definition.excludeMatches || []
             };
         }"""
     )
@@ -86,21 +86,14 @@ def open_ready_context(playwright, profile_dir: Path, extension_dir: Path, chann
 
 
 def build_report(contract: dict[str, object]) -> dict[str, object]:
-    popup_hosts = contract["popupDirectIframeHosts"]
-    compatibility_sites = contract["compatibilityModeSites"]
-    basic_excluded_domains = contract["basicProtectionExcludedDomains"]
-    overlay_selectors = contract["injectBlockerKnownOverlaySelectors"]
-    cosmetic_selectors = contract["cosmeticFilterGlobalSelectors"]
-
+    exclude_matches = contract.get("excludeMatches", [])
     checks = {
-        "success": bool(contract["success"]),
-        "popupDirectIframeHosts": isinstance(popup_hosts, list) and "boyfriendtv.com" in popup_hosts,
-        "compatibilityModeSites": isinstance(compatibility_sites, list) and "boyfriendtv.com" in compatibility_sites,
-        "basicProtectionExcludedDomains": isinstance(basic_excluded_domains, list) and "lovable.dev" in basic_excluded_domains and "auth.lovable.dev" in basic_excluded_domains,
-        "injectOverlaySelectors": isinstance(overlay_selectors, list) and ".cvpboxOverlay" in overlay_selectors,
-        "cosmeticFilterSelectors": isinstance(cosmetic_selectors, list) and '[class*="player-overlay-ad"]' in cosmetic_selectors
+        "scriptFound": contract.get("id") == "shield-basic-docidle",
+        "lovableExcluded": isinstance(exclude_matches, list) and "*://lovable.dev/*" in exclude_matches,
+        "lovableWildcardExcluded": isinstance(exclude_matches, list) and "*://*.lovable.dev/*" in exclude_matches,
+        "authLovableExcluded": isinstance(exclude_matches, list) and "*://auth.lovable.dev/*" in exclude_matches,
+        "authLovableWildcardExcluded": isinstance(exclude_matches, list) and "*://*.auth.lovable.dev/*" in exclude_matches,
     }
-
     return {
         "ok": all(checks.values()),
         "checks": checks,
@@ -111,7 +104,7 @@ def build_report(contract: dict[str, object]) -> dict[str, object]:
 def main() -> int:
     args = parse_args()
     extension_dir = Path(args.extension_dir).resolve()
-    profile_dir = Path(tempfile.mkdtemp(prefix="falcon-site-registry-contract-"))
+    profile_dir = Path(tempfile.mkdtemp(prefix="falcon-basic-script-exclusion-"))
 
     try:
         with sync_playwright() as playwright:
@@ -125,7 +118,7 @@ def main() -> int:
             )
             try:
                 page = context.new_page()
-                contract = fetch_site_registry_contract(page, extension_id)
+                contract = fetch_registered_contract(page, extension_id)
                 report = build_report(contract)
                 print(json.dumps({
                     "ok": report["ok"],
