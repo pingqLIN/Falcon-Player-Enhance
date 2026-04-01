@@ -46,6 +46,50 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+def verify_x_feed_popup(page, context, timeout_ms: int) -> dict:
+    existing_ids = {int(item["id"]) for item in smoke.list_popup_player_windows(context)}
+    dispatch = page.evaluate(
+        """() => {
+            const section = document.querySelector('[data-case-id="x-feed-muted"]');
+            const targetNode = section?.querySelector('video[data-shield-id][data-popup-button-attached="true"], video[data-shield-id]');
+            const targetId = targetNode?.dataset?.shieldId || '';
+            if (!targetId) {
+                return { ok: false, reason: 'x_target_missing' };
+            }
+            const selector = '.shield-popup-player-btn[data-shield-popup-target-id="' + targetId + '"]';
+            const button = document.querySelector(selector);
+            if (!button) {
+                return { ok: false, reason: 'x_button_missing', targetId };
+            }
+            const before = {
+                targetId,
+                videoSrc: button.dataset.shieldPopupVideoSrc || '',
+                iframeSrc: button.dataset.shieldPopupIframeSrc || ''
+            };
+            button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            return { ok: true, before };
+        }"""
+    )
+    if dispatch.get("ok") is not True:
+        return {
+            "ok": False,
+            "dispatch": dispatch,
+            "popupUrl": "",
+        }
+
+    popup = smoke.wait_for_popup_player_window(context, existing_ids, timeout_ms)
+    popup_url = str(popup["tabs"][0]["url"]) if popup.get("tabs") else ""
+    has_usable_payload = (
+        "playerId=" in popup_url and
+        ("videoSrc=" in popup_url or "iframeSrc=" in popup_url)
+    )
+    return {
+        "ok": "popup-player/popup-player.html" in popup_url and has_usable_payload,
+        "dispatch": dispatch,
+        "popupUrl": popup_url,
+        "hasUsablePayload": has_usable_payload,
+    }
+
 
 def main() -> int:
     args = parse_args()
@@ -85,12 +129,14 @@ def main() -> int:
 
                     total_cases = len(report.get("caseReports") or [])
                     passed_cases = int(report.get("passedCases") or 0)
-                    ok = total_cases > 0 and passed_cases == total_cases
+                    x_popup = verify_x_feed_popup(page, context, args.timeout_ms)
+                    ok = total_cases > 0 and passed_cases == total_cases and x_popup.get("ok") is True
                     print(json.dumps({
                         "ok": ok,
                         "extensionId": extension_id,
                         "registeredScripts": registered_scripts,
                         "report": report,
+                        "xPopupSmoke": x_popup,
                     }, ensure_ascii=False, indent=2))
                     return 0 if ok else 1
                 finally:

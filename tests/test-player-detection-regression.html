@@ -208,6 +208,43 @@
             border-radius: 12px;
         }
 
+        .x-card {
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at top, rgba(29, 155, 240, 0.12), transparent 42%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            padding: 14px;
+        }
+
+        .x-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            color: #dbeafe;
+            font-size: 0.9rem;
+        }
+
+        .x-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #1d9bf0, #60a5fa);
+        }
+
+        .x-video-frame {
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .x-video-frame video {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+        }
+
         code {
             color: #fde68a;
         }
@@ -333,6 +370,24 @@
                 </div>
                 <div class="expect">預期：應被偵測，驗證 custom container + playable child 邊界。</div>
             </section>
+
+            <section class="case" data-case-id="x-feed-muted" data-expected="eligible" data-expected-popup="true">
+                <h2>Case 10: X feed muted autoplay 影片</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>模擬 <code>x.com/home</code> 常見的影片卡片：<code>muted autoplay + no controls + delayed source</code>，不應再被誤判成 trap。</p>
+                <article class="x-card" data-testid="tweet">
+                    <div class="x-card-header">
+                        <div class="x-avatar"></div>
+                        <div>@falcon_player · Home feed video</div>
+                    </div>
+                    <div class="x-video-frame" data-testid="videoPlayer">
+                        <div data-testid="videoComponent">
+                            <video id="x-feed-player" autoplay muted playsinline preload="none"></video>
+                        </div>
+                    </div>
+                </article>
+                <div class="expect">預期：應被偵測，並且應掛上可用的 popup button。</div>
+            </section>
         </div>
     </div>
 
@@ -357,21 +412,43 @@
             if (lazyFrame && !lazyFrame.getAttribute("src")) {
                 lazyFrame.src = "https://example.com/player/embed/movie-01?kind=video";
             }
+
+            const xFeedVideo = document.getElementById("x-feed-player");
+            if (xFeedVideo && !xFeedVideo.querySelector("source")) {
+                const source = document.createElement("source");
+                source.src = "./assets/falcon-smoke.webm?v=regression-x-feed";
+                source.type = "video/webm";
+                xFeedVideo.appendChild(source);
+                xFeedVideo.load();
+            }
         }
 
         function hasCaseDetection(section) {
             return Boolean(section.querySelector("[data-shield-id], .shield-detected-player, .shield-detected-container"));
         }
 
+        function hasCasePopupButton(section) {
+            return Array.from(section.querySelectorAll("[data-shield-id], .shield-detected-player, .shield-detected-container"))
+                .some((node) => node.dataset.popupButtonAttached === "true");
+        }
+
         function buildCaseReport(section) {
             const expected = section.dataset.expected;
+            const expectedPopup = section.dataset.expectedPopup;
             const actualEligible = hasCaseDetection(section);
-            const pass = expected === "eligible" ? actualEligible : !actualEligible;
+            const actualPopupButton = hasCasePopupButton(section);
+            const eligibilityPass = expected === "eligible" ? actualEligible : !actualEligible;
+            const popupPass = expectedPopup
+                ? (expectedPopup === "true" ? actualPopupButton : !actualPopupButton)
+                : true;
+            const pass = eligibilityPass && popupPass;
             return {
                 caseId: section.dataset.caseId || "",
                 title: section.querySelector("h2")?.textContent || "",
                 expected,
+                expectedPopupButton: expectedPopup || "",
                 actualEligible,
+                actualPopupButton,
                 pass
             };
         }
@@ -382,7 +459,10 @@
             if (!statusNode) return;
 
             statusNode.classList.remove("pass", "fail");
-            statusNode.textContent = `${report.pass ? CASE_STATUS_LABELS.pass : CASE_STATUS_LABELS.fail} · expected=${report.expected}, actual=${report.actualEligible ? "eligible" : "rejected"}`;
+            const popupText = report.expectedPopupButton
+                ? `, popup=${report.actualPopupButton ? "attached" : "missing"}`
+                : "";
+            statusNode.textContent = `${report.pass ? CASE_STATUS_LABELS.pass : CASE_STATUS_LABELS.fail} · expected=${report.expected}, actual=${report.actualEligible ? "eligible" : "rejected"}${popupText}`;
             statusNode.classList.add(report.pass ? "pass" : "fail");
         }
 

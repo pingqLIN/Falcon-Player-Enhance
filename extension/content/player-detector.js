@@ -358,6 +358,23 @@
         return '';
     }
 
+    function isXFeedVideoCandidate(video, rect = video?.getBoundingClientRect?.()) {
+        if (!video?.closest) return false;
+        const platform = identifyPlatformFromContext(video);
+        if (platform !== 'x') {
+            return false;
+        }
+
+        const area = Math.round((rect?.width || 0) * (rect?.height || 0));
+        if ((rect?.width || 0) < 220 || (rect?.height || 0) < 120 || area < 50000) {
+            return false;
+        }
+
+        return Boolean(
+            video.closest('[data-testid="tweet"] [data-testid="videoPlayer"], [data-testid="tweet"] [data-testid="videoComponent"], article[data-testid="tweet"] [data-testid="videoPlayer"], article[data-testid="tweet"] [data-testid="videoComponent"]')
+        );
+    }
+
     function evaluateVideoEligibility(video) {
         const rect = video.getBoundingClientRect();
         const style = window.getComputedStyle(video);
@@ -366,6 +383,7 @@
             video.src || '',
             video.poster || ''
         ].join(' '));
+        const isXFeedCandidate = isXFeedVideoCandidate(video, rect);
         const isHidden = style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0;
         if (isHidden || rect.width <= 0 || rect.height <= 0) {
             return { eligible: false, reason: 'hidden', isSuspectedAd: false, signalScore: -1000 };
@@ -385,17 +403,17 @@
 
         const duration = Number(video.duration || 0);
         const autoplayTrap = video.autoplay && video.muted && !video.controls &&
-            (video.loop || (duration > 0 && duration < 2) || rect.width < 360 || rect.height < 240);
+            (video.loop || (duration > 0 && duration < 2) || (!isXFeedCandidate && (rect.width < 360 || rect.height < 240)));
         if (autoplayTrap) {
             return { eligible: false, reason: 'trap-profile', isSuspectedAd: true, signalScore: -4500 };
         }
 
         const playableSource = getVideoPlayableSource(video);
         const area = rect.width * rect.height;
-        if (!playableSource && video.readyState < 1 && video.paused && duration <= 0) {
+        if (!playableSource && video.readyState < 1 && video.paused && duration <= 0 && !isXFeedCandidate) {
             return { eligible: false, reason: 'placeholder', isSuspectedAd: false, signalScore: -1500 };
         }
-        if (!video.controls && video.paused && video.muted && duration <= 0 && area < 220000) {
+        if (!video.controls && video.paused && video.muted && duration <= 0 && area < 220000 && !isXFeedCandidate) {
             return { eligible: false, reason: 'weak-signal-muted', isSuspectedAd: false, signalScore: -1600 };
         }
         if (!video.controls && duration > 0 && duration < 2) {
