@@ -375,6 +375,52 @@
         );
     }
 
+    function buildAncestorSignature(element, depth = 5) {
+        const segments = [];
+        let cursor = element?.parentElement || null;
+
+        for (let index = 0; index < depth && cursor; index += 1) {
+            segments.push([
+                cursor.tagName || '',
+                cursor.id || '',
+                cursor.className || '',
+                cursor.getAttribute?.('data-testid') || '',
+                cursor.getAttribute?.('role') || ''
+            ].join(' '));
+            cursor = cursor.parentElement;
+        }
+
+        return segments.join(' ').toLowerCase();
+    }
+
+    function isLinkedNavigationPreview(video, rect, signature) {
+        if (!video?.closest) return false;
+        if (video.controls) return false;
+        if (isXFeedVideoCandidate(video, rect)) return false;
+
+        const navigationAnchor = video.closest('a[href], [role="link"]');
+        if (!navigationAnchor) return false;
+
+        const navigationSignature = [
+            signature,
+            buildAncestorSignature(video, 6),
+            navigationAnchor.id || '',
+            navigationAnchor.className || '',
+            navigationAnchor.getAttribute?.('aria-label') || ''
+        ].join(' ').toLowerCase();
+
+        if (!/thumbnail|preview|card|tile|grid|renderer|reel|shorts|shelf/.test(navigationSignature)) {
+            return false;
+        }
+
+        const area = Math.round((rect?.width || 0) * (rect?.height || 0));
+        if ((rect?.width || 0) < 220 || (rect?.height || 0) < 120 || area < 50000) {
+            return false;
+        }
+
+        return true;
+    }
+
     function evaluateVideoEligibility(video) {
         const rect = video.getBoundingClientRect();
         const style = window.getComputedStyle(video);
@@ -399,6 +445,10 @@
 
         if (hasAdIndicators(signature, video)) {
             return { eligible: false, reason: 'ad-indicator', isSuspectedAd: true, signalScore: -5000 };
+        }
+
+        if (isLinkedNavigationPreview(video, rect, signature)) {
+            return { eligible: false, reason: 'linked-preview-card', isSuspectedAd: false, signalScore: -1700 };
         }
 
         const duration = Number(video.duration || 0);

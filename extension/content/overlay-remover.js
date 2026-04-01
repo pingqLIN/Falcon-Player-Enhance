@@ -234,6 +234,54 @@
         );
     }
 
+    function buildAncestorSignature(element, depth = 5) {
+        const segments = [];
+        let cursor = element?.parentElement || null;
+
+        for (let index = 0; index < depth && cursor; index += 1) {
+            segments.push([
+                cursor.tagName || '',
+                cursor.id || '',
+                cursor.className || '',
+                cursor.getAttribute?.('data-testid') || '',
+                cursor.getAttribute?.('role') || ''
+            ].join(' '));
+            cursor = cursor.parentElement;
+        }
+
+        return segments.join(' ').toLowerCase();
+    }
+
+    function isLinkedNavigationPreviewPlayer(player, rect = player?.getBoundingClientRect?.()) {
+        if (!player?.closest) return false;
+        if (player.tagName !== 'VIDEO') return false;
+        if (player.controls) return false;
+
+        const navigationAnchor = player.closest('a[href], [role="link"]');
+        if (!navigationAnchor) return false;
+
+        const signature = [
+            player.className || '',
+            player.id || '',
+            player.getAttribute?.('data-testid') || '',
+            navigationAnchor.id || '',
+            navigationAnchor.className || '',
+            navigationAnchor.getAttribute?.('aria-label') || '',
+            buildAncestorSignature(player, 6)
+        ].join(' ').toLowerCase();
+
+        if (!/thumbnail|preview|card|tile|grid|renderer|reel|shorts|shelf/.test(signature)) {
+            return false;
+        }
+
+        const area = Math.round((rect?.width || 0) * (rect?.height || 0));
+        if ((rect?.width || 0) < 220 || (rect?.height || 0) < 120 || area < 50000) {
+            return false;
+        }
+
+        return true;
+    }
+
     function getOverlapRatio(rect, targetRect) {
         if (!rect || !targetRect) return 0;
         const left = Math.max(rect.left, targetRect.left);
@@ -475,7 +523,9 @@
      */
     function removePlayerOverlays(player) {
         const playerRect = player.getBoundingClientRect();
-        
+
+        if (isLinkedNavigationPreviewPlayer(player, playerRect)) return 0;
+
         // 只處理可見的播放器
         if (playerRect.width < 50 || playerRect.height < 50) return 0;
         

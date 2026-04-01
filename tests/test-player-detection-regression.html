@@ -266,6 +266,32 @@
             font-size: 0.95rem;
         }
 
+        .linked-preview-card {
+            display: grid;
+            gap: 12px;
+            color: inherit;
+            text-decoration: none;
+            padding: 14px;
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at top, rgba(244, 63, 94, 0.12), transparent 38%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
+            border: 1px solid rgba(251, 146, 60, 0.2);
+        }
+
+        .linked-preview-card video {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 14px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .linked-preview-meta {
+            display: grid;
+            gap: 6px;
+        }
+
         code {
             color: #fde68a;
         }
@@ -425,6 +451,20 @@
                 </div>
                 <div class="expect">預期：播放器仍可被偵測，但隱藏中的 popup button 不應攔截 input / button。</div>
             </section>
+
+            <section class="case" data-case-id="linked-preview-card" data-expected="rejected" data-expected-popup="false" data-expected-interaction="true">
+                <h2>Case 12: 可導航預覽卡片不應被接管</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>模擬 YouTube / feed 類型的可點擊縮圖卡片。卡片裡可能會出現真正有 source 的 preview video，但它的本質仍是導航入口，不應掛 popup button，也不應吃掉點擊。</p>
+                <a id="linked-preview-card" class="linked-preview-card thumbnail-card preview-card" href="#linked-preview-clicked" data-testid="thumbnail">
+                    <video id="linked-preview-player" muted playsinline preload="none"></video>
+                    <div class="linked-preview-meta">
+                        <strong>OpenAI preview card</strong>
+                        <span>點擊整張卡片應走導航，不是被視為 in-page player。</span>
+                    </div>
+                </a>
+                <div class="expect">預期：不應被偵測，不應附加 popup button，卡片點擊仍應成功。</div>
+            </section>
         </div>
     </div>
 
@@ -436,7 +476,8 @@
         };
         const interactionState = {
             inputFocusedCount: 0,
-            buttonClickedCount: 0
+            buttonClickedCount: 0,
+            linkedPreviewClicks: 0
         };
         window.interactionState = interactionState;
 
@@ -463,6 +504,16 @@
                 xFeedVideo.appendChild(source);
                 xFeedVideo.load();
             }
+
+            const linkedPreviewVideo = document.getElementById("linked-preview-player");
+            if (linkedPreviewVideo && !linkedPreviewVideo.querySelector("source")) {
+                const source = document.createElement("source");
+                source.src = "./assets/falcon-smoke.webm?v=regression-linked-preview";
+                source.type = "video/webm";
+                linkedPreviewVideo.appendChild(source);
+                linkedPreviewVideo.load();
+                linkedPreviewVideo.play().catch(() => {});
+            }
         }
 
         function hasCaseDetection(section) {
@@ -476,6 +527,9 @@
 
         function evaluateInteractionPass(section) {
             if (section.dataset.expectedInteraction !== "true") return true;
+            if (section.dataset.caseId === "linked-preview-card") {
+                return interactionState.linkedPreviewClicks > 0;
+            }
             return interactionState.inputFocusedCount > 0 && interactionState.buttonClickedCount > 0;
         }
 
@@ -564,11 +618,17 @@
         window.addEventListener("load", () => {
             const guardInput = document.getElementById("interaction-guard-input");
             const guardButton = document.getElementById("interaction-guard-button");
+            const linkedPreviewCard = document.getElementById("linked-preview-card");
             guardInput?.addEventListener("focus", () => {
                 interactionState.inputFocusedCount += 1;
             });
             guardButton?.addEventListener("click", () => {
                 interactionState.buttonClickedCount += 1;
+            });
+            linkedPreviewCard?.addEventListener("click", (event) => {
+                event.preventDefault();
+                interactionState.linkedPreviewClicks += 1;
+                window.location.hash = "linked-preview-clicked";
             });
 
             setTimeout(activateDelayedFixtures, 1200);

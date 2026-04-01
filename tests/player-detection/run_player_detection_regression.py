@@ -116,6 +116,28 @@ def verify_hidden_button_pass_through(page) -> dict:
     }
 
 
+def verify_linked_preview_card_click(page) -> dict:
+    card = page.locator("#linked-preview-card")
+    card.click(timeout=10000)
+    state = page.evaluate(
+        """() => ({
+            hash: window.location.hash || '',
+            linkedPreviewClicks: Number(window.interactionState?.linkedPreviewClicks || 0),
+            popupButtonCount: document.querySelectorAll('.shield-popup-player-btn').length,
+            linkedPreviewDetected: Boolean(document.querySelector('#linked-preview-card [data-shield-id], #linked-preview-card .shield-detected-player, #linked-preview-card .shield-detected-container'))
+        })"""
+    )
+    ok = (
+        state["hash"] == "#linked-preview-clicked" and
+        state["linkedPreviewClicks"] > 0 and
+        state["linkedPreviewDetected"] is False
+    )
+    return {
+        "ok": ok,
+        "state": state,
+    }
+
+
 def main() -> int:
     args = parse_args()
     extension_dir = Path(args.extension_dir).resolve()
@@ -143,6 +165,7 @@ def main() -> int:
                     )
                     page.wait_for_timeout(args.wait_ms)
                     interaction_smoke = verify_hidden_button_pass_through(page)
+                    linked_preview_smoke = verify_linked_preview_card_click(page)
                     report = page.evaluate("() => window.__collectRegressionReport?.() || window.__regressionReport || null")
                     if not report:
                         print(json.dumps({
@@ -160,7 +183,8 @@ def main() -> int:
                         total_cases > 0 and
                         passed_cases == total_cases and
                         x_popup.get("ok") is True and
-                        interaction_smoke.get("ok") is True
+                        interaction_smoke.get("ok") is True and
+                        linked_preview_smoke.get("ok") is True
                     )
                     print(json.dumps({
                         "ok": ok,
@@ -168,6 +192,7 @@ def main() -> int:
                         "registeredScripts": registered_scripts,
                         "report": report,
                         "interactionSmoke": interaction_smoke,
+                        "linkedPreviewSmoke": linked_preview_smoke,
                         "xPopupSmoke": x_popup,
                     }, ensure_ascii=False, indent=2))
                     return 0 if ok else 1
