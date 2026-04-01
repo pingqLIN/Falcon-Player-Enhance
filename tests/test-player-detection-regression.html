@@ -245,6 +245,27 @@
             object-fit: cover;
         }
 
+        .interaction-guard {
+            display: grid;
+            gap: 14px;
+            padding: 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .interaction-guard input,
+        .interaction-guard button {
+            width: 100%;
+            min-height: 44px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.88);
+            color: #eef2ff;
+            padding: 10px 14px;
+            font-size: 0.95rem;
+        }
+
         code {
             color: #fde68a;
         }
@@ -388,6 +409,22 @@
                 </article>
                 <div class="expect">預期：應被偵測，並且應掛上可用的 popup button。</div>
             </section>
+
+            <section class="case" data-case-id="hidden-button-pass-through" data-expected="eligible" data-expected-popup="true" data-expected-interaction="true">
+                <h2>Case 11: 隱藏 popup button 不得阻擋互動</h2>
+                <div class="status-chip" data-case-status>等待掃描</div>
+                <p>模擬滿頁影片卡片場景。當 popup button 處於隱藏狀態時，不應擋住底下的 input / button 點擊。</p>
+                <div class="interaction-guard">
+                    <div class="player-shell">
+                        <video controls preload="metadata">
+                            <source src="./assets/falcon-smoke.webm?v=regression-pass-through" type="video/webm">
+                        </video>
+                    </div>
+                    <input id="interaction-guard-input" value="" placeholder="Should stay clickable">
+                    <button id="interaction-guard-button" type="button">Click me</button>
+                </div>
+                <div class="expect">預期：播放器仍可被偵測，但隱藏中的 popup button 不應攔截 input / button。</div>
+            </section>
         </div>
     </div>
 
@@ -397,6 +434,11 @@
             fail: "FAIL",
             pending: "等待掃描"
         };
+        const interactionState = {
+            inputFocusedCount: 0,
+            buttonClickedCount: 0
+        };
+        window.interactionState = interactionState;
 
         function activateDelayedFixtures() {
             const delayedVideo = document.getElementById("delayed-player");
@@ -432,6 +474,11 @@
                 .some((node) => node.dataset.popupButtonAttached === "true");
         }
 
+        function evaluateInteractionPass(section) {
+            if (section.dataset.expectedInteraction !== "true") return true;
+            return interactionState.inputFocusedCount > 0 && interactionState.buttonClickedCount > 0;
+        }
+
         function buildCaseReport(section) {
             const expected = section.dataset.expected;
             const expectedPopup = section.dataset.expectedPopup;
@@ -441,7 +488,8 @@
             const popupPass = expectedPopup
                 ? (expectedPopup === "true" ? actualPopupButton : !actualPopupButton)
                 : true;
-            const pass = eligibilityPass && popupPass;
+            const interactionPass = evaluateInteractionPass(section);
+            const pass = eligibilityPass && popupPass && interactionPass;
             return {
                 caseId: section.dataset.caseId || "",
                 title: section.querySelector("h2")?.textContent || "",
@@ -449,6 +497,7 @@
                 expectedPopupButton: expectedPopup || "",
                 actualEligible,
                 actualPopupButton,
+                interactionPass,
                 pass
             };
         }
@@ -462,7 +511,8 @@
             const popupText = report.expectedPopupButton
                 ? `, popup=${report.actualPopupButton ? "attached" : "missing"}`
                 : "";
-            statusNode.textContent = `${report.pass ? CASE_STATUS_LABELS.pass : CASE_STATUS_LABELS.fail} · expected=${report.expected}, actual=${report.actualEligible ? "eligible" : "rejected"}${popupText}`;
+            const interactionText = report.interactionPass === false ? ", interaction=blocked" : "";
+            statusNode.textContent = `${report.pass ? CASE_STATUS_LABELS.pass : CASE_STATUS_LABELS.fail} · expected=${report.expected}, actual=${report.actualEligible ? "eligible" : "rejected"}${popupText}${interactionText}`;
             statusNode.classList.add(report.pass ? "pass" : "fail");
         }
 
@@ -487,6 +537,13 @@
             };
         }
 
+        window.__collectRegressionReport = () => {
+            const report = collectReport();
+            renderSummary(report);
+            window.__regressionReport = report;
+            return report;
+        };
+
         function renderSummary(report) {
             const summaryText = document.getElementById("summary-text");
             const summaryList = document.getElementById("summary-list");
@@ -505,11 +562,18 @@
         }
 
         window.addEventListener("load", () => {
+            const guardInput = document.getElementById("interaction-guard-input");
+            const guardButton = document.getElementById("interaction-guard-button");
+            guardInput?.addEventListener("focus", () => {
+                interactionState.inputFocusedCount += 1;
+            });
+            guardButton?.addEventListener("click", () => {
+                interactionState.buttonClickedCount += 1;
+            });
+
             setTimeout(activateDelayedFixtures, 1200);
             setTimeout(() => {
-                const report = collectReport();
-                renderSummary(report);
-                window.__regressionReport = report;
+                const report = window.__collectRegressionReport();
                 console.log("[regression-test]", report);
             }, 4500);
         });

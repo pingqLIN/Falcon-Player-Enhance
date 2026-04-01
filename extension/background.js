@@ -49,6 +49,7 @@ let siteRegistryState = {
   profiles: {
     compatibilityModeSites: [],
     basicProtectionExcludedDomains: [],
+    mediaAutomationExcludedDomains: [],
     popupDirectIframeHosts: [],
     cosmeticFilter: {
       globalSelectors: [],
@@ -131,6 +132,7 @@ function normalizeSiteRegistry(payload = {}) {
     profiles: {
       compatibilityModeSites: normalizeDomainList(profiles.compatibilityModeSites),
       basicProtectionExcludedDomains: normalizeDomainList(profiles.basicProtectionExcludedDomains),
+      mediaAutomationExcludedDomains: normalizeDomainList(profiles.mediaAutomationExcludedDomains),
       popupDirectIframeHosts: normalizeDomainList(profiles.popupDirectIframeHosts),
       cosmeticFilter: normalizeCosmeticFilterConfig(profiles.cosmeticFilter),
       injectBlocker: normalizeInjectBlockerConfig(profiles.injectBlocker)
@@ -214,6 +216,10 @@ function getCompatibilityModeSites() {
 
 function getBasicProtectionExcludedDomains() {
   return normalizeDomainList(siteRegistryState?.profiles?.basicProtectionExcludedDomains);
+}
+
+function getMediaAutomationExcludedDomains() {
+  return normalizeDomainList(siteRegistryState?.profiles?.mediaAutomationExcludedDomains);
 }
 
 function getInjectBlockerConfig() {
@@ -5679,6 +5685,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         profiles: {
           compatibilityModeSites: getCompatibilityModeSites(),
           basicProtectionExcludedDomains: getBasicProtectionExcludedDomains(),
+          mediaAutomationExcludedDomains: getMediaAutomationExcludedDomains(),
           popupDirectIframeHosts: getPopupDirectIframeHosts(),
           cosmeticFilter: getCosmeticFilterConfig(),
           injectBlocker: getInjectBlockerConfig()

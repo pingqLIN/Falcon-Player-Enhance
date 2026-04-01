@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_browser_args(extension_dir: Path) -> list[str]:
-    host_rules = "MAP falcon-whitelist.test 127.0.0.1"
+    host_rules = "MAP falcon-whitelist.test 127.0.0.1, MAP sora.chatgpt.com 127.0.0.1"
     return [
         *smoke.build_extension_args(extension_dir),
         f"--host-resolver-rules={host_rules}",
@@ -67,7 +67,21 @@ def collect_helper_state(extension_page, target_url: str, whitelist: list[str], 
             await new Promise((resolve) => setTimeout(resolve, waitMs));
 
             const tabs = await chrome.tabs.query({});
-            const targetTab = tabs.find((tab) => tab.url === targetUrl);
+            const targetHostname = (() => {
+                try {
+                    return new URL(targetUrl).hostname;
+                } catch (_) {
+                    return '';
+                }
+            })();
+            const targetTab = tabs.find((tab) => {
+                if (tab.url === targetUrl) return true;
+                try {
+                    return targetHostname && new URL(tab.url).hostname === targetHostname;
+                } catch (_) {
+                    return false;
+                }
+            });
             if (!targetTab?.id) {
                 return { error: 'target_tab_missing', tabs: tabs.map((tab) => tab.url) };
             }
@@ -85,7 +99,8 @@ def collect_helper_state(extension_page, target_url: str, whitelist: list[str], 
                         helperPresent: true,
                         state: helper.getState(),
                         shouldRunCleanup: helper.shouldRunCleanup(window.location.hostname),
-                        shouldRunMediaAutomation: helper.shouldRunMediaAutomation(window.location.hostname)
+                        shouldRunMediaAutomation: helper.shouldRunMediaAutomation(window.location.hostname),
+                        mediaAutomationExcluded: helper.isMediaAutomationExcludedHost?.(window.location.hostname) || false
                     };
                 }
             });
@@ -101,10 +116,11 @@ def collect_helper_state(extension_page, target_url: str, whitelist: list[str], 
     )
 
 
-def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, object], strict_mode: dict[str, object]) -> dict[str, object]:
+def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, object], strict_mode: dict[str, object], excluded_mode: dict[str, object]) -> dict[str, object]:
     initial_domains = initial_state.get("state", {}).get("whitelistDomains", [])
     whitelist_domains = whitelist_mode.get("state", {}).get("whitelistDomains", [])
     strict_domains = strict_mode.get("state", {}).get("whitelistDomains", [])
+    excluded_domains = excluded_mode.get("state", {}).get("mediaAutomationExcludedDomains", [])
 
     checks = {
         "helperPresentInitially": bool(initial_state.get("helperPresent")),
@@ -114,6 +130,7 @@ def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, obj
         "whitelistEnhanceOnlyDisablesMediaAutomation": whitelist_mode.get("shouldRunMediaAutomation") is False and "falcon-whitelist.test" in whitelist_domains,
         "strictModeReEnablesCleanup": strict_mode.get("shouldRunCleanup") is True and "falcon-whitelist.test" in strict_domains,
         "strictModeReEnablesMediaAutomation": strict_mode.get("shouldRunMediaAutomation") is True and "falcon-whitelist.test" in strict_domains,
+        "excludedHostDisablesMediaAutomation": excluded_mode.get("mediaAutomationExcluded") is True and excluded_mode.get("shouldRunMediaAutomation") is False and "sora.chatgpt.com" in excluded_domains,
     }
 
     return {
@@ -123,6 +140,7 @@ def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, obj
             "initial": initial_state,
             "whitelistMode": whitelist_mode,
             "strictMode": strict_mode,
+            "excludedMode": excluded_mode,
         },
     }
 
@@ -158,7 +176,12 @@ def main() -> int:
                 initial_state = collect_helper_state(extension_page, target_url, [], True, args.wait_ms)
                 whitelist_mode = collect_helper_state(extension_page, target_url, ["falcon-whitelist.test"], True, args.wait_ms)
                 strict_mode = collect_helper_state(extension_page, target_url, ["falcon-whitelist.test"], False, args.wait_ms)
-                report = build_report(initial_state, whitelist_mode, strict_mode)
+                excluded_page = context.new_page()
+                excluded_url = f"{server.base_url.replace('127.0.0.1', 'sora.chatgpt.com')}/test-site-state-helper.html"
+                excluded_page.goto(excluded_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                excluded_page.wait_for_timeout(1200)
+                excluded_mode = collect_helper_state(extension_page, excluded_url, [], True, args.wait_ms)
+                report = build_report(initial_state, whitelist_mode, strict_mode, excluded_mode)
 
                 print(json.dumps({
                     "ok": report["ok"],

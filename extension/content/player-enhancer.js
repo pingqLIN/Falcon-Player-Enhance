@@ -289,7 +289,7 @@
             alignItems: 'center',
             justifyContent: 'center',
             backdropFilter: 'blur(4px)',
-            pointerEvents: 'auto'
+            pointerEvents: 'none'
         });
 
         const tooltip = document.createElement('div');
@@ -313,6 +313,12 @@
         let hoverPinned = false;
         let hoverTimeout = null;
 
+        function setOverlayVisibility(visible) {
+            btn.style.opacity = visible ? '1' : '0';
+            btn.style.pointerEvents = visible ? 'auto' : 'none';
+            tooltip.style.opacity = visible ? '1' : '0';
+        }
+
         function syncPopupButtonMetadata() {
             btn.dataset.shieldPopupTargetId = resolvePlayerControlId(player) || '';
             btn.dataset.shieldPopupVideoSrc =
@@ -329,10 +335,10 @@
             clearTimeout(hoverTimeout);
             syncPopupButtonMetadata();
             if (!applyFloatingPopupAnchorPosition(player, btn, tooltip)) {
+                setOverlayVisibility(false);
                 return;
             }
-            btn.style.opacity = '1';
-            tooltip.style.opacity = '1';
+            setOverlayVisibility(true);
             updateVideoTooltip(player, tooltip);
         }
 
@@ -340,8 +346,7 @@
             clearTimeout(hoverTimeout);
             hoverTimeout = window.setTimeout(() => {
                 if (hoverPinned) return;
-                btn.style.opacity = '0';
-                tooltip.style.opacity = '0';
+                setOverlayVisibility(false);
             }, 80);
         }
 

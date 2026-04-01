@@ -42,6 +42,9 @@
       "lovable.dev",
       "auth.lovable.dev"
     ],
+    "mediaAutomationExcludedDomains": [
+      "sora.chatgpt.com"
+    ],
     "popupDirectIframeHosts": [
       "boyfriendtv.com"
     ],

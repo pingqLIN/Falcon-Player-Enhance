@@ -91,6 +91,31 @@ def verify_x_feed_popup(page, context, timeout_ms: int) -> dict:
     }
 
 
+def verify_hidden_button_pass_through(page) -> dict:
+    input_locator = page.locator("#interaction-guard-input")
+    button_locator = page.locator("#interaction-guard-button")
+    input_locator.click(timeout=10000)
+    page.keyboard.type("falcon-pass-through")
+    button_locator.click(timeout=10000)
+    state = page.evaluate(
+        """() => ({
+            activeElementId: document.activeElement?.id || '',
+            inputValue: document.getElementById('interaction-guard-input')?.value || '',
+            inputFocusedCount: Number(window.interactionState?.inputFocusedCount || 0),
+            buttonClickedCount: Number(window.interactionState?.buttonClickedCount || 0)
+        })"""
+    )
+    ok = (
+        state["inputValue"] == "falcon-pass-through" and
+        state["inputFocusedCount"] > 0 and
+        state["buttonClickedCount"] > 0
+    )
+    return {
+        "ok": ok,
+        "state": state,
+    }
+
+
 def main() -> int:
     args = parse_args()
     extension_dir = Path(args.extension_dir).resolve()
@@ -117,7 +142,8 @@ def main() -> int:
                         timeout=args.timeout_ms,
                     )
                     page.wait_for_timeout(args.wait_ms)
-                    report = page.evaluate("() => window.__regressionReport || null")
+                    interaction_smoke = verify_hidden_button_pass_through(page)
+                    report = page.evaluate("() => window.__collectRegressionReport?.() || window.__regressionReport || null")
                     if not report:
                         print(json.dumps({
                             "ok": False,
@@ -130,12 +156,18 @@ def main() -> int:
                     total_cases = len(report.get("caseReports") or [])
                     passed_cases = int(report.get("passedCases") or 0)
                     x_popup = verify_x_feed_popup(page, context, args.timeout_ms)
-                    ok = total_cases > 0 and passed_cases == total_cases and x_popup.get("ok") is True
+                    ok = (
+                        total_cases > 0 and
+                        passed_cases == total_cases and
+                        x_popup.get("ok") is True and
+                        interaction_smoke.get("ok") is True
+                    )
                     print(json.dumps({
                         "ok": ok,
                         "extensionId": extension_id,
                         "registeredScripts": registered_scripts,
                         "report": report,
+                        "interactionSmoke": interaction_smoke,
                         "xPopupSmoke": x_popup,
                     }, ensure_ascii=False, indent=2))
                     return 0 if ok else 1

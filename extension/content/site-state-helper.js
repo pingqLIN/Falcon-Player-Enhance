@@ -30,15 +30,18 @@
     const DEFAULT_STATE = Object.freeze({
         whitelistDomains: [],
         whitelistEnhanceOnly: true,
+        mediaAutomationExcludedDomains: [],
         interactionSafety: DEFAULT_INTERACTION_SAFETY
     });
 
     let state = {
         whitelistDomains: [],
         whitelistEnhanceOnly: true,
+        mediaAutomationExcludedDomains: [],
         interactionSafety: { ...DEFAULT_INTERACTION_SAFETY }
     };
     let loadPromise = null;
+    let siteProfilesPromise = null;
     let recomputeTimer = null;
     const listeners = new Set();
 
@@ -72,6 +75,7 @@
         return {
             whitelistDomains: [...state.whitelistDomains],
             whitelistEnhanceOnly: state.whitelistEnhanceOnly !== false,
+            mediaAutomationExcludedDomains: [...state.mediaAutomationExcludedDomains],
             interactionSafety: normalizeInteractionSafety(state.interactionSafety)
         };
     }
@@ -168,6 +172,7 @@
         state = {
             whitelistDomains: normalizeDomainList(nextState.whitelistDomains),
             whitelistEnhanceOnly: nextState.whitelistEnhanceOnly !== false,
+            mediaAutomationExcludedDomains: normalizeDomainList(nextState.mediaAutomationExcludedDomains),
             interactionSafety: normalizeInteractionSafety(nextState.interactionSafety || state.interactionSafety)
         };
         return getStateSnapshot();
@@ -210,6 +215,7 @@
                 applyState({
                     whitelistDomains: result.whitelist,
                     whitelistEnhanceOnly: result.whitelistEnhanceOnly,
+                    mediaAutomationExcludedDomains: state.mediaAutomationExcludedDomains,
                     interactionSafety: collectInteractionSafety()
                 });
                 resolve(getStateSnapshot());
@@ -217,9 +223,38 @@
         });
     }
 
+    function loadSiteProfiles() {
+        if (siteProfilesPromise) return siteProfilesPromise;
+        siteProfilesPromise = new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage({ action: 'getSiteRegistry' }, (response) => {
+                    const failed = chrome.runtime.lastError || !response?.success;
+                    if (failed) {
+                        resolve(getStateSnapshot());
+                        return;
+                    }
+
+                    applyState({
+                        whitelistDomains: state.whitelistDomains,
+                        whitelistEnhanceOnly: state.whitelistEnhanceOnly,
+                        mediaAutomationExcludedDomains: response?.profiles?.mediaAutomationExcludedDomains,
+                        interactionSafety: state.interactionSafety
+                    });
+                    resolve(getStateSnapshot());
+                });
+            } catch (_) {
+                resolve(getStateSnapshot());
+            }
+        }).finally(() => {
+            siteProfilesPromise = null;
+        });
+
+        return siteProfilesPromise;
+    }
+
     function loadState() {
         if (loadPromise) return loadPromise;
-        loadPromise = readStateFromStorage().finally(() => {
+        loadPromise = Promise.all([loadSiteProfiles(), readStateFromStorage()]).then(() => getStateSnapshot()).finally(() => {
             loadPromise = null;
         });
         return loadPromise;
@@ -230,11 +265,17 @@
         return state.whitelistDomains.some((domain) => host === domain || host.endsWith('.' + domain));
     }
 
+    function isMediaAutomationExcludedHost(hostname = window.location.hostname) {
+        const host = normalizeHostname(hostname);
+        return state.mediaAutomationExcludedDomains.some((domain) => host === domain || host.endsWith('.' + domain));
+    }
+
     function shouldRunCleanup(hostname = window.location.hostname) {
         return !(isWhitelistedHost(hostname) && state.whitelistEnhanceOnly);
     }
 
     function shouldRunMediaAutomation(hostname = window.location.hostname) {
+        if (isMediaAutomationExcludedHost(hostname)) return false;
         if (!shouldRunCleanup(hostname)) return false;
         const safety = normalizeInteractionSafety(state.interactionSafety);
         return !(safety.interactionSensitivePage && !safety.hasProminentMedia);
@@ -307,6 +348,7 @@
         getState: getStateSnapshot,
         getInteractionSafety: () => normalizeInteractionSafety(state.interactionSafety),
         isWhitelistedHost,
+        isMediaAutomationExcludedHost,
         shouldRunCleanup,
         shouldRunMediaAutomation,
         subscribe
