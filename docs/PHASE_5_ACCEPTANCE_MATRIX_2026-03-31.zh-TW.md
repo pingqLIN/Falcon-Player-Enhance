@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 驗收矩陣
 
 > 更新日期: 2026-04-01
-> 狀態: Track E v1/v2 Gate Automated
+> 狀態: Track E v1/v2 + Interaction Safety Gate Automated
 > 參照: `PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 
 ## 1. 驗收原則
@@ -12,6 +12,7 @@
   - getSiteRegistry contract
   - whitelist-state divergence
   - release gate unification
+  - interaction safety
 - 驗收證據以 fresh run 為準，不引用過期結果
 
 ## 2. Gate Matrix
@@ -32,11 +33,12 @@
 | G-06 | Whitelist Consistency | Companion / Standalone | whitelist-state divergence | `python tests/site-state/run_site_state_bridge_regression.py --headless` + `python tests/site-state/run_site_state_helper_regression.py --headless` + `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless` | MAIN-world bridge、canonical helper 與 anti-antiblock 行為一致；non-whitelist / whitelist / strict-mode 與 whitelist restore（strict -> whitelist）切換皆符合預期 |
 | G-07 | AI Candidate Governance | AI-Expanded | release gate unification | `python tests/ai/run_candidate_review_regression.py --headless`（或 `npm run test:ai:candidate-review -- --headless`） | accept/reject 決策與 reason 皆可追溯；dashboard candidate 可手動審核；`baseline/confirmedPatterns` 不可被 candidate review 流程直接改寫 |
 | G-08 | AI Controlled Promotion | AI-Expanded | release gate unification | `python tests/ai/run_candidate_promotion_regression.py --headless`（或 `npm run test:ai:candidate-promotion -- --headless`） | 只允許已接受 decision 的 candidate promotion；decision schema v2 必要欄位完整；promotion 必須附 evidence linkage；rollback 依 `promotionId` 可還原 baseline |
+| G-09 | Interaction Safety | Companion / Standalone | interaction safety, release gate unification | `python tests/interaction-safety/run_interaction_safety_regression.py --headless`（或 `npm run test:interaction-safety -- --headless`） | 互動敏感頁必須停用 media automation；auth overlay / OAuth button / form submit / keydown 不可被全站 media chain 誤傷 |
 
 ## 3. 阻斷規則
 
 - Blocker（必須修復）
-- G-00~G-08 任一失敗
+- G-00~G-09 任一失敗
 - contract 缺值導致 consumer crash 或 fallback 不一致
 - whitelist state 漂移導致 non-whitelist/whitelist 行為反轉
 
@@ -57,6 +59,7 @@
 - `decision_id`（若涉及 G-07/G-08）
 - `promotion_id`（若涉及 G-08）
 - `rollback_id`（若涉及 G-08 rollback）
+- `interaction_signals`（若涉及 G-09）
 - `evidence_refs`（gate output / dataset / dashboard action trace）
 - `schema_version`（decision schema 版本）
 
@@ -66,6 +69,7 @@
 
 本階段可進入下一階段需滿足：
 
-- G-00~G-08 連續兩輪 PASS
+- G-00~G-09 連續兩輪 PASS
 - G-08 連續兩輪 PASS（Track E v2）
+- G-09 連續兩輪 PASS（interaction safety）
 - roadmap 與 execution book 已同步標記 Phase 5 kickoff 與 gate 規範

@@ -84,7 +84,8 @@ def collect_helper_state(extension_page, target_url: str, whitelist: list[str], 
                     return {
                         helperPresent: true,
                         state: helper.getState(),
-                        shouldRunCleanup: helper.shouldRunCleanup(window.location.hostname)
+                        shouldRunCleanup: helper.shouldRunCleanup(window.location.hostname),
+                        shouldRunMediaAutomation: helper.shouldRunMediaAutomation(window.location.hostname)
                     };
                 }
             });
@@ -108,8 +109,11 @@ def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, obj
     checks = {
         "helperPresentInitially": bool(initial_state.get("helperPresent")),
         "initialCleanupEnabled": initial_state.get("shouldRunCleanup") is True and initial_domains == [],
+        "initialMediaAutomationEnabled": initial_state.get("shouldRunMediaAutomation") is True,
         "whitelistEnhanceOnlyDisablesCleanup": whitelist_mode.get("shouldRunCleanup") is False and "falcon-whitelist.test" in whitelist_domains,
+        "whitelistEnhanceOnlyDisablesMediaAutomation": whitelist_mode.get("shouldRunMediaAutomation") is False and "falcon-whitelist.test" in whitelist_domains,
         "strictModeReEnablesCleanup": strict_mode.get("shouldRunCleanup") is True and "falcon-whitelist.test" in strict_domains,
+        "strictModeReEnablesMediaAutomation": strict_mode.get("shouldRunMediaAutomation") is True and "falcon-whitelist.test" in strict_domains,
     }
 
     return {

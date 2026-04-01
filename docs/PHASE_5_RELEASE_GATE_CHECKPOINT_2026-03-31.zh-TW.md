@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 Release Gate Checkpoint
 
 > 更新日期: 2026-04-01
-> 狀態: Track A/B/C/D groundwork + Track E v1/v2 verified
+> 狀態: Track A/B/C/D groundwork + Track E v1/v2 + interaction safety verified
 > 關聯文件:
 > - `docs/PHASE_5_EXECUTION_PLAN_2026-03-31.zh-TW.md`
 > - `docs/PHASE_5_ACCEPTANCE_MATRIX_2026-03-31.zh-TW.md`
@@ -10,7 +10,7 @@
 
 ## 1. 本輪完成項目
 
-本輪 Phase 5 完成六個可交付成果：
+本輪 Phase 5 完成七個可交付成果：
 
 1. `Track A / B` groundwork 落地
 - `anti-popup.js` 補上 compatibility fallback 預設值與缺值保底
@@ -50,6 +50,12 @@
 - `lovable.dev` / `auth.lovable.dev` 已加入 basic content script exclusion 與 DNR allow contract
 - `G-08` 已併入 unified gate 自動化執行
 
+7. `Track F` interaction safety guard 落地
+- `site-state-helper.js` 已可輸出 `interactionSafety` 與 `shouldRunMediaAutomation()`
+- `player-detector`、`fake-video-remover`、`overlay-remover`、`player-enhancer`、`player-controls` 已對齊 interaction safety guard
+- 新增 `tests/interaction-safety/run_interaction_safety_regression.py`
+- `G-09` 已併入 unified gate 自動化執行
+
 ## 2. 驗證結果
 
 本輪 fresh verification：
@@ -64,6 +70,7 @@
   - `G-06` PASS
   - `G-07` PASS
   - `G-08` PASS
+  - `G-09` PASS
 - `python tests/site-state/run_site_state_bridge_regression.py --headless`
 - `python tests/site-state/run_site_state_helper_regression.py --headless`
 - `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless`
@@ -81,6 +88,7 @@
 - candidate governance 已驗證 accept/reject + reason 可追溯，且 `baseline/confirmedPatterns` 不因 candidate review 直接變更
 - controlled promotion 已驗證 decision -> promotion -> rollback evidence chain 可追溯，且 rollback 可將 `confirmedPatterns` 還原
 - lovable safe-domain exemption 已驗證 runtime contract、registered content script excludeMatches 與 DNR allow rule 三層一致
+- interaction safety guard 已驗證互動敏感頁會停用 media automation，且 auth overlay / OAuth button / form submit / keydown 不受干擾
 - unified gate 對 `extension_content_scripts_not_ready` 已加入受控重試，避免偶發 extension startup 抖動污染正式驗收
 
 ## 3. 目前判斷
@@ -92,13 +100,15 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - `Track D` 已有可重跑 release gate
 - `Track C` 已有第一版 canonical helper、跨模組 consumer 對齊與 regression，但尚未涵蓋所有 consumer
 - `Track E` 已完成 candidate/review/decision v1 與 controlled promotion / rollback v2，並納入 release gate 自動化
+- `Track F` 已完成 interaction safety guard 與 auth/form regression，自動化納入 gate
 
-換句話說，Phase 5 現在已具備「每輪交付可統一驗證」的基礎，也完成 Track E v1；下一步重點是治理流程深化與規則升級邊界管理。
+換句話說，Phase 5 現在已具備「每輪交付可統一驗證」的基礎，也完成 Track E v1/v2 與 interaction safety；下一步重點是治理流程深化與真實站點 smoke 擴充。
 
 ## 4. 風險與缺點
 
 - `overlay-remover.js`、`fake-video-remover.js`、`player-enhancer.js` 已優先改讀 canonical helper，但其他 consumer 尚未全部收斂
 - lovable exemption 目前先採 host-level 豁免；若後續確認只需 selector 細粒度例外，可再回頭收窄
+- interaction safety 目前先以 auth/form-like heuristics 判定；後續可再補更多真實站點 smoke 驗證來收斂誤判與漏判
 - GitHub push 問題目前降級為非阻塞項，先以本地 commit 與驗證鏈為主
 
 ## 5. 下一階段建議

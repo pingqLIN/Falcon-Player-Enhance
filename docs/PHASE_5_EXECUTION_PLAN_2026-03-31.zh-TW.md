@@ -1,7 +1,7 @@
 # Falcon-Player-Enhance Phase 5 執行計畫
 
 > 更新日期: 2026-04-01
-> 狀態: Track A/B/C/D groundwork landed + Track E v1/v2 verified
+> 狀態: Track A/B/C/D groundwork landed + Track E v1/v2 verified + interaction safety guard verified
 > 參照: `PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`、`STANDALONE_BASELINE_RULESET_2026-03-31.zh-TW.md`、`PHASE_4_GLOBAL_REVIEW_2026-03-31.zh-TW.md`
 
 ## 1. Phase 5 目標
@@ -16,6 +16,8 @@ Phase 5 的目標不是擴張成一般型 blocker，而是把 Phase 4 的 ground
   - getSiteRegistry contract
   - whitelist-state divergence
   - release gate unification
+- 另外收斂一個跨站高風險問題：
+  - interaction safety（登入 / OAuth / 重表單頁面不可被 media automation 誤傷）
 
 ## 2. 邊界與非目標
 
@@ -123,6 +125,26 @@ Phase 5 明確不做：
 - rollback 後 baseline 必須可還原到 promotion 前快照
 - `G-08` 能在 unified gate 中固定重跑
 
+## 3.6 Track F: Interaction Safety Guard
+
+目標：
+
+- 將登入 / OAuth / 多欄位表單頁從「單站例外」提升為「通用頁面模式判定」
+- 避免 `shield-basic-docidle` 在互動敏感頁上誤啟動 player detection / overlay cleanup / fake-video cleanup / hotkeys
+
+交付：
+
+- `site-state-helper.js` 新增 `interactionSafety` 與 `shouldRunMediaAutomation()`
+- `player-detector`、`fake-video-remover`、`overlay-remover`、`player-enhancer`、`player-controls` 對齊同一條 interaction safety guard
+- `tests/interaction-safety/run_interaction_safety_regression.py`
+- `G-09` 已併入 unified release gate
+
+驗收：
+
+- 互動敏感頁必須判定為 `shouldRunMediaAutomation = false`
+- auth overlay / OAuth button / form submit 不可被全站 media automation 誤傷
+- 既有 player detection regression 不可退化
+
 ## 4. 里程碑
 
 ## M1（Week 1）
@@ -158,5 +180,6 @@ Phase 5 在本階段可宣告完成需同時滿足：
 
 - 四個風險主題均有對應規格與驗收證據
 - acceptance matrix 全部關鍵項目 PASS（含 `G-08`）
+- interaction safety regression PASS（`G-09`）
 - roadmap / execution book / phase docs 一致引用同一套邊界語言
 - 外部審查 findings 已關閉或有明確 backlog 與風險註記

@@ -4,6 +4,14 @@
 (function () {
     'use strict';
 
+    function shouldRunMediaAutomation() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.shouldRunMediaAutomation) {
+            return helper.shouldRunMediaAutomation(window.location.hostname);
+        }
+        return true;
+    }
+
     // ========== 快捷鍵設定 ==========
     const HOTKEYS = {
         // 播放控制
@@ -644,6 +652,10 @@
      * 鍵盤事件處理
      */
     function handleKeydown(e) {
+        if (!shouldRunMediaAutomation()) {
+            return;
+        }
+
         // 忽略輸入框
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
             return;
@@ -723,6 +735,7 @@
         
         // 監聽播放器偵測事件
         document.addEventListener('shieldPlayersDetected', (event) => {
+            if (!shouldRunMediaAutomation()) return;
             const players = event.detail.eligiblePlayers || event.detail.players || [];
             players.forEach(player => {
                 const video = player.tagName === 'VIDEO' ? player : player.querySelector('video');
@@ -735,6 +748,7 @@
         
         // 處理已存在的影片
         setTimeout(() => {
+            if (!shouldRunMediaAutomation()) return;
             getManagedVideos().forEach(video => {
                 bindExclusivePlayback(video);
                 createSpeedControlUI(video);

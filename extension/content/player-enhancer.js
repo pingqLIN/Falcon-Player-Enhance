@@ -32,8 +32,8 @@
 
     function applyCleanupModeFromState(state = null) {
         const helper = window.__ShieldSiteStateHelper;
-        if (helper?.shouldRunCleanup) {
-            cleanupEnabled = helper.shouldRunCleanup(window.location.hostname);
+        if (helper?.shouldRunMediaAutomation) {
+            cleanupEnabled = helper.shouldRunMediaAutomation(window.location.hostname);
             return cleanupEnabled;
         }
 
@@ -1597,6 +1597,7 @@
      * 處理所有偵測到的播放器
      */
     function processPlayers(players, infoList = null) {
+        if (!cleanupEnabled) return;
         const infoIndex = buildInfoIndex(infoList);
         players.forEach(player => {
             if (!isEligiblePlayer(player, infoIndex)) {
@@ -1631,6 +1632,7 @@
      * 我們只能處理父頁面的覆蓋層,不能干擾 iframe 內部。
      */
     function enhanceIframes() {
+        if (!cleanupEnabled) return;
         const iframes = document.querySelectorAll('iframe[src*="player"], iframe[src*="embed"], iframe[src*="myvidplay"], iframe[src*="javboys.online"]');
         
         iframes.forEach(iframe => {

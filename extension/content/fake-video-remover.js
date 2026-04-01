@@ -43,8 +43,8 @@
 
     function applyBlockingModeFromState(state = null) {
         const helper = window.__ShieldSiteStateHelper;
-        if (helper?.shouldRunCleanup) {
-            blockingEnabled = helper.shouldRunCleanup(window.location.hostname);
+        if (helper?.shouldRunMediaAutomation) {
+            blockingEnabled = helper.shouldRunMediaAutomation(window.location.hostname);
             return blockingEnabled;
         }
 

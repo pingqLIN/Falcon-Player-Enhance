@@ -5,7 +5,7 @@
 > 目的: 將 `uBOL Companion` 產品邊界正式併入執行序列，並啟動 Phase 5 的契約化與驗收門檻整合
 
 > 補充（2026-04-01）：
-- Phase 5 Track E candidate governance v1/v2 已落地，`G-07` / `G-08` 已納入自動化 release gate
+- Phase 5 Track E candidate governance v1/v2 與 interaction safety guard 已落地，`G-07` / `G-08` / `G-09` 已納入自動化 release gate
 
 ## 0. 本版重點（相較 2026-03-30）
 

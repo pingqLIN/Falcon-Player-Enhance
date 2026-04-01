@@ -5,7 +5,7 @@
 > 參照：`PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md`
 
 > 補充（2026-04-01）：
-- Phase 5 Track E candidate governance v1/v2 已落地，`G-07` / `G-08` 已納入 release gate 自動化
+- Phase 5 Track E candidate governance v1/v2 與 interaction safety guard 已落地，`G-07` / `G-08` / `G-09` 已納入 release gate 自動化
 
 ## 1. 路線圖目標
 

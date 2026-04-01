@@ -4,6 +4,14 @@
 (function () {
     'use strict';
 
+    function shouldRunMediaAutomation() {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.shouldRunMediaAutomation) {
+            return helper.shouldRunMediaAutomation(window.location.hostname);
+        }
+        return true;
+    }
+
     function hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -797,6 +805,11 @@
      * 執行完整的播放器偵測
      */
     function detectAllPlayers() {
+        if (!shouldRunMediaAutomation()) {
+            playerCount = 0;
+            return 0;
+        }
+
         const html5Count = detectHTML5Players();
         const iframeCount = detectIframePlayers();
         const customCount = detectCustomPlayers();
@@ -961,6 +974,15 @@
      */
     function init() {
         console.log('🚀 Player Detector v4.0 已載入');
+
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.subscribe) {
+            helper.subscribe(() => {
+                if (!shouldRunMediaAutomation()) return;
+                detectAllPlayers();
+                applyBlockedPlayers();
+            });
+        }
 
         // 頁面載入時立即偵測
         if (document.readyState === 'loading') {

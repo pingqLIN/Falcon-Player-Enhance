@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon Interaction Safety Regression</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.2), transparent 35%),
+        linear-gradient(160deg, #0f172a, #111827 55%, #020617);
+      color: #e5eefc;
+      font-family: system-ui, sans-serif;
+    }
+
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.78);
+      z-index: 999;
+    }
+
+    .auth-card {
+      width: min(460px, calc(100vw - 48px));
+      padding: 28px;
+      border-radius: 24px;
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .auth-actions,
+    .oauth-actions {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: #cbd5e1;
+    }
+
+    input,
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font: inherit;
+    }
+
+    input {
+      background: rgba(30, 41, 59, 0.92);
+      color: #f8fafc;
+    }
+
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      color: white;
+      font-weight: 700;
+    }
+
+    .oauth-btn {
+      background: rgba(30, 41, 59, 0.96);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .preview-player {
+      margin-top: 20px;
+      width: 220px;
+    }
+
+    .preview-player video {
+      width: 220px;
+      height: 124px;
+      border-radius: 18px;
+      object-fit: cover;
+    }
+
+    .metrics {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-overlay modal-overlay" id="auth-overlay">
+    <main class="auth-card">
+      <h1>Sign in to continue</h1>
+      <p>Continue with GitHub or Google, or use your email and password.</p>
+
+      <div class="oauth-actions">
+        <button class="oauth-btn" id="oauth-google" type="button">Continue with Google</button>
+        <button class="oauth-btn" id="oauth-github" type="button">Continue with GitHub</button>
+      </div>
+
+      <form id="login-form" class="auth-actions">
+        <label>
+          Email
+          <input id="email" type="email" name="email" autocomplete="username email" placeholder="you@example.com">
+        </label>
+        <label>
+          Password
+          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password">
+        </label>
+        <button id="submit-login" type="submit">Sign in</button>
+      </form>
+
+      <div class="preview-player video-player-shell">
+        <video id="preview-video" autoplay muted loop playsinline src="/assets/falcon-smoke.webm"></video>
+      </div>
+
+      <div class="metrics" id="metrics"></div>
+    </main>
+  </div>
+
+  <script>
+    window.__authMetrics = {
+      keydowns: 0,
+      submits: 0,
+      oauthClicks: 0
+    };
+
+    document.addEventListener('keydown', () => {
+      window.__authMetrics.keydowns += 1;
+      renderMetrics();
+    });
+
+    document.getElementById('login-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      window.__authMetrics.submits += 1;
+      renderMetrics();
+    });
+
+    document.getElementById('oauth-google').addEventListener('click', () => {
+      window.__authMetrics.oauthClicks += 1;
+      renderMetrics();
+    });
+
+    document.getElementById('oauth-github').addEventListener('click', () => {
+      window.__authMetrics.oauthClicks += 1;
+      renderMetrics();
+    });
+
+    function renderMetrics() {
+      document.getElementById('metrics').textContent = JSON.stringify(window.__authMetrics);
+    }
+
+    renderMetrics();
+  </script>
+</body>
+</html>

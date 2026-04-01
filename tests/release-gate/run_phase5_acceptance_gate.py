@@ -43,6 +43,7 @@ PY_COMPILE_FILES = [
     "tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py",
     "tests/anti-popup/run_anti_popup_compatibility_fallback_regression.py",
     "tests/content-scripts/run_basic_content_script_exclusion_regression.py",
+    "tests/interaction-safety/run_interaction_safety_regression.py",
     "tests/rules/run_filter_rules_contract.py",
     "tests/site-state/run_site_state_bridge_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
@@ -251,6 +252,13 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "label": "AI Controlled Promotion",
             "steps": [
                 build_browser_command("tests/ai/run_candidate_promotion_regression.py", headless),
+            ],
+        },
+        {
+            "id": "G-09",
+            "label": "Interaction Safety",
+            "steps": [
+                build_browser_command("tests/interaction-safety/run_interaction_safety_regression.py", headless),
             ],
         },
     ]

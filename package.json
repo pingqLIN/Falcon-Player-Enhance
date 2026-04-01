@@ -14,6 +14,7 @@
     "test:anti-popup:compat": "python tests/anti-popup/run_anti_popup_compatibility_fallback_regression.py",
     "test:ai:candidate-review": "python tests/ai/run_candidate_review_regression.py",
     "test:ai:candidate-promotion": "python tests/ai/run_candidate_promotion_regression.py",
+    "test:interaction-safety": "python tests/interaction-safety/run_interaction_safety_regression.py",
     "test:content-scripts:basic-exclusion": "python tests/content-scripts/run_basic_content_script_exclusion_regression.py",
     "test:rules:contract": "python tests/rules/run_filter_rules_contract.py",
     "test:site-state:bridge": "python tests/site-state/run_site_state_bridge_regression.py",
