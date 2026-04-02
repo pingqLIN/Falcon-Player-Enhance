@@ -175,26 +175,42 @@ def build_report(initial_snapshot: dict[str, object], promoted_snapshot: dict[st
     rolled_back_candidates = rolled_back_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     promotion_log = export_dataset.get("dataset", {}).get("candidatePromotionLog", [])
     rollback_log = export_dataset.get("dataset", {}).get("candidateRollbackLog", [])
+    governance_chains = export_dataset.get("dataset", {}).get("candidateGovernanceChains", [])
     initial_confirmed = int(initial_snapshot.get("knowledge", {}).get("confirmedCount", 0))
     promoted_confirmed = int(promoted_snapshot.get("knowledge", {}).get("confirmedCount", 0))
     rolled_back_confirmed = int(rolled_back_snapshot.get("knowledge", {}).get("confirmedCount", 0))
-    latest_promoted = promoted_candidates[0].get("latestPromotion") if promoted_candidates else None
-    latest_rolled_back = rolled_back_candidates[0].get("latestPromotion") if rolled_back_candidates else None
+    promoted_candidate = promoted_candidates[0] if promoted_candidates else None
+    rolled_back_candidate = rolled_back_candidates[0] if rolled_back_candidates else None
+    latest_promoted = promoted_candidate.get("latestPromotion") if isinstance(promoted_candidate, dict) else None
+    latest_rolled_back = rolled_back_candidate.get("latestPromotion") if isinstance(rolled_back_candidate, dict) else None
+    latest_rollback = rolled_back_candidate.get("latestRollback") if isinstance(rolled_back_candidate, dict) else None
     promoted_reused_count = len(latest_promoted.get("reusedPatternIds", [])) if isinstance(latest_promoted, dict) else 0
+    exported_chain = next(
+        (item for item in governance_chains if item.get("hostname") == "javboys.com"),
+        None,
+    )
 
     checks = {
         "promotionRecorded": len(promoted_snapshot.get("candidatePromotionLog", [])) >= 1,
         "promotionSummaryUpdated": int(promoted_snapshot.get("provider", {}).get("candidatePromotionSummary", {}).get("activePromotions", 0)) >= 1,
         "promotionVisibleOnCandidate": isinstance(latest_promoted, dict) and latest_promoted.get("active") is True,
         "promotionLinkedToDecision": isinstance(latest_promoted, dict) and bool(latest_promoted.get("decisionId")),
+        "promotionGovernanceStateVisible": isinstance(promoted_candidate, dict) and promoted_candidate.get("governanceState") == "promoted",
         "confirmedPatternsIncreased": promoted_confirmed > initial_confirmed,
         "promotionTrackedReusedPatterns": promoted_reused_count >= 1,
         "promotionExported": len(promotion_log) >= 1 and promotion_log[0].get("hostname") == "javboys.com",
         "rollbackRecorded": len(rolled_back_snapshot.get("candidateRollbackLog", [])) >= 1,
         "rollbackSummaryUpdated": int(rolled_back_snapshot.get("provider", {}).get("candidatePromotionSummary", {}).get("totalRollbacks", 0)) >= 1,
         "rollbackVisibleOnCandidate": isinstance(latest_rolled_back, dict) and latest_rolled_back.get("active") is False,
+        "rollbackGovernanceStateVisible": isinstance(rolled_back_candidate, dict) and rolled_back_candidate.get("governanceState") == "rolled_back",
+        "rollbackLinkedToPromotion": isinstance(latest_rollback, dict) and isinstance(latest_rolled_back, dict) and latest_rollback.get("promotionId") == latest_rolled_back.get("promotionId"),
         "confirmedPatternsRolledBack": rolled_back_confirmed == initial_confirmed,
         "rollbackExported": len(rollback_log) >= 1 and rollback_log[0].get("hostname") == "javboys.com",
+        "governanceChainExported": isinstance(exported_chain, dict),
+        "governanceChainHasDecision": isinstance(exported_chain, dict) and isinstance(exported_chain.get("decision"), dict) and bool(exported_chain.get("decision", {}).get("decisionId")),
+        "governanceChainHasPromotion": isinstance(exported_chain, dict) and isinstance(exported_chain.get("promotion"), dict) and bool(exported_chain.get("promotion", {}).get("promotionId")),
+        "governanceChainHasRollback": isinstance(exported_chain, dict) and isinstance(exported_chain.get("rollback"), dict) and bool(exported_chain.get("rollback", {}).get("rollbackId")),
+        "governanceChainRolledBack": isinstance(exported_chain, dict) and exported_chain.get("governanceState") == "rolled_back",
     }
 
     return {
@@ -206,6 +222,7 @@ def build_report(initial_snapshot: dict[str, object], promoted_snapshot: dict[st
             "rolledBack": rolled_back_snapshot,
         },
         "export": export_dataset,
+        "governanceChain": exported_chain,
     }
 
 

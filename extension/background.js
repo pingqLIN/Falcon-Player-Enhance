@@ -2149,6 +2149,134 @@ function getLatestCandidatePromotion(hostname, generatedAt) {
   };
 }
 
+function buildCandidateGovernanceSnapshot(maxItems = 20) {
+  const candidateReviewLog = normalizeCandidateReviewLog(aiState.candidateReviewLog || []);
+  const candidatePromotionLog = normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []);
+  const candidateRollbackLog = normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []);
+  const rolledBackPromotionIds = new Set(candidateRollbackLog.map((item) => item.promotionId));
+  const latestCandidateDecisionBySignature = candidateReviewLog.reduce((result, item) => {
+    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
+    if (!result[key]) {
+      result[key] = item;
+    }
+    return result;
+  }, {});
+  const latestCandidatePromotionBySignature = candidatePromotionLog.reduce((result, item) => {
+    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
+    if (!result[key]) {
+      result[key] = {
+        ...item,
+        active: !rolledBackPromotionIds.has(item.promotionId)
+      };
+    }
+    return result;
+  }, {});
+  const latestCandidateRollbackByPromotionId = candidateRollbackLog.reduce((result, item) => {
+    if (!result[item.promotionId]) {
+      result[item.promotionId] = item;
+    }
+    return result;
+  }, {});
+  const generatedRuleCandidates = Object.values(normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}))
+    .sort((a, b) => Number(b.generatedAt || 0) - Number(a.generatedAt || 0))
+    .slice(0, maxItems)
+    .map((item) => {
+      const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
+      const latestDecisionRecord = latestCandidateDecisionBySignature[key];
+      const latestPromotionRecord = latestCandidatePromotionBySignature[key];
+      const latestRollbackRecord = latestPromotionRecord
+        ? latestCandidateRollbackByPromotionId[latestPromotionRecord.promotionId]
+        : null;
+      const latestDecision = latestDecisionRecord
+        ? {
+            decision: String(latestDecisionRecord.decision || ''),
+            decisionId: String(latestDecisionRecord.id || ''),
+            reason: String(latestDecisionRecord.reason || ''),
+            decidedAt: Number(latestDecisionRecord.decidedAt || 0),
+            actor: String(latestDecisionRecord.actor || ''),
+            schemaVersion: String(latestDecisionRecord.schemaVersion || ''),
+            evidenceRefs: normalizeEvidenceRefs(latestDecisionRecord.evidenceRefs || [])
+          }
+        : null;
+      const latestPromotion = latestPromotionRecord
+        ? {
+            promotionId: String(latestPromotionRecord.promotionId || ''),
+            decisionId: String(latestPromotionRecord.decisionId || ''),
+            promotedAt: Number(latestPromotionRecord.promotedAt || 0),
+            actor: String(latestPromotionRecord.actor || ''),
+            active: latestPromotionRecord.active === true,
+            schemaVersion: String(latestPromotionRecord.schemaVersion || ''),
+            evidenceRefs: normalizeEvidenceRefs(latestPromotionRecord.evidenceRefs || []),
+            confirmedPatternIds: Array.isArray(latestPromotionRecord.confirmedPatternIds)
+              ? latestPromotionRecord.confirmedPatternIds
+              : [],
+            reusedPatternIds: Array.isArray(latestPromotionRecord.reusedPatternIds)
+              ? latestPromotionRecord.reusedPatternIds
+              : []
+          }
+        : null;
+      const latestRollback = latestRollbackRecord
+        ? {
+            rollbackId: String(latestRollbackRecord.rollbackId || ''),
+            promotionId: String(latestRollbackRecord.promotionId || ''),
+            rolledBackAt: Number(latestRollbackRecord.rolledBackAt || 0),
+            actor: String(latestRollbackRecord.actor || ''),
+            schemaVersion: String(latestRollbackRecord.schemaVersion || ''),
+            reason: String(latestRollbackRecord.reason || ''),
+            evidenceRefs: normalizeEvidenceRefs(latestRollbackRecord.evidenceRefs || []),
+            confirmedPatternIds: Array.isArray(latestRollbackRecord.confirmedPatternIds)
+              ? latestRollbackRecord.confirmedPatternIds
+              : []
+          }
+        : null;
+      const governanceState = latestRollback
+        ? 'rolled_back'
+        : latestPromotion?.active
+        ? 'promoted'
+        : latestDecision?.decision === 'accepted'
+        ? 'accepted_pending_promotion'
+        : latestDecision?.decision === 'rejected'
+        ? 'rejected'
+        : 'pending_review';
+
+      return {
+        hostname: item.hostname,
+        generatedAt: Number(item.generatedAt || 0),
+        model: String(item.model || ''),
+        provider: String(item.provider || ''),
+        selectorCount: Array.isArray(item.selectorRules) ? item.selectorRules.length : 0,
+        domainCount: Array.isArray(item.domainRules) ? item.domainRules.length : 0,
+        summary: String(item.summary || ''),
+        latestDecision,
+        latestPromotion,
+        latestRollback,
+        governanceState
+      };
+    });
+  const governanceChains = generatedRuleCandidates.map((item) => ({
+    hostname: item.hostname,
+    generatedAt: item.generatedAt,
+    provider: item.provider,
+    model: item.model,
+    summary: item.summary,
+    selectorCount: item.selectorCount,
+    domainCount: item.domainCount,
+    governanceState: item.governanceState,
+    decision: item.latestDecision,
+    promotion: item.latestPromotion,
+    rollback: item.latestRollback
+  }));
+
+  return {
+    candidateReviewLog,
+    candidatePromotionLog,
+    candidateRollbackLog,
+    rolledBackPromotionIds,
+    generatedRuleCandidates,
+    governanceChains
+  };
+}
+
 function recordCandidatePromotion(hostname, input = {}) {
   const normalizedHost = getHostname(hostname);
   if (!normalizedHost) return { success: false, error: 'invalid_hostname' };
@@ -4837,27 +4965,7 @@ function buildAiInsightsSnapshot() {
   const nowTs = getNow();
   const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
   const providerState = normalizeAiProviderState(aiState.providerState || {});
-  const candidateReviewLog = normalizeCandidateReviewLog(aiState.candidateReviewLog || []);
-  const candidatePromotionLog = normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []);
-  const candidateRollbackLog = normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []);
-  const rolledBackPromotionIds = new Set(candidateRollbackLog.map((item) => item.promotionId));
-  const latestCandidateDecisionBySignature = candidateReviewLog.reduce((result, item) => {
-    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
-    if (!result[key]) {
-      result[key] = item;
-    }
-    return result;
-  }, {});
-  const latestCandidatePromotionBySignature = candidatePromotionLog.reduce((result, item) => {
-    const key = `${item.hostname}::${Number(item.generatedAt || 0)}`;
-    if (!result[key]) {
-      result[key] = {
-        ...item,
-        active: !rolledBackPromotionIds.has(item.promotionId)
-      };
-    }
-    return result;
-  }, {});
+  const governance = buildCandidateGovernanceSnapshot(20);
   const advisoryHosts = Object.values(aiState.providerAdvisories || {})
     .filter((item) => item && typeof item === 'object')
     .slice(0, 20)
@@ -4870,43 +4978,6 @@ function buildAiInsightsSnapshot() {
       domainCount: Array.isArray(item.candidateDomains) ? item.candidateDomains.length : 0
     }))
     .filter((item) => item.hostname);
-  const generatedRuleCandidates = Object.values(normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}))
-    .sort((a, b) => Number(b.generatedAt || 0) - Number(a.generatedAt || 0))
-    .slice(0, 20)
-    .map((item) => ({
-      hostname: item.hostname,
-      generatedAt: Number(item.generatedAt || 0),
-      model: String(item.model || ''),
-      selectorCount: Array.isArray(item.selectorRules) ? item.selectorRules.length : 0,
-      domainCount: Array.isArray(item.domainRules) ? item.domainRules.length : 0,
-      summary: String(item.summary || ''),
-      latestDecision: latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`]
-        ? {
-            decision: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decision || ''),
-            decisionId: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].id || ''),
-            reason: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reason || ''),
-            decidedAt: Number(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decidedAt || 0),
-            actor: String(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || ''),
-            evidenceRefs: normalizeEvidenceRefs(latestCandidateDecisionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].evidenceRefs || [])
-          }
-        : null,
-      latestPromotion: latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`]
-        ? {
-            promotionId: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].promotionId || ''),
-            decisionId: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].decisionId || ''),
-            promotedAt: Number(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].promotedAt || 0),
-            actor: String(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].actor || ''),
-            active: latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].active === true,
-            evidenceRefs: normalizeEvidenceRefs(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].evidenceRefs || []),
-            confirmedPatternIds: Array.isArray(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].confirmedPatternIds)
-              ? latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].confirmedPatternIds
-              : [],
-            reusedPatternIds: Array.isArray(latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reusedPatternIds)
-              ? latestCandidatePromotionBySignature[`${item.hostname}::${Number(item.generatedAt || 0)}`].reusedPatternIds
-              : []
-          }
-        : null
-    }));
 
   const activeFallbackHosts = Object.values(aiState.hostFallbacks || {})
     .map((state) => ({
@@ -4947,19 +5018,20 @@ function buildAiInsightsSnapshot() {
       settings: providerSettings,
       state: providerState,
       advisoryHosts,
-      generatedRuleCandidates,
+      generatedRuleCandidates: governance.generatedRuleCandidates,
+      candidateGovernanceChains: governance.governanceChains,
       candidateReviewSummary: {
-        totalDecisions: candidateReviewLog.length,
-        acceptedCount: candidateReviewLog.filter((item) => item.decision === 'accepted').length,
-        rejectedCount: candidateReviewLog.filter((item) => item.decision === 'rejected').length,
-        latestDecisionAt: Number(candidateReviewLog[0]?.decidedAt || 0)
+        totalDecisions: governance.candidateReviewLog.length,
+        acceptedCount: governance.candidateReviewLog.filter((item) => item.decision === 'accepted').length,
+        rejectedCount: governance.candidateReviewLog.filter((item) => item.decision === 'rejected').length,
+        latestDecisionAt: Number(governance.candidateReviewLog[0]?.decidedAt || 0)
       },
       candidatePromotionSummary: {
-        totalPromotions: candidatePromotionLog.length,
-        activePromotions: candidatePromotionLog.filter((item) => !rolledBackPromotionIds.has(item.promotionId)).length,
-        totalRollbacks: candidateRollbackLog.length,
-        latestPromotionAt: Number(candidatePromotionLog[0]?.promotedAt || 0),
-        latestRollbackAt: Number(candidateRollbackLog[0]?.rolledBackAt || 0)
+        totalPromotions: governance.candidatePromotionLog.length,
+        activePromotions: governance.candidatePromotionLog.filter((item) => !governance.rolledBackPromotionIds.has(item.promotionId)).length,
+        totalRollbacks: governance.candidateRollbackLog.length,
+        latestPromotionAt: Number(governance.candidatePromotionLog[0]?.promotedAt || 0),
+        latestRollbackAt: Number(governance.candidateRollbackLog[0]?.rolledBackAt || 0)
       }
     },
     knowledge: {
@@ -4971,9 +5043,10 @@ function buildAiInsightsSnapshot() {
       readyForReviewCount: Number(knowledge.stats.readyForReviewCount || 0),
       pendingReviewCount: Number(knowledge.stats.pendingReviewCount || 0)
     },
-    candidateReviewLog: candidateReviewLog.slice(0, 50),
-    candidatePromotionLog: candidatePromotionLog.slice(0, 50),
-    candidateRollbackLog: candidateRollbackLog.slice(0, 50),
+    candidateReviewLog: governance.candidateReviewLog.slice(0, 50),
+    candidatePromotionLog: governance.candidatePromotionLog.slice(0, 50),
+    candidateRollbackLog: governance.candidateRollbackLog.slice(0, 50),
+    candidateGovernanceChains: governance.governanceChains.slice(0, 50),
     activeFallbackHosts,
     hostMetrics,
     highRiskHosts: profiles
@@ -5338,6 +5411,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'exportAiDataset') {
+    const governance = buildCandidateGovernanceSnapshot(50);
     sendResponse({
       success: true,
       dataset: {
@@ -5352,9 +5426,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         providerState: normalizeAiProviderState(aiState.providerState || {}),
         providerAdvisories: aiState.providerAdvisories || {},
         generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
-        candidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
-        candidatePromotionLog: normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []),
-        candidateRollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []),
+        candidateReviewLog: governance.candidateReviewLog,
+        candidatePromotionLog: governance.candidatePromotionLog,
+        candidateRollbackLog: governance.candidateRollbackLog,
+        candidateGovernanceChains: governance.governanceChains,
         knowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
       }
     });

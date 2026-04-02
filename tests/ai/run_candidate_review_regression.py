@@ -143,24 +143,38 @@ def build_report(initial_snapshot: dict[str, object], accept_snapshot: dict[str,
     reject_candidates = reject_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     refreshed_candidates = refreshed_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     review_log = export_dataset.get("dataset", {}).get("candidateReviewLog", [])
+    governance_chains = export_dataset.get("dataset", {}).get("candidateGovernanceChains", [])
     initial_confirmed = int(initial_snapshot.get("knowledge", {}).get("confirmedCount", 0))
     final_confirmed = int(reject_snapshot.get("knowledge", {}).get("confirmedCount", 0))
 
-    latest_accept = accept_candidates[0].get("latestDecision") if accept_candidates else None
-    latest_reject = reject_candidates[0].get("latestDecision") if reject_candidates else None
-    latest_refreshed = refreshed_candidates[0].get("latestDecision") if refreshed_candidates else None
+    accept_candidate = accept_candidates[0] if accept_candidates else None
+    reject_candidate = reject_candidates[0] if reject_candidates else None
+    refreshed_candidate = refreshed_candidates[0] if refreshed_candidates else None
+    latest_accept = accept_candidate.get("latestDecision") if isinstance(accept_candidate, dict) else None
+    latest_reject = reject_candidate.get("latestDecision") if isinstance(reject_candidate, dict) else None
+    latest_refreshed = refreshed_candidate.get("latestDecision") if isinstance(refreshed_candidate, dict) else None
+    exported_chain = next(
+        (item for item in governance_chains if item.get("hostname") == "javboys.com"),
+        None,
+    )
 
     checks = {
         "initialCandidatePresent": len(initial_candidates) == 1,
         "acceptDecisionRecorded": len(accept_snapshot.get("candidateReviewLog", [])) >= 1,
         "acceptSummaryUpdated": int(accept_snapshot.get("provider", {}).get("candidateReviewSummary", {}).get("acceptedCount", 0)) >= 1,
         "acceptLatestDecisionVisible": isinstance(latest_accept, dict) and latest_accept.get("decision") == "accepted",
+        "acceptGovernanceStateVisible": isinstance(accept_candidate, dict) and accept_candidate.get("governanceState") == "accepted_pending_promotion",
         "rejectDecisionRecorded": len(reject_snapshot.get("candidateReviewLog", [])) >= 2,
         "rejectSummaryUpdated": int(reject_snapshot.get("provider", {}).get("candidateReviewSummary", {}).get("rejectedCount", 0)) >= 1,
         "rejectLatestDecisionVisible": isinstance(latest_reject, dict) and latest_reject.get("decision") == "rejected",
+        "rejectGovernanceStateVisible": isinstance(reject_candidate, dict) and reject_candidate.get("governanceState") == "rejected",
         "refreshedCandidateRequiresReview": len(refreshed_candidates) == 1 and latest_refreshed is None,
+        "refreshedGovernanceStateVisible": isinstance(refreshed_candidate, dict) and refreshed_candidate.get("governanceState") == "pending_review",
         "reviewLogRetainedAfterRefresh": int(refreshed_snapshot.get("provider", {}).get("candidateReviewSummary", {}).get("totalDecisions", 0)) >= 2,
         "reviewLogExported": len(review_log) >= 2 and any(item.get("hostname") == "javboys.com" for item in review_log),
+        "governanceChainExported": isinstance(exported_chain, dict),
+        "governanceChainRejected": isinstance(exported_chain, dict) and exported_chain.get("governanceState") == "rejected",
+        "governanceChainHasLatestDecision": isinstance(exported_chain, dict) and isinstance(exported_chain.get("decision"), dict) and exported_chain.get("decision", {}).get("decision") == "rejected",
         "confirmedPatternsUnchanged": initial_confirmed == final_confirmed,
     }
 
@@ -174,6 +188,7 @@ def build_report(initial_snapshot: dict[str, object], accept_snapshot: dict[str,
             "refreshed": refreshed_snapshot,
         },
         "reviewLog": review_log,
+        "governanceChain": exported_chain,
     }
 
 
