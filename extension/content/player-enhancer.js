@@ -13,6 +13,7 @@
     let siteProfilesLoadPromise = null;
     let shouldRunAggressiveOverlayCleanup = true;
     let popupDirectIframeHosts = [];
+    let overlayMonitoringStarted = false;
 
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
@@ -68,6 +69,7 @@
             const previous = cleanupEnabled;
             const next = applyCleanupModeFromState(state);
             if (previous || !next) return;
+            processExistingDetectedPlayers();
             startOverlayMonitoring();
             if (shouldRunAggressiveOverlayCleanup) {
                 removeParentPageOverlays();
@@ -1615,11 +1617,22 @@
         });
     }
 
+    function processExistingDetectedPlayers() {
+        const detectorEntries = getDetectorEntries();
+        if (!(detectorEntries instanceof Map) || detectorEntries.size === 0) return;
+        const players = Array.from(detectorEntries.keys()).filter((player) => document.contains(player));
+        if (players.length === 0) return;
+        const info = window.__ShieldPlayerDetector?.getPlayersInfo?.() || null;
+        processPlayers(players, info);
+    }
+
     /**
      * 定期檢查並移除覆蓋元素
      */
     function startOverlayMonitoring() {
         if (!shouldRunAggressiveOverlayCleanup) return;
+        if (overlayMonitoringStarted) return;
+        overlayMonitoringStarted = true;
 
         setInterval(() => {
             if (!cleanupEnabled) return;
@@ -1761,10 +1774,7 @@
 
         // 處理已存在的播放器
         setTimeout(() => {
-            const existingPlayers = document.querySelectorAll('.shield-detected-player, .shield-detected-container');
-            if (existingPlayers.length > 0) {
-                processPlayers(Array.from(existingPlayers));
-            }
+            processExistingDetectedPlayers();
         }, 1000);
     }
 

@@ -123,7 +123,8 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 1. `Track C: Whitelist-State Divergence`
 - 盤點剩餘 whitelist state consumer
 - 將尚未接 helper 的 consumer 收斂到同一 runtime contract
-- 擴充至少一個跨模組 consistency regression
+- 已補 `run_site_state_consistency_regression.py`，覆蓋同頁 whitelist -> strict 的跨模組 consistency 行為
+- 下一步可轉向 residual consumer audit 與 flake hardening，而非再補同類型 regression
 
 2. `Track E: AI Candidate Governance`
 - 將 promotion evidence 與 reviewer trace 再補到更完整匯出格式
