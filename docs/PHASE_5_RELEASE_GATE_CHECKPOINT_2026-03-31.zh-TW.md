@@ -54,6 +54,7 @@
 - `site-state-helper.js` 已可輸出 `interactionSafety` 與 `shouldRunMediaAutomation()`
 - `player-detector`、`fake-video-remover`、`overlay-remover`、`player-enhancer`、`player-controls` 已對齊 interaction safety guard
 - 新增 `tests/interaction-safety/run_interaction_safety_regression.py`
+- 新增 `tests/interaction-safety/run_labs_flow_cta_regression.py`
 - `G-09` 已併入 unified gate 自動化執行
 
 ## 2. 驗證結果
@@ -79,16 +80,20 @@
 - `python tests/site-registry/run_site_registry_contract_regression.py --headless` PASS
 - `python tests/content-scripts/run_basic_content_script_exclusion_regression.py --headless` PASS
 - `python tests/rules/run_filter_rules_contract.py` PASS
+- `python tests/interaction-safety/run_labs_flow_cta_regression.py --headless` PASS
 
 附帶說明：
 
 - `pin-close-reopen` 的已知視窗尺寸還原差異仍維持 Warning，不升級為 Blocker
 - contract / player detection / popup smoke / cosmetic / inject / whitelist regression 已被 unified gate 串成單一入口
-- anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為
+- anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為，且 whitelist 首次載入不會因 stale pre-hydration bridge state 提前 bootstrap full cleanup
+- unified release gate 對 browser regressions 新增 extension startup retry 與 step timeout，降低 unattended 執行被 service worker 啟動抖動或單一 case 卡死中斷的風險
 - candidate governance 已驗證 accept/reject + reason 可追溯，且 `baseline/confirmedPatterns` 不因 candidate review 直接變更
 - controlled promotion 已驗證 decision -> promotion -> rollback evidence chain 可追溯，且 rollback 可將 `confirmedPatterns` 還原
 - lovable safe-domain exemption 已驗證 runtime contract、registered content script excludeMatches 與 DNR allow rule 三層一致
 - interaction safety guard 已驗證互動敏感頁會停用 media automation，且 auth overlay / OAuth button / form submit / keydown 不受干擾
+- 互動敏感頁與 `labs.google/flow` 類型 hero 已驗證不會被 `.shield-speed-control` 等 controls UI 提前掛載
+- `labs.google/flow` 類型的中央 CTA hero 已驗證不會被 player detection / popup button / overlay cleanup 誤接管
 - unified gate 對 `extension_content_scripts_not_ready` 已加入受控重試，避免偶發 extension startup 抖動污染正式驗收
 
 ## 3. 目前判斷

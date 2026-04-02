@@ -88,9 +88,12 @@ def build_report(initial_messages: list[dict[str, object]], whitelist_messages: 
     checks = {
         "initialMessagePresent": len(initial_messages) >= 1,
         "initialStateShapeValid": isinstance(initial_last.get("whitelistDomains"), list) and initial_last.get("whitelistEnhanceOnly") is True,
+        "initialStateHydrated": initial_last.get("siteStateHydrated") is True,
         "whitelistUpdateObserved": len(whitelist_messages) > len(initial_messages) and "javboys.com" in whitelist_last.get("whitelistDomains", []),
         "whitelistNormalizedHost": "www.javboys.com" not in whitelist_last.get("whitelistDomains", []),
+        "whitelistStateHydrated": whitelist_last.get("siteStateHydrated") is True,
         "strictModeUpdateObserved": len(strict_messages) > len(whitelist_messages) and strict_last.get("whitelistEnhanceOnly") is False,
+        "strictModeStateHydrated": strict_last.get("siteStateHydrated") is True,
     }
 
     return {

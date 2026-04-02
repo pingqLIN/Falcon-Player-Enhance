@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow CTA Regression</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: #f8fafc;
+      background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.2), transparent 36%),
+        linear-gradient(180deg, #020617, #0f172a 52%, #111827);
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 28px;
+    }
+
+    .eyebrow {
+      font-size: 0.9rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #93c5fd;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 4vw, 4.6rem);
+      line-height: 0.98;
+      max-width: 12ch;
+    }
+
+    p {
+      margin: 0;
+      max-width: 68ch;
+      color: #cbd5e1;
+      line-height: 1.65;
+    }
+
+    .hero-stage {
+      position: relative;
+      min-height: 560px;
+      border-radius: 32px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background:
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 45%),
+        linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.92));
+      box-shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+    }
+
+    #hero-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: saturate(1.1) contrast(1.02);
+    }
+
+    .hero-tint {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(2, 6, 23, 0.16), rgba(2, 6, 23, 0.48)),
+        radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.06), transparent 28%);
+      pointer-events: none;
+    }
+
+    .hero-center-overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .hero-copy {
+      display: grid;
+      justify-items: center;
+      gap: 18px;
+      text-align: center;
+      width: min(720px, calc(100% - 40px));
+      padding: 28px;
+      border-radius: 28px;
+      background: rgba(2, 6, 23, 0.16);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-copy strong {
+      font-size: clamp(1.5rem, 2vw, 2.2rem);
+      font-weight: 700;
+    }
+
+    .hero-copy span {
+      color: rgba(226, 232, 240, 0.9);
+      line-height: 1.6;
+      max-width: 54ch;
+    }
+
+    #center-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 220px;
+      min-height: 58px;
+      padding: 0 28px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #ffffff, #dbeafe);
+      color: #0f172a;
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.24);
+    }
+
+    .metrics {
+      margin-top: 18px;
+      font-size: 0.92rem;
+      color: #bfdbfe;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">labs.google / flow</div>
+      <h1>Central CTA should stay clickable.</h1>
+      <p>
+        This fixture mirrors a marketing-style hero with a large media surface and a centered
+        call-to-action overlay. Falcon should not run media automation on this host.
+      </p>
+
+      <div class="hero-stage preview-card thumbnail-grid" data-testid="flow-hero-stage">
+        <video id="hero-video" controls preload="metadata">
+          <source src="/assets/falcon-smoke.webm?v=flow-cta" type="video/webm">
+        </video>
+        <div class="hero-tint"></div>
+        <div id="cta-overlay" class="hero-center-overlay preview-card thumbnail-card tile-grid">
+          <div class="hero-copy">
+            <strong>Create with Flow</strong>
+            <span>
+              If overlay cleanup is accidentally active on this host, this transparent center
+              layer is a realistic place where pointer-events can get disabled and break the CTA.
+            </span>
+            <a id="center-cta" href="#flow-create">Create with Flow</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics" id="metrics"></div>
+    </section>
+  </main>
+
+  <script>
+    window.__flowState = {
+      centerClicks: 0
+    };
+
+    const cta = document.getElementById("center-cta");
+    const metrics = document.getElementById("metrics");
+
+    cta.addEventListener("click", (event) => {
+      event.preventDefault();
+      window.__flowState.centerClicks += 1;
+      window.location.hash = "flow-create";
+      renderMetrics();
+    });
+
+    function renderMetrics() {
+      metrics.textContent = JSON.stringify(window.__flowState);
+    }
+
+    renderMetrics();
+  </script>
+</body>
+</html>

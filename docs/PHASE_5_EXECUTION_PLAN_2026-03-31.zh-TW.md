@@ -79,7 +79,9 @@ Phase 5 明確不做：
 - `document_idle / ISOLATED` canonical helper (`site-state-helper.js`)
 - `document_start / MAIN` bridge regression (`run_site_state_bridge_regression.py`)
 - anti-antiblock live update regression（whitelist -> strict -> whitelist restore）
+- `siteStateHydrated` contract 與 pre-hydration stale state bootstrap 防護
 - `tests/site-state/run_site_state_helper_regression.py`
+- unified gate retry / timeout hardening（避免 unattended run 因 extension startup flake 或單一 case 卡死）
 
 驗收：
 
@@ -143,6 +145,7 @@ Phase 5 明確不做：
 
 - 互動敏感頁必須判定為 `shouldRunMediaAutomation = false`
 - auth overlay / OAuth button / form submit 不可被全站 media automation 誤傷
+- interaction-sensitive / excluded host 上不可提前掛載 controls UI（例如 `.shield-speed-control`）
 - 既有 player detection regression 不可退化
 
 ## 4. 里程碑

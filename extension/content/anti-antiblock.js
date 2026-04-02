@@ -857,6 +857,7 @@ let siteStateTimeoutId = null;
 let iframeProtectionBound = false;
 let fullCleanupActivated = false;
 let fullCleanupBootstrapped = false;
+let siteStateHydrated = false;
 let adblockMessageObserver = null;
 let adblockMessageIntervalId = 0;
 const hiddenAdblockMessages = new Map();
@@ -886,13 +887,17 @@ function removeAdblockHideStyles() {
 function getSiteStateSnapshot() {
     return {
         whitelistDomains: [...whitelistDomains],
-        whitelistEnhanceOnly
+        whitelistEnhanceOnly,
+        siteStateHydrated,
+        fullCleanupActivated,
+        fullCleanupBootstrapped
     };
 }
 
 function applySiteState(payload = {}) {
     whitelistDomains = normalizeDomainList(payload.whitelistDomains);
     whitelistEnhanceOnly = payload.whitelistEnhanceOnly !== false;
+    siteStateHydrated = payload.siteStateHydrated === true;
     return getSiteStateSnapshot();
 }
 
@@ -918,6 +923,11 @@ function deactivateFullCleanup() {
 }
 
 function syncProtectionMode() {
+    if (!siteStateHydrated) {
+        deactivateFullCleanup();
+        protectIframes();
+        return;
+    }
     const onWhitelist = isWhitelistDomain();
     if (!onWhitelist || !whitelistEnhanceOnly) {
         activateFullCleanup();
@@ -974,7 +984,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
         if (request.action === 'setWhitelistEnhanceOnly') {
             applySiteState({
                 whitelistDomains,
-                whitelistEnhanceOnly: !!request.enabled
+                whitelistEnhanceOnly: !!request.enabled,
+                siteStateHydrated: true
             });
             syncProtectionMode();
             log('白名單保護模式:', whitelistEnhanceOnly ? '開啟（只增強）' : '關閉（完整清除）');
@@ -1000,5 +1011,9 @@ async function init() {
 
 // 立即執行（在任何其他腳本之前）
 init();
+
+window.__ShieldAntiAntiblock = {
+    getState: getSiteStateSnapshot
+};
 
 })();

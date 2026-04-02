@@ -54,7 +54,8 @@
         whitelistDomains: Array.isArray(event.data?.payload?.whitelistDomains)
           ? [...event.data.payload.whitelistDomains]
           : [],
-        whitelistEnhanceOnly: event.data?.payload?.whitelistEnhanceOnly !== false
+        whitelistEnhanceOnly: event.data?.payload?.whitelistEnhanceOnly !== false,
+        siteStateHydrated: event.data?.payload?.siteStateHydrated === true
       });
       syncReport();
     });

@@ -4,12 +4,16 @@
 (function () {
     'use strict';
 
+    let mediaAutomationReady = false;
+    let mediaAutomationEnabled = false;
+    let siteStateHelper = null;
+
     function shouldRunMediaAutomation() {
-        const helper = window.__ShieldSiteStateHelper;
-        if (helper?.shouldRunMediaAutomation) {
-            return helper.shouldRunMediaAutomation(window.location.hostname);
+        if (!mediaAutomationReady) return false;
+        if (siteStateHelper?.shouldRunMediaAutomation) {
+            mediaAutomationEnabled = siteStateHelper.shouldRunMediaAutomation(window.location.hostname);
         }
-        return true;
+        return mediaAutomationEnabled;
     }
 
     // ========== 快捷鍵設定 ==========
@@ -76,6 +80,83 @@
     let abPointB = null;
     let abLoopActive = false;
     let abLoopVideo = null;
+
+    function waitForSiteStateHelper(attempt = 0) {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.load) {
+            siteStateHelper = helper;
+            return Promise.resolve(helper);
+        }
+        if (attempt >= 20) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            window.setTimeout(() => {
+                resolve(waitForSiteStateHelper(attempt + 1));
+            }, 50);
+        });
+    }
+
+    function applyMediaAutomationState() {
+        if (siteStateHelper?.shouldRunMediaAutomation) {
+            mediaAutomationEnabled = siteStateHelper.shouldRunMediaAutomation(window.location.hostname);
+            mediaAutomationReady = true;
+            return mediaAutomationEnabled;
+        }
+        mediaAutomationEnabled = true;
+        mediaAutomationReady = true;
+        return mediaAutomationEnabled;
+    }
+
+    function resolveMediaAutomationState() {
+        return waitForSiteStateHelper().then((helper) => {
+            if (!helper?.load) {
+                return applyMediaAutomationState();
+            }
+            return helper.load()
+                .catch(() => null)
+                .then(() => applyMediaAutomationState());
+        });
+    }
+
+    function removeSpeedControlUI() {
+        if (!speedControlUI || !document.contains(speedControlUI)) {
+            speedControlUI = null;
+            return;
+        }
+        speedControlUI.remove();
+        speedControlUI = null;
+    }
+
+    function resetManagedControlState() {
+        removeSpeedControlUI();
+        clearAbLoop();
+        abPointA = null;
+        abPointB = null;
+        activeVideo = null;
+    }
+
+    function syncManagedVideos() {
+        getManagedVideos().forEach((video) => {
+            bindExclusivePlayback(video);
+            createSpeedControlUI(video);
+        });
+    }
+
+    function bindMediaAutomationUpdates() {
+        if (!siteStateHelper?.subscribe) return;
+        siteStateHelper.subscribe(() => {
+            const previous = mediaAutomationEnabled;
+            const next = applyMediaAutomationState();
+            if (!next) {
+                resetManagedControlState();
+                return;
+            }
+            if (!previous) {
+                syncManagedVideos();
+            }
+        });
+    }
 
     function isManagedVideo(video) {
         if (!video || !document.contains(video)) return false;
@@ -746,15 +827,6 @@
             });
         });
         
-        // 處理已存在的影片
-        setTimeout(() => {
-            if (!shouldRunMediaAutomation()) return;
-            getManagedVideos().forEach(video => {
-                bindExclusivePlayback(video);
-                createSpeedControlUI(video);
-            });
-        }, 1000);
-        
         // 點擊影片時設為活躍
         document.addEventListener('click', (e) => {
             const video = e.target.closest('video') || e.target.closest('.shield-detected-container')?.querySelector('video');
@@ -767,6 +839,19 @@
             if (!(e.target instanceof HTMLVideoElement)) return;
             enforceSingleActiveVideo(e.target);
         }, true);
+
+        resolveMediaAutomationState().then((enabled) => {
+            bindMediaAutomationUpdates();
+            if (!enabled) {
+                console.log('⚪ Player Controls: media automation disabled, keyboard shortcuts and speed UI remain inactive');
+                return;
+            }
+            syncManagedVideos();
+            setTimeout(() => {
+                if (!shouldRunMediaAutomation()) return;
+                syncManagedVideos();
+            }, 1000);
+        });
     }
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

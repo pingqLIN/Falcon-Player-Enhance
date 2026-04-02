@@ -44,6 +44,7 @@ PY_COMPILE_FILES = [
     "tests/anti-popup/run_anti_popup_compatibility_fallback_regression.py",
     "tests/content-scripts/run_basic_content_script_exclusion_regression.py",
     "tests/interaction-safety/run_interaction_safety_regression.py",
+    "tests/interaction-safety/run_labs_flow_cta_regression.py",
     "tests/rules/run_filter_rules_contract.py",
     "tests/site-state/run_site_state_bridge_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
@@ -73,27 +74,41 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_command(command: list[str]) -> dict[str, object]:
+def run_command(command: list[str], timeout_sec: int | None = None) -> dict[str, object]:
     runtime_env = dict(os.environ)
     runtime_env["PYTHONIOENCODING"] = "utf-8"
-    result = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        encoding=PREFERRED_ENCODING,
-        errors="replace",
-        env=runtime_env,
-    )
-    stdout = result.stdout.strip()
-    stderr = result.stderr.strip()
-    return {
-        "command": " ".join(command),
-        "returncode": int(result.returncode),
-        "ok": result.returncode == 0,
-        "stdout": stdout,
-        "stderr": stderr,
-    }
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding=PREFERRED_ENCODING,
+            errors="replace",
+            env=runtime_env,
+            timeout=timeout_sec,
+        )
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        return {
+            "command": " ".join(command),
+            "returncode": int(result.returncode),
+            "ok": result.returncode == 0,
+            "stdout": stdout,
+            "stderr": stderr,
+        }
+    except subprocess.TimeoutExpired as error:
+        stdout = str(error.stdout or "").strip()
+        stderr = str(error.stderr or "").strip()
+        return {
+            "command": " ".join(command),
+            "returncode": 124,
+            "ok": False,
+            "stdout": stdout,
+            "stderr": stderr,
+            "timeoutSec": timeout_sec,
+            "timedOut": True,
+        }
 
 
 def load_json_file() -> dict[str, object]:
@@ -131,12 +146,32 @@ def build_step(
     command: list[str],
     retries: int = 0,
     retry_tokens: list[str] | None = None,
+    timeout_sec: int | None = None,
 ) -> dict[str, object]:
     return {
         "command": command,
         "retries": retries,
         "retry_tokens": retry_tokens or [],
+        "timeout_sec": timeout_sec,
     }
+
+
+def build_retryable_browser_step(
+    path: str,
+    headless: bool,
+    extra: list[str] | None = None,
+    retries: int = 1,
+    timeout_sec: int = 120,
+) -> dict[str, object]:
+    return build_step(
+        build_browser_command(path, headless, extra),
+        retries=retries,
+        timeout_sec=timeout_sec,
+        retry_tokens=[
+            "extension_service_worker_not_ready",
+            "extension_content_scripts_not_ready",
+        ],
+    )
 
 
 def should_retry(result: dict[str, object], retry_tokens: list[str]) -> bool:
@@ -153,21 +188,26 @@ def run_step(step: dict[str, object] | list[str]) -> dict[str, object]:
     command = step["command"]
     retries = int(step.get("retries", 0))
     retry_tokens = list(step.get("retry_tokens", []))
+    timeout_sec = step.get("timeout_sec")
     attempts: list[dict[str, object]] = []
 
     for attempt in range(retries + 1):
-        result = run_command(command)
+        result = run_command(command, timeout_sec)
         attempts.append(result)
         if not should_retry(result, retry_tokens) or attempt == retries:
             final_result = dict(result)
             final_result["attempts"] = attempts
             final_result["retryCount"] = attempt
+            if timeout_sec is not None:
+                final_result["timeoutSec"] = timeout_sec
             return final_result
         time.sleep(1.0)
 
     final_result = dict(attempts[-1])
     final_result["attempts"] = attempts
     final_result["retryCount"] = retries
+    if timeout_sec is not None:
+        final_result["timeoutSec"] = timeout_sec
     return final_result
 
 
@@ -180,6 +220,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
                 ["--cases", "popup-open-local-video", "pin-close-reopen", "popup-player-state-restore"],
             ),
             retries=1,
+            timeout_sec=180,
             retry_tokens=["extension_content_scripts_not_ready"],
         ),
         build_step(
@@ -189,6 +230,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
                 ["--cases", "multi-popup-distinct-windows"],
             ),
             retries=2,
+            timeout_sec=180,
             retry_tokens=["extension_content_scripts_not_ready"],
         ),
     ]
@@ -206,15 +248,15 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "id": "G-01",
             "label": "Contract",
             "steps": [
-                build_browser_command("tests/site-registry/run_site_registry_contract_regression.py", headless),
-                build_browser_command("tests/content-scripts/run_basic_content_script_exclusion_regression.py", headless),
+                build_retryable_browser_step("tests/site-registry/run_site_registry_contract_regression.py", headless),
+                build_retryable_browser_step("tests/content-scripts/run_basic_content_script_exclusion_regression.py", headless),
                 [sys.executable, "tests/rules/run_filter_rules_contract.py"],
             ],
         },
         {
             "id": "G-02",
             "label": "Player Detection",
-            "steps": [build_browser_command("tests/player-detection/run_player_detection_regression.py", headless)],
+            "steps": [build_retryable_browser_step("tests/player-detection/run_player_detection_regression.py", headless)],
         },
         {
             "id": "G-03",
@@ -224,41 +266,42 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
         {
             "id": "G-04",
             "label": "Cosmetic Filter",
-            "steps": [build_browser_command("tests/cosmetic-filter/run_cosmetic_filter_regression.py", headless)],
+            "steps": [build_retryable_browser_step("tests/cosmetic-filter/run_cosmetic_filter_regression.py", headless)],
         },
         {
             "id": "G-05",
             "label": "Inject Overlay",
-            "steps": [build_browser_command("tests/inject-blocker/run_inject_blocker_overlay_regression.py", headless)],
+            "steps": [build_retryable_browser_step("tests/inject-blocker/run_inject_blocker_overlay_regression.py", headless)],
         },
         {
             "id": "G-06",
             "label": "Whitelist Consistency",
             "steps": [
-                build_browser_command("tests/site-state/run_site_state_bridge_regression.py", headless),
-                build_browser_command("tests/site-state/run_site_state_helper_regression.py", headless),
-                build_browser_command("tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py", headless),
+                build_retryable_browser_step("tests/site-state/run_site_state_bridge_regression.py", headless),
+                build_retryable_browser_step("tests/site-state/run_site_state_helper_regression.py", headless),
+                build_retryable_browser_step("tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py", headless),
             ],
         },
         {
             "id": "G-07",
             "label": "AI Candidate Governance",
             "steps": [
-                build_browser_command("tests/ai/run_candidate_review_regression.py", headless),
+                build_retryable_browser_step("tests/ai/run_candidate_review_regression.py", headless),
             ],
         },
         {
             "id": "G-08",
             "label": "AI Controlled Promotion",
             "steps": [
-                build_browser_command("tests/ai/run_candidate_promotion_regression.py", headless),
+                build_retryable_browser_step("tests/ai/run_candidate_promotion_regression.py", headless),
             ],
         },
         {
             "id": "G-09",
             "label": "Interaction Safety",
             "steps": [
-                build_browser_command("tests/interaction-safety/run_interaction_safety_regression.py", headless),
+                build_retryable_browser_step("tests/interaction-safety/run_interaction_safety_regression.py", headless),
+                build_retryable_browser_step("tests/interaction-safety/run_labs_flow_cta_regression.py", headless),
             ],
         },
     ]

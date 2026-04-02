@@ -88,6 +88,7 @@ def inspect_current_page(page: Page, wait_ms: int) -> dict[str, object]:
             const messageStyle = message ? window.getComputedStyle(message) : null;
             const frameStyle = frame ? window.getComputedStyle(frame) : null;
             const styleElement = document.getElementById('__shield_anti_adblock_css__');
+            const antiState = window.__ShieldAntiAntiblock?.getState?.() || null;
 
             return {
                 hostname: window.location.hostname,
@@ -98,7 +99,8 @@ def inspect_current_page(page: Page, wait_ms: int) -> dict[str, object]:
                 frameDisplay: frameStyle ? frameStyle.display : null,
                 frameVisibility: frameStyle ? frameStyle.visibility : null,
                 antiBypassLoaded: Boolean(window.__antiAdblockBypassLoaded),
-                antiAntiblockInitDone: Boolean(window.__antiAntiblockInitDone)
+                antiAntiblockInitDone: Boolean(window.__antiAntiblockInitDone),
+                antiState
             };
         }"""
     )
@@ -127,15 +129,19 @@ def build_report(base_url: str, page: Page, wait_ms: int) -> dict[str, object]:
     checks = {
         "whitelistSkippedStyle": not bool(whitelist_mode["styleElementPresent"]),
         "whitelistMessageVisible": bool(whitelist_mode["messagePresent"]) and whitelist_mode["messageDisplay"] != "none",
+        "whitelistAvoidedBootstrapping": bool(whitelist_mode.get("antiState", {}).get("siteStateHydrated")) and not bool(whitelist_mode.get("antiState", {}).get("fullCleanupBootstrapped")) and not bool(whitelist_mode.get("antiState", {}).get("fullCleanupActivated")),
         "strictModeInjectedStyle": bool(strict_mode["styleElementPresent"]),
         "strictModeMessageHidden": (not bool(strict_mode["messagePresent"])) or strict_mode["messageDisplay"] == "none",
         "strictModeIframeVisible": strict_mode["frameDisplay"] != "none" and strict_mode["frameVisibility"] != "hidden",
+        "strictModeBootstrapped": bool(strict_mode.get("antiState", {}).get("siteStateHydrated")) and bool(strict_mode.get("antiState", {}).get("fullCleanupBootstrapped")) and bool(strict_mode.get("antiState", {}).get("fullCleanupActivated")),
         "whitelistRestoreRemovedStyle": not bool(whitelist_restored["styleElementPresent"]),
         "whitelistRestoreMessageVisible": bool(whitelist_restored["messagePresent"]) and whitelist_restored["messageDisplay"] != "none",
         "whitelistRestoreIframeVisible": whitelist_restored["frameDisplay"] != "none" and whitelist_restored["frameVisibility"] != "hidden",
+        "whitelistRestoreDeactivatedCleanup": bool(whitelist_restored.get("antiState", {}).get("siteStateHydrated")) and not bool(whitelist_restored.get("antiState", {}).get("fullCleanupActivated")),
         "nonWhitelistInjectedStyle": bool(non_whitelist["styleElementPresent"]),
         "nonWhitelistMessageHidden": (not bool(non_whitelist["messagePresent"])) or non_whitelist["messageDisplay"] == "none",
         "nonWhitelistIframeVisible": non_whitelist["frameDisplay"] != "none" and non_whitelist["frameVisibility"] != "hidden",
+        "nonWhitelistBootstrapped": bool(non_whitelist.get("antiState", {}).get("siteStateHydrated")) and bool(non_whitelist.get("antiState", {}).get("fullCleanupBootstrapped")) and bool(non_whitelist.get("antiState", {}).get("fullCleanupActivated")),
         "antiAntiblockInitDone": bool(non_whitelist["antiAntiblockInitDone"]) and bool(whitelist_mode["antiAntiblockInitDone"]) and bool(strict_mode["antiAntiblockInitDone"]) and bool(whitelist_restored["antiAntiblockInitDone"]),
     }
 

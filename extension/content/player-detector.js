@@ -874,6 +874,7 @@
      */
     function detectAllPlayers() {
         if (!shouldRunMediaAutomation()) {
+            clearDetectedPlayers();
             playerCount = 0;
             return 0;
         }
@@ -908,6 +909,22 @@
         }
         
         return totalNew;
+    }
+
+    function clearDetectedPlayers() {
+        detectedPlayers.forEach((data, element) => {
+            if (!(element instanceof Element)) return;
+            element.classList.remove('shield-detected-player');
+            element.classList.remove('shield-detected-container');
+            delete element.dataset.shieldId;
+            delete element.dataset.shieldPlayerType;
+            delete element.dataset.shieldPlatform;
+            delete element.dataset.shieldResolvedIframeSrc;
+            delete element.dataset.shieldResolvedPoster;
+            delete element.dataset.shieldPrimaryCandidate;
+        });
+        detectedPlayers.clear();
+        playerCount = 0;
     }
 
     /**
@@ -963,9 +980,19 @@
         return () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                detectAllPlayers();
+                runDetectionCycle();
             }, delay);
         };
+    }
+
+    function runDetectionCycle() {
+        if (!shouldRunMediaAutomation()) {
+            clearDetectedPlayers();
+            return 0;
+        }
+        const newCount = detectAllPlayers();
+        applyBlockedPlayers();
+        return newCount;
     }
 
     /**
@@ -1046,32 +1073,30 @@
         const helper = window.__ShieldSiteStateHelper;
         if (helper?.subscribe) {
             helper.subscribe(() => {
-                if (!shouldRunMediaAutomation()) return;
-                detectAllPlayers();
-                applyBlockedPlayers();
+                runDetectionCycle();
             });
         }
 
-        // 頁面載入時立即偵測
+        const startDetection = () => {
+            const runInitialSweep = () => {
+                runDetectionCycle();
+                setTimeout(runDetectionCycle, 500);
+                setTimeout(runDetectionCycle, 1000);
+            };
+
+            if (helper?.load) {
+                helper.load().catch(() => null).finally(runInitialSweep);
+                return;
+            }
+
+            runInitialSweep();
+        };
+
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                detectAllPlayers();
-                applyBlockedPlayers();
-            });
+            document.addEventListener('DOMContentLoaded', startDetection, { once: true });
         } else {
-            detectAllPlayers();
-            applyBlockedPlayers();
+            startDetection();
         }
-
-        // 額外延遲偵測 (處理動態載入的播放器)
-        setTimeout(() => {
-            detectAllPlayers();
-            applyBlockedPlayers();
-        }, 500);
-        setTimeout(() => {
-            detectAllPlayers();
-            applyBlockedPlayers();
-        }, 1000);
 
         // 啟動 DOM 監聽
         if (document.body) {

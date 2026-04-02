@@ -36,6 +36,8 @@ _metadata/
 # Downloaded images (not part of project)
 download*.jpg
 download*.png
+extension.crx
+extension.pem
 
 # Python bytecode
 __pycache__/
