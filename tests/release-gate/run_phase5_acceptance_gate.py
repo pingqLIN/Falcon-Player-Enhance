@@ -56,7 +56,7 @@ PY_COMPILE_FILES = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run Falcon Phase 5 acceptance gates (G-00 to G-07) with fresh evidence."
+        description="Run Falcon Phase 5 acceptance gates (G-00 to G-09) with fresh evidence."
     )
     parser.add_argument(
         "--headless",

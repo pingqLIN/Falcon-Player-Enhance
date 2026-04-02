@@ -131,4 +131,5 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - 盤點是否需要 promotion queue / multi-reviewer policy
 
 3. `Release Evidence Export`
-- 讓 unified gate 支援輸出 JSON artifact 到指定路徑，方便回填到外部專案與里程碑記錄
+- unified gate 已支援 `--json-out` 輸出 JSON artifact 到指定路徑
+- 下一步可補 artifact 命名規約或外部里程碑回填腳本，而非再實作同一能力
