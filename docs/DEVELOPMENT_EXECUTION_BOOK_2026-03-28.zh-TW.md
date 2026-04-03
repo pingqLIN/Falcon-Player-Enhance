@@ -3,6 +3,17 @@
 > 更新日期: 2026-03-28
 > 執行模式: YOLO mode + 子代理通盤審查
 > 目的: 收斂目前已驗證修補、未完成缺口、以及下一階段執行順序
+>
+> 同日追加:
+>
+> - 已新增 `tests/live-browser/test_popup_reliability.py`
+> - 已補上兩個可重跑 smoke:
+>   - `popup-open-local-video`
+>   - `runtime-state-restore-on-reopen`
+> - 已確認這兩個 case 可在 headless Chromium + unpacked extension 下通過
+> - 已新增 `tests/popup-reliability.smoke.js`
+> - 已補 `npm run test:popup-reliability`，驗證 direct-popup 與 remote mode 分流不互相覆蓋
+> - 已補上 `pinned-remote-restore` smoke，Phase 2 的 remote restore 現在已有 headless 可重跑驗證
 
 ## 1. 本輪已完成且已驗證的修補
 
@@ -53,14 +64,67 @@
 - 這代表「重開 pinned popup」會自動調整來源頁播放器
 - 若產品後續不希望這種自動回寫，需要再補一層 user-intent 規則
 
-### 1.5 本輪已跑過的新鮮驗證
+### 1.5 popup close / unpin race 與 state clobber 已補上第二刀
+
+本輪再補了兩個會直接影響 Phase 2 體感的可靠性問題：
+
+- `togglePin()` 現在會等待 background pin/unpin 同步完成，避免使用者剛 unpin 就立刻關閉視窗時，background 還來不及吃到 `pinned:false`
+- `beforeunload` 與 `cleanupAndClose()` 的 runtime state 持久化順序已改正
+  - 先 persist，再 cleanup
+  - 避免把剛恢復的 `currentTime / volume / muted / playbackRate / temperature` 又寫回預設值
+- `remotePlayerState` 尚未回來時，runtime state 會優先保留已恢復狀態，而不是覆寫成空白初始值
+- `cleanupPlayer()` 現在會一併清掉 pending persist timer，避免 close 流程尾端再寫一次過期狀態
+
+### 1.6 direct-popup / remote mode 分流已補上第三刀
+
+本輪再補了一個會直接影響 `direct-popup overlay` 驗證可信度的路徑問題：
+
+- `player-enhancer.js` 不再把 direct host 的 iframe popup 一律標成 `remoteControlPreferred`
+- `background.js` 現在會優先判斷 direct-popup path，再決定是否進 remote mode
+- `withSenderPopupPlayerContext()` 不再把 direct host 強制升級成 remote mode
+
+這代表 `direct-popup overlay` 路徑現在真的能被走到，不會在有 `sourceTabId` 時被 remote popup 抢走。
+
+### 1.7 本輪已跑過的新鮮驗證
 
 已通過：
 
 - `node --check extension/background.js`
 - `node --check extension/content/inject-blocker.js`
 - `node --check extension/popup-player/popup-player.js`
+- `node --check tests/popup-reliability.smoke.js`
+- `npm run test:popup-reliability`
+- `python -m unittest tests/live-browser/test_popup_reliability.py`
 - `python -m unittest discover -s tests/live-browser -p "test*.py"`
+
+### 1.8 popup reliability smoke 已形成第一版可重跑子集
+
+本輪新增：
+
+- `tests/live-browser/test_popup_reliability.py`
+
+目前已自動驗證的 case：
+
+- `popup-open-local-video`
+  - 開 `tests/test-popup-player.html`
+  - 點 `.shield-popup-player-btn`
+  - 透過 extension service worker 的 `chrome.windows.getAll({ populate: true })` 驗證 popup window 與 target URL
+- `runtime-state-restore-on-reopen`
+  - 直接開啟 `popup-player/popup-player.html?pin=1`
+  - 寫入 `currentTime / volume / muted / playbackRate / temperature`
+  - 關閉後重新開啟同一路徑
+  - 驗證 runtime state 已恢復
+- `pinned-remote-restore`
+  - 以 `tests/test-popup-player.html` 作為 source tab
+  - 開啟 `remote=1&pin=1` 的 popup-player 路徑
+  - 直接種入 popup runtime state，避免把 smoke 綁死在 close-persist 細節
+  - 重新開啟後驗證 source page 的 `currentTime / volume / muted / playbackRate` 被 remote bridge 拉回預期值
+- `direct-popup-vs-remote-routing`
+  - 透過 `tests/popup-reliability.smoke.js` 直接驗證 background 路由決策
+  - 確認 direct host iframe 走外站 popup / overlay 路徑
+  - 確認純 remote payload 仍走 extension popup `remote=1`
+
+這一版刻意不用 Playwright 的一般 page event 當 popup 開窗唯一訊號，因為 headless Chromium 下 `chrome.windows.create()` 建立的 popup window 不一定會以一般 `context.pages` 浮現；目前改採 background 可觀測狀態驗證 popup 開窗，對 headless 比較穩定。
 
 ## 2. 子代理通盤審查摘要
 
@@ -69,19 +133,23 @@
 子代理結論：播放器彈窗這條線目前仍有三個高優先缺口。
 
 1. popup window 本體不會恢復播放狀態與視覺狀態
-   - 目前只會靠 query params 重建 payload
-   - `currentTime`、`volume/mute`、`playbackRate`、色彩/溫度等 UI 狀態都會重置
-   - 目前最值得先補的欄位順序是：
-     `currentTime`、`volume`、`muted`、`playbackRate`
-   - 第 5 個再補 `visualState.temperature`
+   - 這個缺口已完成第一版
+   - 已補欄位：
+     `currentTime`
+     `volume`
+     `muted`
+     `playbackRate`
+     `visualState.temperature`
+   - 仍未擴大到：
+     `paused / loop / brightness / contrast / saturation / sharpness / hue`
 
 2. popup / direct-popup / popup window 的自動化驗證仍明顯不足
    - `browser_judge.py` 偏被動巡檢，不會真的操作 popup button
-   - `tests/test-popup-player.html` 仍偏手動頁面
+   - `tests/test-popup-player.html` 現在已有自動 smoke 消費者，但頁面本身仍偏手動驗證導向
    - repo 內既有 smoke report 還留有舊專案路徑 artifact
    - 目前最該優先補的驗證是：
-     `pinned remote restore`
-     `pinned direct/video restore`
+     `direct-popup-overlay-smoke`
+     `popup-blocked-counter`
 
 ### 2.2 rule-generalization / site-specific 收斂線
 
@@ -111,13 +179,9 @@
 
 ### P1
 
-- popup-player 增加最小 session state restore
-  - 最少先補 `currentTime`
-  - `volume / muted`
-  - `playbackRate`
-  - `visualState.temperature`
-- 補一支真正會操作 popup button 的 e2e / Playwright smoke
-- 將 popup direct / remote / direct-popup overlay 的驗證鏈收斂成可重跑 smoke subset
+- `direct-popup-overlay-smoke`
+- `popup-blocked-counter`
+- 將 popup direct / remote / direct-popup overlay 的驗證鏈收斂成更完整 smoke subset
 
 ### P1.5
 
@@ -174,6 +238,13 @@
   - `video` 模式
   - `remote/direct` 模式
   - `direct-popup overlay` 模式
+
+目前進度：
+
+- `video` 模式: 已完成 `popup-open-local-video`
+- `runtime state restore`: 已完成 `runtime-state-restore-on-reopen`
+- `remote restore` 模式: 已完成 `pinned-remote-restore`
+- `direct-popup overlay` 模式: 尚未完成
 
 建議最小 smoke suite：
 

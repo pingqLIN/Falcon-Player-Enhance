@@ -829,9 +829,6 @@ function withSenderPopupPlayerContext(input = {}, sender) {
   if (!payload.sourceTabUrl && sender?.tab?.url) {
     payload.sourceTabUrl = String(sender.tab.url);
   }
-  if (shouldOpenPopupDirectly(payload) && payload.sourceTabId > 0) {
-    payload.remoteControlPreferred = true;
-  }
   return payload;
 }
 
@@ -880,9 +877,11 @@ function buildPopupPlayerUrl(payload = {}) {
   if (Number.isFinite(restoreBounds.top)) params.set('restoreTop', String(restoreBounds.top));
   return chrome.runtime.getURL('popup-player/popup-player.html') + '?' + params.toString();
 }
-
 function shouldUseRemoteControlMode(payload = {}) {
   const normalized = sanitizePopupPlayerPayload(payload);
+  if (shouldOpenPopupDirectly(normalized)) {
+    return false;
+  }
   if (!Number.isFinite(normalized.sourceTabId) || normalized.sourceTabId <= 0) {
     return false;
   }
@@ -901,7 +900,6 @@ function isRestorablePinnedPopupEntry(entry) {
   const payload = sanitizePopupPlayerPayload(entry.payload || {});
   return Boolean(payload.videoSrc || payload.iframeSrc || payload.sourceTabId > 0 || payload.sourceTabUrl);
 }
-
 function buildPinnedPopupPlayerEntry(payload, updatedAt = getNow(), windowBounds = {}) {
   const normalized = sanitizePopupPlayerPayload(payload);
   normalized.pin = true;
@@ -1141,12 +1139,11 @@ async function loadPinnedPopupPlayers() {
     pinnedPopupPlayersLoadPromise = null;
   }
 }
-
 async function createPopupPlayerWindow(payload = {}, preferredBounds = {}) {
-  const popupUrl = shouldUseRemoteControlMode(payload)
-    ? buildPopupPlayerUrl({ ...payload, remoteControlPreferred: true })
-    : shouldOpenPopupDirectly(payload)
+  const popupUrl = shouldOpenPopupDirectly(payload)
     ? String(payload.iframeSrc || '').trim()
+    : shouldUseRemoteControlMode(payload)
+    ? buildPopupPlayerUrl({ ...payload, remoteControlPreferred: true })
     : buildPopupPlayerUrl(payload);
   const bounds = sanitizePopupWindowBounds(preferredBounds);
   const createWindow = async (nextBounds = {}) => {

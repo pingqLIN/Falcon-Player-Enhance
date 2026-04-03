@@ -87,6 +87,7 @@
   let remoteRestoreInFlight = false;
   let remoteRestoreApplied = false;
   let remoteFallbackTriggered = false;
+  let popupClosing = false;
 
   const visualState = { ...DEFAULT_VISUAL_STATE };
 
@@ -168,16 +169,29 @@
   }
 
   function collectPopupRuntimeState() {
-    const state = {
-      version: 1,
-      playback: {
-        currentTime: 0,
-        volume: 1,
-        muted: false,
-        playbackRate: 1
-      },
-      ui: normalizePopupVisualState(visualState)
-    };
+    const fallback = restoredPopupState ? normalizePopupRuntimeState(restoredPopupState) : null;
+    const state = fallback
+      ? {
+          version: fallback.version,
+          playback: { ...fallback.playback },
+          ui: normalizePopupVisualState(fallback.ui)
+        }
+      : {
+          version: 1,
+          playback: {
+            currentTime: 0,
+            volume: 1,
+            muted: false,
+            playbackRate: 1
+          },
+          ui: {
+            temperature: 0
+          }
+        };
+    state.ui = normalizePopupVisualState({
+      ...state.ui,
+      ...visualState
+    });
 
     if (currentMode === 'video' && currentVideo) {
       state.playback.currentTime = clampNumber(currentVideo.currentTime, 0, Number.MAX_SAFE_INTEGER, 0);
@@ -202,10 +216,10 @@
     return state;
   }
 
-  function persistPopupRuntimeState() {
+  function persistPopupRuntimeState(state = null) {
     if (!popupStateStorageKey) return;
     try {
-      localStorage.setItem(popupStateStorageKey, JSON.stringify(collectPopupRuntimeState()));
+      localStorage.setItem(popupStateStorageKey, JSON.stringify(state || collectPopupRuntimeState()));
     } catch (_) {
       // no-op
     }
@@ -213,6 +227,7 @@
 
   function schedulePopupRuntimeStatePersist(force = false) {
     if (!popupStateStorageKey) return;
+    if (popupClosing) return;
     if (force) {
       if (popupStatePersistTimer) {
         clearTimeout(popupStatePersistTimer);
@@ -377,10 +392,10 @@
     });
   }
 
-  function syncPinStateToBackground() {
-    if (!chromeWindowId) return;
+  async function syncPinStateToBackground() {
+    if (!chromeWindowId) return false;
     try {
-      chrome.runtime.sendMessage({
+      await chrome.runtime.sendMessage({
         action: 'setPopupPlayerPin',
         pinned: isPinned,
         chromeWindowId,
@@ -395,9 +410,10 @@
         title: currentParams?.title || '',
         pin: isPinned,
         windowBounds: getCurrentWindowBounds()
-      }).catch(() => {});
+      });
+      return true;
     } catch (_) {
-      // no-op
+      return false;
     }
   }
 
@@ -899,6 +915,10 @@
   }
 
   function cleanupPlayer() {
+    if (popupStatePersistTimer) {
+      clearTimeout(popupStatePersistTimer);
+      popupStatePersistTimer = null;
+    }
     if (remoteSyncInterval) {
       clearInterval(remoteSyncInterval);
       remoteSyncInterval = null;
@@ -924,7 +944,7 @@
       chromeWindowId = await getCurrentChromeWindowId();
     }
     schedulePopupRuntimeStatePersist(true);
-    syncPinStateToBackground();
+    await syncPinStateToBackground();
   }
 
   async function cleanupAndClose() {
@@ -932,6 +952,10 @@
       alert(t('popupPlayerAlertUnpinBeforeClose'));
       return;
     }
+    const runtimeState = collectPopupRuntimeState();
+    popupClosing = true;
+    persistPopupRuntimeState(runtimeState);
+    await syncPinStateToBackground();
     cleanupPlayer();
     window.close();
   }
@@ -1287,7 +1311,7 @@
       }, 220);
     }
     if (isPinned) {
-      syncPinStateToBackground();
+      await syncPinStateToBackground();
     }
 
     const displaySrc = params.videoSrc || params.iframeSrc || '';
@@ -1335,12 +1359,23 @@
   }
 
   window.addEventListener('beforeunload', () => {
-    schedulePopupRuntimeStatePersist(true);
-    syncPinStateToBackground();
+    if (!popupClosing) {
+      popupClosing = true;
+      persistPopupRuntimeState(collectPopupRuntimeState());
+    }
+    cleanupPlayer();
+    if (!isPinned) {
+      syncPinStateToBackground().catch(() => {});
+    }
   });
   window.addEventListener('pagehide', () => {
-    schedulePopupRuntimeStatePersist(true);
-    syncPinStateToBackground();
+    if (!popupClosing) {
+      popupClosing = true;
+      persistPopupRuntimeState(collectPopupRuntimeState());
+    }
+    if (!isPinned) {
+      syncPinStateToBackground().catch(() => {});
+    }
   });
   window.addEventListener('resize', () => {
     schedulePinnedWindowBoundsSync();
