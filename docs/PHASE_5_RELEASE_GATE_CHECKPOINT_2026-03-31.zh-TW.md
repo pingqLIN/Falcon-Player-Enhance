@@ -133,4 +133,6 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 
 3. `Release Evidence Export`
 - unified gate 已支援 `--json-out` 輸出 JSON artifact 到指定路徑
+- JSON artifact 目前會附帶 `branch`、`dirty` 與 `dirtyFiles`，方便回填時判讀工作樹脈絡
+- gate / step / overall report 目前會附帶 `durationSec`，方便追蹤慢步驟與 flake 熱點
 - 下一步可補 artifact 命名規約或外部里程碑回填腳本，而非再實作同一能力

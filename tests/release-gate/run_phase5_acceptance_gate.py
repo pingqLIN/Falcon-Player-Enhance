@@ -79,6 +79,7 @@ def parse_args() -> argparse.Namespace:
 def run_command(command: list[str], timeout_sec: int | None = None) -> dict[str, object]:
     runtime_env = dict(os.environ)
     runtime_env["PYTHONIOENCODING"] = "utf-8"
+    started_at = time.perf_counter()
     try:
         result = subprocess.run(
             command,
@@ -96,6 +97,7 @@ def run_command(command: list[str], timeout_sec: int | None = None) -> dict[str,
             "command": " ".join(command),
             "returncode": int(result.returncode),
             "ok": result.returncode == 0,
+            "durationSec": round(time.perf_counter() - started_at, 3),
             "stdout": stdout,
             "stderr": stderr,
         }
@@ -106,6 +108,7 @@ def run_command(command: list[str], timeout_sec: int | None = None) -> dict[str,
             "command": " ".join(command),
             "returncode": 124,
             "ok": False,
+            "durationSec": round(time.perf_counter() - started_at, 3),
             "stdout": stdout,
             "stderr": stderr,
             "timeoutSec": timeout_sec,
@@ -133,6 +136,32 @@ def get_commit() -> str:
         check=False,
     )
     return result.stdout.strip() or "unknown"
+
+
+def get_branch() -> str:
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding=PREFERRED_ENCODING,
+        errors="replace",
+        check=False,
+    )
+    return result.stdout.strip() or "unknown"
+
+
+def get_dirty_files() -> list[str]:
+    result = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding=PREFERRED_ENCODING,
+        errors="replace",
+        check=False,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def build_browser_command(path: str, headless: bool, extra: list[str] | None = None) -> list[str]:
@@ -312,6 +341,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
 
 
 def run_gate(gate: dict[str, object]) -> dict[str, object]:
+    started_at = time.perf_counter()
     step_reports = [run_step(step) for step in gate["steps"]]
     checks: list[dict[str, object]] = []
     if gate.get("json_check"):
@@ -337,6 +367,7 @@ def run_gate(gate: dict[str, object]) -> dict[str, object]:
         "id": gate["id"],
         "label": gate["label"],
         "ok": all(item["ok"] for item in results),
+        "durationSec": round(time.perf_counter() - started_at, 3),
         "steps": results,
     }
 
@@ -351,6 +382,7 @@ def main() -> int:
     args = parse_args()
     gates = build_gates(args.headless)
     reports: list[dict[str, object]] = []
+    started_at = time.perf_counter()
 
     for gate in gates:
         report = run_gate(gate)
@@ -363,10 +395,17 @@ def main() -> int:
     report = {
         "ok": overall_ok,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "branch": get_branch(),
         "commit": get_commit(),
+        "dirty": False,
+        "dirtyFiles": [],
+        "durationSec": 0.0,
         "gates": reports,
         "blockers": blocker_ids,
     }
+    report["dirtyFiles"] = get_dirty_files()
+    report["dirty"] = len(report["dirtyFiles"]) > 0
+    report["durationSec"] = round(time.perf_counter() - started_at, 3)
     output = json.dumps(report, ensure_ascii=False, indent=2)
     print(output)
 
