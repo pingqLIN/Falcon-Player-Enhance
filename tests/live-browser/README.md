@@ -27,6 +27,8 @@ pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 - The repository does not ship a hardcoded adult-site list.
 - If you want category-specific targets, generate them outside the repo and review them before adding them to `targets.json`.
 - `targets.external-ai.single-page.curated.json` is a reviewed import artifact for regression work. Keep `requiresManualReview: true` until a human confirms each target still behaves as expected.
+- `targets.external-ai.single-page.smoke.json` should keep `generatedFrom` as the repo-relative curated path (`tests/live-browser/targets.external-ai.single-page.curated.json`) so contract checks do not depend on a machine-local absolute path.
+- Smoke targets should remain a reviewed subset of the curated pool, keep `requiresManualReview: true`, and preserve the `external-ai-curation`, `single-page`, and `smoke` tags.
 - A bookmark export like `tests/bookmarks_2026_3_13.html` is a good sample input for `import_bookmarks.py`.
 - For reliable uBlock coverage, prefer either:
   - an unpacked uBlock directory via `--ublock-extension-dir`

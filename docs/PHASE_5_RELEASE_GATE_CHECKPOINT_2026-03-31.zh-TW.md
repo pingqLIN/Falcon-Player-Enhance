@@ -91,6 +91,7 @@
 - contract / player detection / popup smoke / cosmetic / inject / whitelist regression 已被 unified gate 串成單一入口
 - anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為，且 whitelist 首次載入不會因 stale pre-hydration bridge state 提前 bootstrap full cleanup
 - unified release gate 對 browser regressions 新增 extension startup retry 與 step timeout，降低 unattended 執行被 service worker 啟動抖動或單一 case 卡死中斷的風險
+- live-browser smoke target manifest 已新增 contract regression，鎖定 curated -> smoke 的 repo-relative lineage、`requiresManualReview` 與 smoke subset 治理，避免舊 repo 路徑或脫鉤 target pool 混入正式驗收脈絡
 - `run_site_state_consumer_contract_regression.py` 已驗證 helper-first 注入順序固定，且 audited media automation consumers 不再繞過 canonical helper contract
 - candidate governance 已驗證 accept/reject + reason 可追溯，且 `baseline/confirmedPatterns` 不因 candidate review 直接變更
 - controlled promotion 已驗證 decision -> promotion -> rollback evidence chain 可追溯，且 rollback 可將 `confirmedPatterns` 還原
@@ -127,7 +128,7 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - 已補 `run_site_state_consistency_regression.py`，覆蓋同頁 whitelist -> strict 的跨模組 consistency 行為
 - 已補 `run_player_controls_site_state_regression.py`，覆蓋同頁 whitelist / strict / whitelist restore 的 speed UI lifecycle
 - 已補 `run_site_state_consumer_contract_regression.py`，覆蓋 helper-first 注入順序與 consumer contract
-- 下一步可轉向 flake hardening，而非再補同類型 regression
+- 已補 live-browser smoke target contract，將 real-site smoke 先納入靜態治理層，下一步可再擴到更細的 live-browser runtime smoke
 
 2. `Track E: AI Candidate Governance`
 - 將 promotion evidence 與 reviewer trace 再補到更完整匯出格式

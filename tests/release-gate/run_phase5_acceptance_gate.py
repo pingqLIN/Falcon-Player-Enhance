@@ -36,6 +36,7 @@ PY_COMPILE_FILES = [
     "docs/take-screenshots.py",
     "tests/ai/run_candidate_review_regression.py",
     "tests/ai/run_candidate_promotion_regression.py",
+    "tests/live-browser/run_live_browser_target_contract_regression.py",
     "tests/popup-smoke/run_popup_smoke.py",
     "tests/player-detection/run_player_detection_regression.py",
     "tests/cosmetic-filter/run_cosmetic_filter_regression.py",
@@ -283,6 +284,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
                 build_retryable_browser_step("tests/site-registry/run_site_registry_contract_regression.py", headless),
                 build_retryable_browser_step("tests/content-scripts/run_basic_content_script_exclusion_regression.py", headless),
                 [sys.executable, "tests/rules/run_filter_rules_contract.py"],
+                [sys.executable, "tests/live-browser/run_live_browser_target_contract_regression.py"],
             ],
         },
         {
