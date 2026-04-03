@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Falcon-Player-Enhance Banner" width="100%">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/banner.png" alt="Falcon-Player-Enhance Banner" width="100%">
 </p>
 
 <p align="center">
@@ -124,33 +124,33 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 ### Distraction-Free Player
 
 <p align="center">
-  <img src="docs/screenshots/01-player-dark-full.png" width="80%" alt="Player — Dark Theme">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/01-player-dark-full.png" width="80%" alt="Player — Dark Theme">
 </p>
 <p align="center"><em>Distraction-Free Player (Dark Theme) — top info bar + video stage + control panel</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/03-player-light-full.png" width="80%" alt="Player — Light Theme">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/03-player-light-full.png" width="80%" alt="Player — Light Theme">
 </p>
 <p align="center"><em>Distraction-Free Player (Light Theme) — frosted-glass panel effect</em></p>
 
 ### Dashboard
 
 <p align="center">
-  <img src="docs/screenshots/05-dashboard-overview.png" width="45%" alt="Dashboard — Overview">&nbsp;&nbsp;
-  <img src="docs/screenshots/07-dashboard-ai.png" width="45%" alt="Dashboard — AI Settings">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/05-dashboard-overview.png" width="45%" alt="Dashboard — Overview">&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/07-dashboard-ai.png" width="45%" alt="Dashboard — AI Settings">
 </p>
 <p align="center"><em>Left: Overview tab (stats + protection toggles) · Right: AI provider configuration</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/06-dashboard-sites.png" width="45%" alt="Dashboard — Sites">&nbsp;&nbsp;
-  <img src="docs/screenshots/08-dashboard-advanced.png" width="45%" alt="Dashboard — Advanced">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/06-dashboard-sites.png" width="45%" alt="Dashboard — Sites">&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/08-dashboard-advanced.png" width="45%" alt="Dashboard — Advanced">
 </p>
 <p align="center"><em>Left: Site management (whitelist/blacklist) · Right: Advanced settings (policy gate, blocked elements)</em></p>
 
 ### Extension Popup
 
 <p align="center">
-  <img src="docs/screenshots/09-popup-main.png" width="35%" alt="Extension Popup">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/09-popup-main.png" width="35%" alt="Extension Popup">
 </p>
 <p align="center"><em>Browser action popup — 3-step flow guide, player detection, stats grid, blocking level</em></p>
 

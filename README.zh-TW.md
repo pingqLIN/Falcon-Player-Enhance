@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Falcon-Player-Enhance Banner" width="100%">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/banner.png" alt="Falcon-Player-Enhance Banner" width="100%">
 </p>
 
 <p align="center">
@@ -124,33 +124,33 @@
 ### 無干擾播放器
 
 <p align="center">
-  <img src="docs/screenshots/01-player-dark-full.png" width="80%" alt="播放器 — 暗色主題">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/01-player-dark-full.png" width="80%" alt="播放器 — 暗色主題">
 </p>
 <p align="center"><em>無干擾播放器（暗色主題）— 頂部資訊列 + 影片舞台 + 控制面板</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/03-player-light-full.png" width="80%" alt="播放器 — 明亮主題">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/03-player-light-full.png" width="80%" alt="播放器 — 明亮主題">
 </p>
 <p align="center"><em>無干擾播放器（明亮主題）— 毛玻璃面板效果</em></p>
 
 ### 設定面板
 
 <p align="center">
-  <img src="docs/screenshots/05-dashboard-overview.png" width="45%" alt="Dashboard — 總覽">&nbsp;&nbsp;
-  <img src="docs/screenshots/07-dashboard-ai.png" width="45%" alt="Dashboard — AI 設定">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/05-dashboard-overview.png" width="45%" alt="Dashboard — 總覽">&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/07-dashboard-ai.png" width="45%" alt="Dashboard — AI 設定">
 </p>
 <p align="center"><em>左：總覽（統計 + 保護開關）· 右：AI 服務商設定</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/06-dashboard-sites.png" width="45%" alt="Dashboard — 站點">&nbsp;&nbsp;
-  <img src="docs/screenshots/08-dashboard-advanced.png" width="45%" alt="Dashboard — 進階">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/06-dashboard-sites.png" width="45%" alt="Dashboard — 站點">&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/08-dashboard-advanced.png" width="45%" alt="Dashboard — 進階">
 </p>
 <p align="center"><em>左：站點管理（白名單/黑名單）· 右：進階設定（政策閘門、封鎖元素）</em></p>
 
 ### 擴充功能彈窗
 
 <p align="center">
-  <img src="docs/screenshots/09-popup-main.png" width="35%" alt="擴充功能 Popup">
+  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/09-popup-main.png" width="35%" alt="擴充功能 Popup">
 </p>
 <p align="center"><em>瀏覽器彈窗 — 三步驟流程指引、播放器偵測、統計數據、封鎖等級</em></p>
 
