@@ -124,6 +124,7 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - 盤點剩餘 whitelist state consumer
 - 將尚未接 helper 的 consumer 收斂到同一 runtime contract
 - 已補 `run_site_state_consistency_regression.py`，覆蓋同頁 whitelist -> strict 的跨模組 consistency 行為
+- 已補 `run_player_controls_site_state_regression.py`，覆蓋同頁 whitelist / strict / whitelist restore 的 speed UI lifecycle
 - 下一步可轉向 residual consumer audit 與 flake hardening，而非再補同類型 regression
 
 2. `Track E: AI Candidate Governance`
