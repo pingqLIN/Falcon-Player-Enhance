@@ -345,12 +345,14 @@ def run_gate(gate: dict[str, object]) -> dict[str, object]:
     step_reports = [run_step(step) for step in gate["steps"]]
     checks: list[dict[str, object]] = []
     if gate.get("json_check"):
+        json_check_started_at = time.perf_counter()
         try:
             load_json_file()
             checks.append({
                 "command": "python json.load(extension/rules/site-registry.json)",
                 "returncode": 0,
                 "ok": True,
+                "durationSec": round(time.perf_counter() - json_check_started_at, 3),
                 "stdout": "site-registry.json parsed successfully",
                 "stderr": "",
             })
@@ -359,6 +361,7 @@ def run_gate(gate: dict[str, object]) -> dict[str, object]:
                 "command": "python json.load(extension/rules/site-registry.json)",
                 "returncode": 1,
                 "ok": False,
+                "durationSec": round(time.perf_counter() - json_check_started_at, 3),
                 "stdout": "",
                 "stderr": str(error),
             })
