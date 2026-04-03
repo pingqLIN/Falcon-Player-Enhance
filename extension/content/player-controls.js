@@ -103,7 +103,7 @@
             mediaAutomationReady = true;
             return mediaAutomationEnabled;
         }
-        mediaAutomationEnabled = true;
+        mediaAutomationEnabled = false;
         mediaAutomationReady = true;
         return mediaAutomationEnabled;
     }

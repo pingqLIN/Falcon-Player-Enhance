@@ -15,6 +15,21 @@
     let popupDirectIframeHosts = [];
     let overlayMonitoringStarted = false;
 
+    function waitForSiteStateHelper(attempt = 0) {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.load) {
+            return Promise.resolve(helper);
+        }
+        if (attempt >= 20) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            window.setTimeout(() => {
+                resolve(waitForSiteStateHelper(attempt + 1));
+            }, 50);
+        });
+    }
+
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
     }
@@ -37,6 +52,10 @@
             cleanupEnabled = helper.shouldRunMediaAutomation(window.location.hostname);
             return cleanupEnabled;
         }
+        if (!state) {
+            cleanupEnabled = false;
+            return cleanupEnabled;
+        }
 
         const hostname = normalizeHostname(window.location.hostname);
         const whitelist = Array.isArray(state?.whitelistDomains) ? state.whitelistDomains : [];
@@ -47,18 +66,13 @@
     }
 
     function resolveCleanupMode() {
-        const helper = window.__ShieldSiteStateHelper;
-        if (helper?.load) {
-            return helper.load().then((state) => applyCleanupModeFromState(state));
-        }
-
-        return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
-                resolve(applyCleanupModeFromState({
-                    whitelistDomains: Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [],
-                    whitelistEnhanceOnly: result.whitelistEnhanceOnly
-                }));
-            });
+        return waitForSiteStateHelper().then((helper) => {
+            if (!helper?.load) {
+                return applyCleanupModeFromState(null);
+            }
+            return helper.load()
+                .catch(() => null)
+                .then((state) => applyCleanupModeFromState(state));
         });
     }
 

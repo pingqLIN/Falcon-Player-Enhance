@@ -4,12 +4,31 @@
 (function () {
     'use strict';
 
+    function getSiteStateHelper() {
+        return window.__ShieldSiteStateHelper || null;
+    }
+
+    function waitForSiteStateHelper(attempt = 0) {
+        const helper = getSiteStateHelper();
+        if (helper?.load) {
+            return Promise.resolve(helper);
+        }
+        if (attempt >= 20) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            window.setTimeout(() => {
+                resolve(waitForSiteStateHelper(attempt + 1));
+            }, 50);
+        });
+    }
+
     function shouldRunMediaAutomation() {
-        const helper = window.__ShieldSiteStateHelper;
+        const helper = getSiteStateHelper();
         if (helper?.shouldRunMediaAutomation) {
             return helper.shouldRunMediaAutomation(window.location.hostname);
         }
-        return true;
+        return false;
     }
 
     function hashString(str) {
@@ -1070,12 +1089,12 @@
     function init() {
         console.log('🚀 Player Detector v4.0 已載入');
 
-        const helper = window.__ShieldSiteStateHelper;
-        if (helper?.subscribe) {
+        waitForSiteStateHelper().then((helper) => {
+            if (!helper?.subscribe) return;
             helper.subscribe(() => {
                 runDetectionCycle();
             });
-        }
+        });
 
         const startDetection = () => {
             const runInitialSweep = () => {
@@ -1084,12 +1103,13 @@
                 setTimeout(runDetectionCycle, 1000);
             };
 
-            if (helper?.load) {
+            waitForSiteStateHelper().then((helper) => {
+                if (!helper?.load) {
+                    runInitialSweep();
+                    return;
+                }
                 helper.load().catch(() => null).finally(runInitialSweep);
-                return;
-            }
-
-            runInitialSweep();
+            });
         };
 
         if (document.readyState === 'loading') {

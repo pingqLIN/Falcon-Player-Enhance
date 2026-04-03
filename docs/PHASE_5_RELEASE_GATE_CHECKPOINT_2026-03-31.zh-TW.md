@@ -33,6 +33,8 @@
 - `background.js` 已將 helper 納入 `document_idle / ISOLATED` content script 鏈
 - `player-enhancer.js`、`overlay-remover.js`、`fake-video-remover.js` 改為優先讀取 canonical helper
 - 新增 `tests/site-state/run_site_state_helper_regression.py`
+- 已完成 residual consumer audit，`player-detector.js`、`player-controls.js` 與三個 cleanup consumer 在 helper 缺席時改為 fail-closed，不再回退到 whitelist-only fallback
+- 新增 `tests/site-state/run_site_state_consumer_contract_regression.py`
 
 5. `Track E` candidate governance v1 落地
 - background 已可記錄 candidate review decision（accept/reject + reason）
@@ -74,6 +76,7 @@
   - `G-09` PASS
 - `python tests/site-state/run_site_state_bridge_regression.py --headless`
 - `python tests/site-state/run_site_state_helper_regression.py --headless`
+- `python tests/site-state/run_site_state_consumer_contract_regression.py` PASS
 - `python tests/anti-antiblock/run_anti_antiblock_whitelist_regression.py --headless`
 - `python tests/ai/run_candidate_review_regression.py --headless` PASS
 - `python tests/ai/run_candidate_promotion_regression.py --headless` PASS
@@ -88,6 +91,7 @@
 - contract / player detection / popup smoke / cosmetic / inject / whitelist regression 已被 unified gate 串成單一入口
 - anti-antiblock 已驗證 whitelist -> strict -> whitelist restore 的 live update 行為，且 whitelist 首次載入不會因 stale pre-hydration bridge state 提前 bootstrap full cleanup
 - unified release gate 對 browser regressions 新增 extension startup retry 與 step timeout，降低 unattended 執行被 service worker 啟動抖動或單一 case 卡死中斷的風險
+- `run_site_state_consumer_contract_regression.py` 已驗證 helper-first 注入順序固定，且 audited media automation consumers 不再繞過 canonical helper contract
 - candidate governance 已驗證 accept/reject + reason 可追溯，且 `baseline/confirmedPatterns` 不因 candidate review 直接變更
 - controlled promotion 已驗證 decision -> promotion -> rollback evidence chain 可追溯，且 rollback 可將 `confirmedPatterns` 還原
 - lovable safe-domain exemption 已驗證 runtime contract、registered content script excludeMatches 與 DNR allow rule 三層一致
@@ -103,7 +107,7 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 - `Track A` 已有第一版 fallback 規格與驗證
 - `Track B` 已有第一版 contract 驗證
 - `Track D` 已有可重跑 release gate
-- `Track C` 已有第一版 canonical helper、跨模組 consumer 對齊與 regression，但尚未涵蓋所有 consumer
+- `Track C` 已完成 canonical helper、residual consumer contract 收斂與 regression，自動化已可覆蓋 helper-first 注入順序與同頁模式切換
 - `Track E` 已完成 candidate/review/decision v1 與 controlled promotion / rollback v2，並納入 release gate 自動化
 - `Track F` 已完成 interaction safety guard 與 auth/form regression，自動化納入 gate
 
@@ -111,21 +115,19 @@ Phase 5 目前不是整體完成，而是進入以下狀態：
 
 ## 4. 風險與缺點
 
-- `overlay-remover.js`、`fake-video-remover.js`、`player-enhancer.js` 已優先改讀 canonical helper，但其他 consumer 尚未全部收斂
 - lovable exemption 目前先採 host-level 豁免；若後續確認只需 selector 細粒度例外，可再回頭收窄
 - interaction safety 目前先以 auth/form-like heuristics 判定；後續可再補更多真實站點 smoke 驗證來收斂誤判與漏判
-- GitHub push 問題目前降級為非阻塞項，先以本地 commit 與驗證鏈為主
 
 ## 5. 下一階段建議
 
 下一刀優先順序建議如下：
 
 1. `Track C: Whitelist-State Divergence`
-- 盤點剩餘 whitelist state consumer
-- 將尚未接 helper 的 consumer 收斂到同一 runtime contract
+- residual consumer audit 已完成，下一步可轉向 flake hardening 與更細的 real-site smoke，而非再做同類 fallback 收斂
 - 已補 `run_site_state_consistency_regression.py`，覆蓋同頁 whitelist -> strict 的跨模組 consistency 行為
 - 已補 `run_player_controls_site_state_regression.py`，覆蓋同頁 whitelist / strict / whitelist restore 的 speed UI lifecycle
-- 下一步可轉向 residual consumer audit 與 flake hardening，而非再補同類型 regression
+- 已補 `run_site_state_consumer_contract_regression.py`，覆蓋 helper-first 注入順序與 consumer contract
+- 下一步可轉向 flake hardening，而非再補同類型 regression
 
 2. `Track E: AI Candidate Governance`
 - 將 promotion evidence 與 reviewer trace 再補到更完整匯出格式

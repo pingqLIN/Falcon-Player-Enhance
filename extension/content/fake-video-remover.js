@@ -33,6 +33,21 @@
     };
     let blockingEnabled = false;
 
+    function waitForSiteStateHelper(attempt = 0) {
+        const helper = window.__ShieldSiteStateHelper;
+        if (helper?.load) {
+            return Promise.resolve(helper);
+        }
+        if (attempt >= 20) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            window.setTimeout(() => {
+                resolve(waitForSiteStateHelper(attempt + 1));
+            }, 50);
+        });
+    }
+
     function normalizeHostname(hostname) {
         return String(hostname || '').toLowerCase().replace(/^www\./, '');
     }
@@ -47,6 +62,10 @@
             blockingEnabled = helper.shouldRunMediaAutomation(window.location.hostname);
             return blockingEnabled;
         }
+        if (!state) {
+            blockingEnabled = false;
+            return blockingEnabled;
+        }
 
         const hostname = normalizeHostname(window.location.hostname);
         const whitelist = Array.isArray(state?.whitelistDomains) ? state.whitelistDomains : [];
@@ -57,18 +76,13 @@
     }
 
     function resolveBlockingMode() {
-        const helper = window.__ShieldSiteStateHelper;
-        if (helper?.load) {
-            return helper.load().then((state) => applyBlockingModeFromState(state));
-        }
-
-        return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
-                resolve(applyBlockingModeFromState({
-                    whitelistDomains: Array.isArray(result.whitelist) ? result.whitelist.map(normalizeHostname) : [],
-                    whitelistEnhanceOnly: result.whitelistEnhanceOnly
-                }));
-            });
+        return waitForSiteStateHelper().then((helper) => {
+            if (!helper?.load) {
+                return applyBlockingModeFromState(null);
+            }
+            return helper.load()
+                .catch(() => null)
+                .then((state) => applyBlockingModeFromState(state));
         });
     }
 

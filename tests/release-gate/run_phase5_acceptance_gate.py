@@ -48,6 +48,7 @@ PY_COMPILE_FILES = [
     "tests/rules/run_filter_rules_contract.py",
     "tests/site-state/run_site_state_bridge_regression.py",
     "tests/site-state/run_site_state_consistency_regression.py",
+    "tests/site-state/run_site_state_consumer_contract_regression.py",
     "tests/site-state/run_player_controls_site_state_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
     "tests/site-registry/run_site_registry_contract_regression.py",
@@ -308,6 +309,7 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "id": "G-06",
             "label": "Whitelist Consistency",
             "steps": [
+                [sys.executable, "tests/site-state/run_site_state_consumer_contract_regression.py"],
                 build_retryable_browser_step("tests/site-state/run_site_state_bridge_regression.py", headless),
                 build_retryable_browser_step("tests/site-state/run_site_state_consistency_regression.py", headless),
                 build_retryable_browser_step("tests/site-state/run_player_controls_site_state_regression.py", headless),
