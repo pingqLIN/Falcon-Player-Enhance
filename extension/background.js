@@ -89,6 +89,37 @@ function normalizeDomainList(domains = []) {
   )];
 }
 
+function normalizeCustomSiteDomain(value) {
+  let domain = String(value || '').trim().toLowerCase();
+  domain = domain.replace(/^https?:\/\//, '');
+  domain = domain.replace(/\/.*$/, '');
+  domain = domain.replace(/^www\./, '');
+  return domain;
+}
+
+function isValidCustomSiteDomain(value) {
+  const domain = normalizeCustomSiteDomain(value);
+  if (!domain || domain.length < 3 || !domain.includes('.')) {
+    return false;
+  }
+  return /^[a-z0-9.-]+$/.test(domain) && !domain.startsWith('.') && !domain.endsWith('.');
+}
+
+async function getStoredCustomSites() {
+  const result = await chrome.storage.local.get(['customSites']);
+  return normalizeDomainList(result.customSites);
+}
+
+async function setStoredCustomSites(customSites) {
+  await chrome.storage.local.set({ customSites: normalizeDomainList(customSites) });
+}
+
+async function syncCustomSiteRegistration() {
+  if (await isExtensionEnabled()) {
+    await registerContentScripts();
+  }
+}
+
 function normalizeSelectorList(selectors = []) {
   return [...new Set(
     (Array.isArray(selectors) ? selectors : [])
@@ -5769,6 +5800,88 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'getCustomSites') {
+    (async () => {
+      await loadSiteRegistry();
+      const customSites = await getStoredCustomSites();
+      sendResponse({
+        success: true,
+        builtinDomains: getBuiltinEnhancedDomains(),
+        customSites
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (request.action === 'addCustomSite') {
+    (async () => {
+      await loadSiteRegistry();
+      const domain = normalizeCustomSiteDomain(request.domain);
+      if (!isValidCustomSiteDomain(domain)) {
+        sendResponse({ success: false, error: 'invalid_domain' });
+        return;
+      }
+
+      const builtinDomains = getBuiltinEnhancedDomains();
+      const customSites = await getStoredCustomSites();
+
+      if (builtinDomains.includes(domain)) {
+        sendResponse({
+          success: true,
+          domain,
+          added: false,
+          builtinDomains,
+          customSites
+        });
+        return;
+      }
+
+      if (!customSites.includes(domain)) {
+        customSites.push(domain);
+        await setStoredCustomSites(customSites);
+        await syncCustomSiteRegistration();
+      }
+
+      sendResponse({
+        success: true,
+        domain,
+        added: true,
+        builtinDomains,
+        customSites: normalizeDomainList(customSites)
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (request.action === 'removeCustomSite') {
+    (async () => {
+      await loadSiteRegistry();
+      const domain = normalizeCustomSiteDomain(request.domain);
+      const customSites = await getStoredCustomSites();
+      const nextSites = customSites.filter((entry) => entry !== domain);
+
+      if (nextSites.length !== customSites.length) {
+        await setStoredCustomSites(nextSites);
+        await syncCustomSiteRegistration();
+      }
+
+      sendResponse({
+        success: true,
+        domain,
+        removed: nextSites.length !== customSites.length,
+        builtinDomains: getBuiltinEnhancedDomains(),
+        customSites: nextSites
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
   if (request.action === 'openInSandbox') {
     const sandboxUrl = chrome.runtime.getURL('sandbox/sandbox.html') + '?url=' + encodeURIComponent(request.url);
     chrome.tabs.create({ url: sandboxUrl });
@@ -5810,7 +5923,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     })
     .catch(() => {});
 });
-
 chrome.tabs.onRemoved.addListener((tabId) => {
   const key = String(tabId);
   if (directPopupOverlayTabs[key]) {
