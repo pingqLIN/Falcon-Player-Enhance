@@ -1,5 +1,9 @@
 # Falcon-Player-Enhance 進度說明儲存
 
+> 2026-04-15 補充：
+> active tooling 已改為使用 `tests/live-browser/bookmarks.sample.html` 作為合成範例輸入；bookmark-derived target metadata 也已改為 repo-relative / sanitized path。
+> 本文件中較早期的 findings 仍保留作為歷史決策脈絡；若與目前程式碼不一致，應以最新 `git` 狀態與 Phase 5 文件為準。
+
 > 2026-03-28 補充：
 > 已新增 `docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-28.zh-TW.md`，收斂本輪 YOLO mode + 子代理通盤審查的 findings、已驗證修補與下一階段執行順序。
 > 同日再補：`extension/background.js` 已完成 pinned popup startup/onRemoved restore 第一版修補，Phase 2 正式啟動。
@@ -182,7 +186,7 @@ target 檔已建立，但還沒有針對這 5 個樣本跑出第一份固定報�
 
 ## 6. 補充說明
 
-目前 worktree 仍是 dirty 狀態，repo 內也有不少同時進行中的修改。因此這份文件的目的是讓審查者快速掌握「本輪新增與目前最值得檢查的區塊」，而不是宣稱整個 repository 已進入可發布狀態。
+本段描述的是 2026-03-20 當時的工作樹狀態。若要判讀目前 repo 是否可發布，應以最新 `git status` 與 release gate fresh run 為準。
 
 ---
 
@@ -215,17 +219,16 @@ target 檔已建立，但還沒有針對這 5 個樣本跑出第一份固定報�
 
 **安全 / 隱私（立即處理）：**
 
-- 🔴 `tests/bookmarks_2026_3_13.html` 與 `.bak` — 個人書籤已 commit 至 git
-  - 處理方式：`git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths`（需對 .bak 重複執行）
-  - 並將兩個檔案加入 `.gitignore`
+- 🟡 `tests/.clean/bookmarks_2026_3_13.html` 與 `.bak` — 已移出 active test flow，並由 `.gitignore` 排除
+  - active tooling 目前已改用 `tests/live-browser/bookmarks.sample.html`
+  - 若要清理舊歷史敏感痕跡，仍可另外執行 `git filter-repo`
 
-- 🔴 `POLICY-GATE.md` 內含開發者本機絕對路徑 `C:\Dev\Projects\...`
-  - 改為相對路徑或 Markdown 相對連結
+- ✅ `POLICY-GATE.md` 開發者本機絕對路徑問題已改為 repo 內相對連結
 
 **品牌命名（短期處理）：**
 
-- 🟡 `inject-blocker.js`、`ai-runtime.js`、`POLICY-GATE.md` 等仍使用 `Shield Pro`
-  - 目標：全部統一為 `Falcon-Player-Enhance`
+- 🟡 active tooling 中的品牌命名已統一；目前殘留的 `Shield Pro` 主要存在於歷史審查文件與舊 prompt / artifact 文字脈絡
+  - 若要再清理，應視為 historical-doc scrub，而不是 runtime code issue
 
 **CWS 發布風險（若有 CWS 發布計畫）：**
 

@@ -126,7 +126,7 @@ Chrome Web Store policy prohibits extensions primarily targeting adult content s
 #### 3.2.2 Developer Machine Path Leaked in POLICY-GATE.md
 
 ```
-[background.js](C:\Dev\Projects\ad-blocker-player-enhancer\extension\background.js)
+[background.js](../extension/background.js)
 ```
 
 Absolute paths to the developer's local machine are hardcoded in documentation.
@@ -135,15 +135,15 @@ Absolute paths to the developer's local machine are hardcoded in documentation.
 
 ### 3.3 Personal Data Exposure 🔴 High Priority
 
-The following files are committed to Git:
-- `tests/bookmarks_2026_3_13.html`
-- `tests/bookmarks_2026_3_13.html.bak`
+The following bookmark-export files should stay out of active tracked flows:
+- `tests/.clean/bookmarks_2026_3_13.html`
+- `tests/.clean/bookmarks_2026_3_13.html.bak`
 
-These are browser bookmark exports containing personal browsing history. They must be removed from version history immediately.
+These are bookmark exports containing personal browsing history. They should stay out of active tracked flows, and old history should be purged if the repository will be shared more broadly.
 
 **Recommendations:**
 1. Add both files to `.gitignore` immediately
-2. Use `git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths` to purge history
+2. Use `git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths` to purge legacy history if needed
 3. `filter-rules.json.backup` should also be removed from version control
 
 ### 3.4 AI Integration Technical Gaps 🟡 Medium Priority

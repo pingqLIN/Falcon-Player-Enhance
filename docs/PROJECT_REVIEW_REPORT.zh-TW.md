@@ -125,7 +125,7 @@ manifest.json 同時請求：
 #### 3.2.2 POLICY-GATE.md 洩漏開發機器路徑
 
 ```
-[background.js](C:\Dev\Projects\ad-blocker-player-enhancer\extension\background.js)
+[background.js](../extension/background.js)
 ```
 
 文件中硬編碼了開發者的本機絕對路徑，不應進入版本控制。
@@ -134,15 +134,15 @@ manifest.json 同時請求：
 
 ### 3.3 個人資料洩漏 🔴 高優先
 
-以下檔案已提交到 Git：
-- `tests/bookmarks_2026_3_13.html`
-- `tests/bookmarks_2026_3_13.html.bak`
+以下 bookmark export 檔案不應留在 active tracked flow：
+- `tests/.clean/bookmarks_2026_3_13.html`
+- `tests/.clean/bookmarks_2026_3_13.html.bak`
 
-這是瀏覽器書籤的匯出，包含個人瀏覽歷史。應立即從版本歷史中移除（`git filter-repo` 或 BFG）。
+這是瀏覽器書籤的匯出，包含個人瀏覽歷史。active flow 應避免再直接引用，若需要對外分享 repo，仍建議清理舊歷史（`git filter-repo` 或 BFG）。
 
 **建議**：
 1. 立即將這兩個檔案加入 `.gitignore`
-2. 使用 `git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths` 從歷史移除
+2. 若舊路徑仍存在於 Git 歷史，使用 `git filter-repo --path tests/bookmarks_2026_3_13.html --invert-paths` 從歷史移除
 3. `filter-rules.json.backup` 也應移出版本控制
 
 ### 3.4 AI 整合技術缺口 🟡 中優先
@@ -246,7 +246,7 @@ manifest.json 同時請求：
 
 ### 5.2 🔴 關鍵風險：個人資料洩漏（書籤檔案）
 
-**描述**：`tests/bookmarks_2026_3_13.html` 已提交 Git，包含完整瀏覽紀錄。若此 repo 設為公開，個人隱私將直接暴露。
+**描述**：歷史上的 bookmark export 曾進入 repo 脈絡。若不清理舊 commit，對外分享時仍可能暴露個人瀏覽痕跡。
 
 **觸發條件**：repo 設為 public，或 repo access 意外開放。
 
