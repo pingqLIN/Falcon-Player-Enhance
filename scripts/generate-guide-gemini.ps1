@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Generate three operation guide SVG illustrations for Shield Pro using Gemini.
+    Generate three operation guide SVG illustrations for Falcon-Player-Enhance using Gemini.
 
 .DESCRIPTION
     Calls Gemini to generate three SVG illustrations of a spherical robot

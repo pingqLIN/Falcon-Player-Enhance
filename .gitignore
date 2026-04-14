@@ -45,6 +45,7 @@ __pycache__/
 
 # Temporary test data
 tests/live-browser/_tmp-*.json
+tests/.clean/
 
 # Backup files
 *.backup

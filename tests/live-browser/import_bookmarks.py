@@ -12,6 +12,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 class BookmarkParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -337,8 +340,13 @@ def run() -> int:
 
     out_path = Path(args.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        generated_from = str(input_path.relative_to(REPO_ROOT))
+    except ValueError:
+        generated_from = str(input_path)
+
     payload = {
-        "generatedFrom": str(input_path),
+        "generatedFrom": generated_from,
         "targets": accepted
     }
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

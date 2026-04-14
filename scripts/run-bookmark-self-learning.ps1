@@ -1,5 +1,5 @@
 param(
-    [string]$Bookmarks = "tests/bookmarks_2026_3_13.html",
+    [string]$Bookmarks = "tests/live-browser/bookmarks.sample.html",
     [string]$TargetsOut = "tests/live-browser/targets.from-bookmarks.filtered.json",
     [string]$DomainRegex = "javboys|missav|thisav|jable|avgle|poapan",
     [string]$ExcludeUrlRegex = "/tag/|/all-models/|/_page=|/category/",

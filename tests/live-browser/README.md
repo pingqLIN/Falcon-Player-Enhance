@@ -32,7 +32,8 @@ pwsh ./scripts/run-bookmark-self-learning.ps1 -Headless
 - `targets.external-ai.single-page.curated.json` is a reviewed import artifact for regression work. Keep `requiresManualReview: true` until a human confirms each target still behaves as expected.
 - `targets.external-ai.single-page.smoke.json` should keep `generatedFrom` as the repo-relative curated path (`tests/live-browser/targets.external-ai.single-page.curated.json`) so contract checks do not depend on a machine-local absolute path.
 - Smoke targets should remain a reviewed subset of the curated pool, keep `requiresManualReview: true`, and preserve the `external-ai-curation`, `single-page`, and `smoke` tags.
-- A bookmark export like `tests/bookmarks_2026_3_13.html` is a good sample input for `import_bookmarks.py`.
+- `tests/live-browser/bookmarks.sample.html` is a synthetic sample input for `import_bookmarks.py`.
+- Keep personal bookmark exports outside the tracked repo tree, or move them under `tests/.clean/` when they are only needed locally.
 - For reliable uBlock coverage, prefer either:
   - an unpacked uBlock directory via `--ublock-extension-dir`
   - an existing Chromium profile via `--browser-profile-dir`

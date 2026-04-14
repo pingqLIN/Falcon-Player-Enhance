@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// Shield Pro - CSS Safety Lint
+// Falcon-Player-Enhance - CSS Safety Lint
 // ============================================================================
 // 掃描所有 CSS 檔案，檢查是否有危險的全域 attribute selectors
 // 用法: node scripts/lint-css-safety.js
@@ -84,7 +84,7 @@ const cssFiles = fs.readdirSync(CSS_DIR)
   .filter(f => f.endsWith('.css'))
   .map(f => path.join(CSS_DIR, f));
 
-console.log('🔍 Shield Pro CSS Safety Lint');
+console.log('🔍 Falcon-Player-Enhance CSS Safety Lint');
 console.log('=============================');
 console.log(`掃描 ${cssFiles.length} 個 CSS 檔案...\n`);
 
