@@ -43,6 +43,8 @@ const TEACHING_CONFIRMATION_THRESHOLD = 3;
 const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 
 const directPopupOverlayTabs = {};
+const playerPopupGuardTabs = {};
+const PLAYER_POPUP_GUARD_MAX_AGE_MS = 15000;
 let siteRegistryLoadPromise = null;
 let siteRegistryState = {
   domains: [],
@@ -385,6 +387,22 @@ const AI_HIGH_RISK_EXTRA_DOMAINS = [
   'doubleclick',
   'trackingclick',
   'slot'
+];
+const PLAYER_POPUP_TRAP_TOKENS = [
+  'displayendpoint',
+  'trackingclick',
+  'magsrv',
+  'popads',
+  'exoclick',
+  'clickadu',
+  'adsterra',
+  'propellerads',
+  'juicyads',
+  'trafficjunky',
+  'popcash',
+  'adcash',
+  'hilltopads',
+  'redirect'
 ];
 const AI_POLICY_GATE_DEFAULT_THRESHOLDS = {
   advisoryMinConfidence: 0.55,
@@ -869,6 +887,153 @@ function normalizePopupHost(input = '') {
 
 function isPopupDomainOrSubdomain(hostname, domain) {
   return hostname === domain || hostname.endsWith('.' + domain);
+}
+
+function isInternalBrowserUrl(url = '') {
+  const value = String(url || '').trim().toLowerCase();
+  if (!value) return true;
+  return (
+    value.startsWith('about:') ||
+    value.startsWith('chrome://') ||
+    value.startsWith('chrome-extension://') ||
+    value.startsWith('devtools://') ||
+    value.startsWith('edge://')
+  );
+}
+
+function hasPlayerPopupTrapToken(url = '', hostname = '') {
+  const haystack = `${String(url || '').toLowerCase()} ${String(hostname || '').toLowerCase()}`;
+  if (!haystack.trim()) return false;
+  return PLAYER_POPUP_TRAP_TOKENS.some((token) => haystack.includes(token));
+}
+
+async function isManagedEnhancedHost(hostname = '') {
+  const normalizedHost = normalizePopupHost(hostname);
+  if (!normalizedHost) return false;
+
+  const customSites = await getStoredCustomSites().catch(() => []);
+  return getEffectiveEnhancedDomains(customSites).some((domain) => isPopupDomainOrSubdomain(normalizedHost, domain));
+}
+
+function clearPlayerPopupGuardTab(tabId) {
+  delete playerPopupGuardTabs[String(tabId)];
+}
+
+async function closeGuardedPlayerPopupTab(tabId, entry, tabUrl = '') {
+  clearPlayerPopupGuardTab(tabId);
+
+  try {
+    await chrome.tabs.remove(tabId);
+  } catch (_) {}
+
+  if (entry?.openerTabId) {
+    try {
+      await chrome.tabs.update(entry.openerTabId, { active: true });
+    } catch (_) {}
+  }
+
+  if (Number.isFinite(Number(entry?.openerWindowId)) && Number(entry.openerWindowId) > 0) {
+    try {
+      await chrome.windows.update(Number(entry.openerWindowId), { focused: true });
+    } catch (_) {}
+  }
+
+  updateStatsWith((next) => {
+    next.popupsBlocked += 1;
+    next.totalBlocked += 1;
+  }).catch(() => {});
+
+  console.log(`🛡️ 已關閉玩家站點可疑 popup: ${String(tabUrl || '').slice(0, 180)}`);
+}
+
+async function evaluatePlayerPopupGuardTab(tabId, tabUrl = '') {
+  const entry = playerPopupGuardTabs[String(tabId)];
+  if (!entry) return;
+
+  if (getNow() - Number(entry.createdAt || 0) > PLAYER_POPUP_GUARD_MAX_AGE_MS) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
+  const resolvedUrl = String(tabUrl || '').trim();
+  if (!resolvedUrl || isInternalBrowserUrl(resolvedUrl)) {
+    return;
+  }
+
+  if (await isWhitelisted(resolvedUrl)) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
+  const targetHost = normalizePopupHost(getHostname(resolvedUrl));
+  if (!targetHost) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
+  if (isPopupDomainOrSubdomain(targetHost, entry.openerHost)) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
+  const allowedDomains = normalizeDomainList([
+    ...getPopupDirectIframeHosts(),
+    ...getBuiltinEnhancedDomains()
+  ]);
+  if (allowedDomains.some((domain) => isPopupDomainOrSubdomain(targetHost, domain))) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
+  if (hasPlayerPopupTrapToken(resolvedUrl, targetHost)) {
+    await closeGuardedPlayerPopupTab(tabId, entry, resolvedUrl);
+    return;
+  }
+
+  await closeGuardedPlayerPopupTab(tabId, entry, resolvedUrl);
+}
+
+async function registerPlayerPopupGuardTab(tab) {
+  const tabId = Number(tab?.id || 0);
+  const openerTabId = Number(tab?.openerTabId || 0);
+  if (!Number.isFinite(tabId) || tabId <= 0 || !Number.isFinite(openerTabId) || openerTabId <= 0) {
+    return;
+  }
+
+  const enabled = await isExtensionEnabled();
+  if (!enabled || normalizeBlockingLevel(blockingLevel) < BLOCKING_LEVEL_DEFAULT) {
+    return;
+  }
+
+  let openerTab = null;
+  try {
+    openerTab = await chrome.tabs.get(openerTabId);
+  } catch (_) {
+    openerTab = null;
+  }
+  if (!openerTab?.url || isInternalBrowserUrl(openerTab.url)) {
+    return;
+  }
+
+  if (await isWhitelisted(openerTab.url)) {
+    return;
+  }
+
+  const openerHost = normalizePopupHost(getHostname(openerTab.url));
+  if (!openerHost || !(await isManagedEnhancedHost(openerHost))) {
+    return;
+  }
+
+  playerPopupGuardTabs[String(tabId)] = {
+    openerTabId,
+    openerWindowId: Number(openerTab.windowId || 0),
+    openerHost,
+    createdAt: getNow()
+  };
+
+  if (tab.url) {
+    await evaluatePlayerPopupGuardTab(tabId, tab.url);
+  }
 }
 
 function shouldOpenPopupDirectly(payload = {}) {
@@ -5903,6 +6068,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.url || changeInfo.status === 'complete') {
+    evaluatePlayerPopupGuardTab(tabId, changeInfo.url || tab?.url || '').catch(() => {});
+  }
+
   if (changeInfo.status !== 'complete' || !tab.url) {
     return;
   }
@@ -5936,11 +6105,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     })
     .catch(() => {});
 });
+chrome.tabs.onCreated.addListener((tab) => {
+  registerPlayerPopupGuardTab(tab).catch(() => {});
+});
 chrome.tabs.onRemoved.addListener((tabId) => {
   const key = String(tabId);
   if (directPopupOverlayTabs[key]) {
     delete directPopupOverlayTabs[key];
   }
+  clearPlayerPopupGuardTab(tabId);
 });
 
 chrome.windows?.onBoundsChanged?.addListener((popupWindow) => {
