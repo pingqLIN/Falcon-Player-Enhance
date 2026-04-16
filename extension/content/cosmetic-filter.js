@@ -109,7 +109,8 @@
         }
 
         for (const rule of customRules) {
-            if (!rule.hostname || hostname.includes(rule.hostname)) {
+            const ruleHostname = String(rule.hostname || '').trim().toLowerCase();
+            if (!ruleHostname || isDomainOrSubdomain(hostname, ruleHostname)) {
                 selectors.push(rule.selector);
             }
         }

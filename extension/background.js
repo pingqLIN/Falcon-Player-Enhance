@@ -5115,12 +5115,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const tabId = request.tabId || sender.tab?.id;
       if (!tabId) { sendResponse({ success: false, error: 'no tab' }); return; }
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['content/element-picker.js']
+        const activateExistingPicker = () => new Promise((resolve, reject) => {
+          chrome.tabs.sendMessage(tabId, { action: 'activateElementPicker' }, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            resolve(response);
+          });
         });
-        // 注入後立即啟用
-        chrome.tabs.sendMessage(tabId, { action: 'activateElementPicker' });
+
+        try {
+          await activateExistingPicker();
+        } catch (_) {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['content/element-picker.js']
+          });
+          await activateExistingPicker();
+        }
         sendResponse({ success: true });
       } catch (error) {
         sendResponse({ success: false, error: String(error?.message || error) });

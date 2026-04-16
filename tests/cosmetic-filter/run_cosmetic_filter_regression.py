@@ -91,6 +91,23 @@ def inspect_page(page, url: str, wait_ms: int) -> dict[str, object]:
     )
 
 
+def seed_hidden_elements(context) -> None:
+    worker = smoke.get_extension_worker(context)
+    worker.evaluate(
+        """async () => {
+            await chrome.storage.local.set({
+                hiddenElements: [
+                    {
+                        selector: '#javboys-site-ad',
+                        hostname: 'javboys.com',
+                        timestamp: Date.now()
+                    }
+                ]
+            });
+        }"""
+    )
+
+
 def build_report(base_url: str, page, wait_ms: int) -> dict[str, object]:
     javboys = inspect_page(page, base_url.replace("127.0.0.1", "javboys.com"), wait_ms)
     missav = inspect_page(page, base_url.replace("127.0.0.1", "missav.com"), wait_ms)
@@ -136,6 +153,7 @@ def main() -> int:
             try:
                 extension_id = smoke.wait_for_extension_id(context, args.timeout_ms)
                 registered_scripts = smoke.wait_for_extension_ready(context, args.timeout_ms)
+                seed_hidden_elements(context)
                 page = context.new_page()
                 report = build_report(f"{server.base_url}/test-cosmetic-filter.html", page, args.wait_ms)
                 print(json.dumps({

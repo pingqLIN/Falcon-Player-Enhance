@@ -4,6 +4,11 @@
 (function () {
   'use strict';
 
+  if (window.__FalconElementPickerLoaded) {
+    return;
+  }
+  window.__FalconElementPickerLoaded = true;
+
   let isPickerActive = false;
   let highlightedElement = null;
   let overlay = null;
@@ -533,10 +538,6 @@
   window.addEventListener('pagehide', () => {
     deactivatePicker();
   });
-
-  if (!isPickerActive) {
-    activatePicker();
-  }
 
   console.log('🎯 Element Picker 已載入 - Alt+Shift+Z 啟動/停用');
 })();
