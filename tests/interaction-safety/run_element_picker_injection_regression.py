@@ -34,8 +34,19 @@ def collect_metrics(page) -> dict[str, int]:
 
 
 def click_oauth(page) -> None:
-    page.locator("#oauth-google").click(force=True)
+    page.locator("#oauth-google").click()
     page.wait_for_timeout(250)
+
+
+def is_confirm_dialog_visible(page) -> bool:
+    return page.evaluate(
+        """() => {
+            const dialog = document.getElementById('__element_picker_confirm__');
+            if (!dialog) return false;
+            const style = window.getComputedStyle(dialog);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+        }"""
+    )
 
 
 def collect_picker_state(extension_page, target_url: str) -> dict[str, object]:
@@ -130,6 +141,7 @@ def build_report(
     picker_after_injection: dict[str, object],
     picker_after_activation: dict[str, object],
     picker_after_deactivation: dict[str, object],
+    confirm_after_activation: bool,
 ) -> dict[str, object]:
     checks = {
         "injectionKeepsPickerInactive": picker_after_injection.get("pickerActive") is False,
@@ -139,9 +151,15 @@ def build_report(
         "deactivatedPickerRestoresClicks": int(after_deactivation_metrics.get("oauthClicks", 0)) == int(after_activation_metrics.get("oauthClicks", 0)) + 1,
     }
 
+    observations = {
+        "activePickerShowsConfirmDialog": confirm_after_activation is True,
+        "activePickerBlocksPageAction": int(after_activation_metrics.get("oauthClicks", 0)) == int(after_injection_metrics.get("oauthClicks", 0)),
+    }
+
     return {
         "ok": all(checks.values()),
         "checks": checks,
+        "observations": observations,
         "samples": {
             "initialMetrics": initial_metrics,
             "afterInjectionMetrics": after_injection_metrics,
@@ -150,6 +168,7 @@ def build_report(
             "pickerAfterInjection": picker_after_injection,
             "pickerAfterActivation": picker_after_activation,
             "pickerAfterDeactivation": picker_after_deactivation,
+            "confirmAfterActivation": confirm_after_activation,
         },
     }
 
@@ -203,6 +222,7 @@ def main() -> int:
                 page.wait_for_timeout(300)
                 picker_after_activation = collect_picker_state(extension_page, target_url)
                 click_oauth(page)
+                confirm_after_activation = is_confirm_dialog_visible(page)
                 after_activation_metrics = collect_metrics(page)
 
                 deactivate_result = deactivate_picker(extension_page, target_url)
@@ -222,6 +242,7 @@ def main() -> int:
                     picker_after_injection,
                     picker_after_activation,
                     picker_after_deactivation,
+                    confirm_after_activation,
                 )
                 print(json.dumps({
                     "ok": report["ok"],

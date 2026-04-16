@@ -22,6 +22,13 @@
     '0 0 0 2px rgba(88, 166, 255, 0.45), 0 0 20px 8px rgba(88, 166, 255, 0.75), inset 0 0 0 1px rgba(255,255,255,0.55), 0 0 0 200vmax rgba(2, 10, 20, 0.22)';
   const PICKER_AUTO_OFF_MS = 2 * 60 * 1000;
   const PICKER_TARGET_CLASS = '__falcon_picker_target__';
+  const PREFERRED_TEST_ATTRIBUTES = ['data-testid', 'data-test', 'data-qa', 'data-cy'];
+  const GENERIC_CLASS_TOKENS = new Set([
+    'active', 'btn', 'button', 'card', 'cell', 'col', 'column', 'container',
+    'content', 'dialog', 'disabled', 'grid', 'hidden', 'inner', 'item', 'link',
+    'list', 'main', 'modal', 'outer', 'panel', 'primary', 'row', 'section',
+    'selected', 'shell', 'small', 'text', 'title', 'toolbar', 'wrapper'
+  ]);
 
   function clearPickerAutoOffTimer() {
     if (!pickerAutoOffTimer) return;
@@ -102,6 +109,101 @@
     if (!(node instanceof Element)) return false;
     if (node.id?.startsWith('__element_picker_')) return true;
     return node.classList.contains(PICKER_TARGET_CLASS);
+  }
+
+  function getUniqueSelector(selector) {
+    if (!selector) return null;
+    try {
+      return document.querySelectorAll(selector).length === 1 ? selector : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function buildEscapedAttributeSelector(attribute, value) {
+    if (!attribute || !value) return null;
+    return `[${attribute}="${CSS.escape(String(value))}"]`;
+  }
+
+  function isStableClassName(name) {
+    const normalized = String(name || '').trim();
+    if (!normalized) return false;
+    if (normalized.startsWith('__')) return false;
+    if (normalized.length < 3) return false;
+    if (/^\d+$/.test(normalized)) return false;
+    if (/[#:>\[\]()]/.test(normalized)) return false;
+    return !GENERIC_CLASS_TOKENS.has(normalized.toLowerCase());
+  }
+
+  function getPreferredAttributeSelector(element, tagName) {
+    for (const attribute of PREFERRED_TEST_ATTRIBUTES) {
+      const value = element.getAttribute(attribute);
+      if (!value) continue;
+      const selector = `${tagName}${buildEscapedAttributeSelector(attribute, value)}`;
+      const unique = getUniqueSelector(selector);
+      if (unique) return unique;
+    }
+
+    const ariaLabel = element.getAttribute('aria-label');
+    if (ariaLabel && ariaLabel.length <= 80) {
+      const selector = `${tagName}${buildEscapedAttributeSelector('aria-label', ariaLabel)}`;
+      const unique = getUniqueSelector(selector);
+      if (unique) return unique;
+    }
+
+    const name = element.getAttribute('name');
+    if (name && name.length <= 80) {
+      const selector = `${tagName}${buildEscapedAttributeSelector('name', name)}`;
+      const unique = getUniqueSelector(selector);
+      if (unique) return unique;
+    }
+
+    return null;
+  }
+
+  function getClassSelector(element, tagName) {
+    const stableClasses = Array.from(element.classList)
+      .filter(isStableClassName)
+      .slice(0, 3);
+
+    if (stableClasses.length === 0) return null;
+
+    const selector = `${tagName}${stableClasses.map((name) => `.${CSS.escape(name)}`).join('')}`;
+    return getUniqueSelector(selector);
+  }
+
+  function getStructuralSelector(element) {
+    const segments = [];
+    let current = element;
+    let depth = 0;
+
+    while (current && current !== document.body && current !== document.documentElement && depth < 5) {
+      const tagName = current.tagName.toLowerCase();
+      let segment = tagName;
+
+      if (current.id) {
+        segment += `#${CSS.escape(current.id)}`;
+        segments.unshift(segment);
+        return segments.join(' > ');
+      }
+
+      const siblings = current.parentElement
+        ? Array.from(current.parentElement.children).filter((node) => node.tagName === current.tagName)
+        : [];
+      if (siblings.length > 1) {
+        segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+      }
+
+      segments.unshift(segment);
+      const selector = segments.join(' > ');
+      const unique = getUniqueSelector(selector);
+      if (unique) return unique;
+
+      current = current.parentElement;
+      depth += 1;
+    }
+
+    return segments.join(' > ') || element.tagName.toLowerCase();
   }
 
   function resolveTarget(event) {
@@ -218,36 +320,23 @@
       return null;
     }
 
+    const tagName = element.tagName.toLowerCase();
+
     if (element.id) {
       return `#${CSS.escape(element.id)}`;
     }
 
-    if (element.classList.length > 0) {
-      const classes = Array.from(element.classList)
-        .filter((name) => !name.startsWith('__'))
-        .slice(0, 3)
-        .map((name) => `.${CSS.escape(name)}`)
-        .join('');
-
-      if (classes) {
-        const selector = `${element.tagName.toLowerCase()}${classes}`;
-        if (document.querySelectorAll(selector).length === 1) {
-          return selector;
-        }
-      }
+    const attributeSelector = getPreferredAttributeSelector(element, tagName);
+    if (attributeSelector) {
+      return attributeSelector;
     }
 
-    const parent = element.parentElement;
-    if (parent) {
-      const siblings = Array.from(parent.children);
-      const index = siblings.indexOf(element) + 1;
-      const parentSelector = generateSelector(parent);
-      if (parentSelector) {
-        return `${parentSelector} > ${element.tagName.toLowerCase()}:nth-child(${index})`;
-      }
+    const classSelector = getClassSelector(element, tagName);
+    if (classSelector) {
+      return classSelector;
     }
 
-    return element.tagName.toLowerCase();
+    return getStructuralSelector(element);
   }
 
   function updateHighlight(element) {
