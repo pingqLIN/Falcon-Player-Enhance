@@ -12,6 +12,7 @@
   let isPickerActive = false;
   let highlightedElement = null;
   let overlay = null;
+  let interactionShield = null;
   let tooltip = null;
   let confirmDialog = null;
   let pickerAutoOffTimer = null;
@@ -84,6 +85,12 @@
     if (overlay?.isConnected) return overlay;
     createOverlay();
     return overlay;
+  }
+
+  function ensureInteractionShield() {
+    if (interactionShield?.isConnected) return interactionShield;
+    createInteractionShield();
+    return interactionShield;
   }
 
   function ensureTooltip() {
@@ -261,6 +268,31 @@
     getPickerParent().appendChild(overlay);
   }
 
+  function createInteractionShield() {
+    interactionShield = document.createElement('div');
+    interactionShield.id = '__element_picker_interaction_shield__';
+    interactionShield.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483645;
+      background: transparent;
+      cursor: crosshair;
+      display: none;
+      touch-action: none;
+    `;
+
+    interactionShield.addEventListener('mousemove', onShieldMouseMove, true);
+    interactionShield.addEventListener('pointerdown', onShieldPointerDown, true);
+    interactionShield.addEventListener('pointerup', onShieldPointerUp, true);
+    interactionShield.addEventListener('click', onShieldClick, true);
+    interactionShield.addEventListener('contextmenu', onShieldContextMenu, true);
+    interactionShield.addEventListener('touchstart', onShieldTouchMove, true);
+    interactionShield.addEventListener('touchmove', onShieldTouchMove, true);
+    interactionShield.addEventListener('touchend', onShieldTouchEnd, true);
+
+    getPickerParent().appendChild(interactionShield);
+  }
+
   function createTooltip() {
     tooltip = document.createElement('div');
     tooltip.id = '__element_picker_tooltip__';
@@ -337,6 +369,37 @@
     }
 
     return getStructuralSelector(element);
+  }
+
+  function getPointFromEvent(event) {
+    if (typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+      return { clientX: event.clientX, clientY: event.clientY };
+    }
+
+    const touch = event.touches?.[0] || event.changedTouches?.[0];
+    if (touch) {
+      return { clientX: touch.clientX, clientY: touch.clientY };
+    }
+
+    return null;
+  }
+
+  function resolveTargetAtPoint(clientX, clientY) {
+    if (typeof clientX !== 'number' || typeof clientY !== 'number') return null;
+
+    if (typeof document.elementsFromPoint === 'function') {
+      const stack = document.elementsFromPoint(clientX, clientY);
+      const candidate = stack.find((node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        if (node === document.body || node === document.documentElement) return false;
+        if (isPickerNode(node)) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.width >= 12 && rect.height >= 12;
+      });
+      if (candidate) return candidate;
+    }
+
+    return null;
   }
 
   function updateHighlight(element) {
@@ -470,34 +533,47 @@
     updateTooltip(target, event);
   }
 
-  function onPointerGuard(event) {
+  function onShieldMouseMove(event) {
     if (!isPickerActive) return;
-    if (event.target?.closest?.('#__element_picker_confirm__')) return;
-    if (isPickerNode(event.target)) return;
+    onMouseMove(event);
+  }
 
+  function onShieldPointerDown(event) {
+    if (!isPickerActive) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
   }
 
-  function onClick(event) {
+  function onShieldPointerUp(event) {
+    if (!isPickerActive) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  function onShieldClick(event) {
     if (!isPickerActive) return;
 
     if (event.button !== 0) return;
-    if (isPickerNode(event.target)) return;
-    if (event.target?.closest?.('#__element_picker_confirm__')) return;
 
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const target = highlightedElement;
+    const point = getPointFromEvent(event);
+    const target =
+      point
+        ? resolveTargetAtPoint(point.clientX, point.clientY)
+        : highlightedElement;
     if (!target || isPickerNode(target)) return;
 
+    updateHighlight(target);
+    updateTooltip(target, event);
     showConfirmDialog(target);
   }
 
-  function onContextMenu(event) {
+  function onShieldContextMenu(event) {
     if (!isPickerActive) return;
 
     event.preventDefault();
@@ -506,6 +582,48 @@
 
     hideConfirmDialog();
     deactivatePicker();
+  }
+
+  function onShieldTouchMove(event) {
+    if (!isPickerActive) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const point = getPointFromEvent(event);
+    if (!point) return;
+
+    const target = resolveTargetAtPoint(point.clientX, point.clientY);
+    if (!target) {
+      hideHighlight();
+      return;
+    }
+
+    if (target !== highlightedElement) {
+      updateHighlight(target);
+    }
+
+    updateTooltip(target, point);
+  }
+
+  function onShieldTouchEnd(event) {
+    if (!isPickerActive) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const point = getPointFromEvent(event);
+    const target =
+      point
+        ? resolveTargetAtPoint(point.clientX, point.clientY)
+        : highlightedElement;
+    if (!target || isPickerNode(target)) return;
+
+    updateHighlight(target);
+    updateTooltip(target, point);
+    showConfirmDialog(target);
   }
 
   function onKeyDown(event) {
@@ -521,21 +639,12 @@
 
     isPickerActive = true;
 
+    ensureInteractionShield();
     ensureOverlay();
     ensureTooltip();
     ensureConfirmDialog();
 
-    document.addEventListener('mousemove', onMouseMove, true);
-    document.addEventListener('mousedown', onPointerGuard, true);
-    document.addEventListener('mouseup', onPointerGuard, true);
-    document.addEventListener('pointerdown', onPointerGuard, true);
-    document.addEventListener('pointerup', onPointerGuard, true);
-    document.addEventListener('auxclick', onPointerGuard, true);
-    document.addEventListener('dragstart', onPointerGuard, true);
-    document.addEventListener('touchstart', onPointerGuard, true);
-    document.addEventListener('touchend', onPointerGuard, true);
-    document.addEventListener('click', onClick, true);
-    document.addEventListener('contextmenu', onContextMenu, true);
+    interactionShield.style.display = 'block';
     document.addEventListener('keydown', onKeyDown, true);
 
     setPickerCursor('crosshair');
@@ -549,17 +658,9 @@
 
     isPickerActive = false;
 
-    document.removeEventListener('mousemove', onMouseMove, true);
-    document.removeEventListener('mousedown', onPointerGuard, true);
-    document.removeEventListener('mouseup', onPointerGuard, true);
-    document.removeEventListener('pointerdown', onPointerGuard, true);
-    document.removeEventListener('pointerup', onPointerGuard, true);
-    document.removeEventListener('auxclick', onPointerGuard, true);
-    document.removeEventListener('dragstart', onPointerGuard, true);
-    document.removeEventListener('touchstart', onPointerGuard, true);
-    document.removeEventListener('touchend', onPointerGuard, true);
-    document.removeEventListener('click', onClick, true);
-    document.removeEventListener('contextmenu', onContextMenu, true);
+    if (interactionShield) {
+      interactionShield.style.display = 'none';
+    }
     document.removeEventListener('keydown', onKeyDown, true);
 
     setPickerCursor('');

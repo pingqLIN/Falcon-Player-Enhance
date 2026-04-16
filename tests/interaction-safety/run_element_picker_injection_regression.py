@@ -38,6 +38,15 @@ def click_oauth(page) -> None:
     page.wait_for_timeout(250)
 
 
+def click_oauth_at_position(page) -> None:
+    button = page.locator("#oauth-google")
+    box = button.bounding_box()
+    if not box:
+        raise RuntimeError("oauth_button_box_missing")
+    page.mouse.click(box["x"] + (box["width"] / 2), box["y"] + (box["height"] / 2))
+    page.wait_for_timeout(250)
+
+
 def is_confirm_dialog_visible(page) -> bool:
     return page.evaluate(
         """() => {
@@ -147,19 +156,15 @@ def build_report(
         "injectionKeepsPickerInactive": picker_after_injection.get("pickerActive") is False,
         "injectionDoesNotBlockClicks": int(after_injection_metrics.get("oauthClicks", 0)) == int(initial_metrics.get("oauthClicks", 0)) + 1,
         "backgroundActivationTurnsPickerOn": picker_after_activation.get("pickerActive") is True,
-        "deactivateTurnsPickerOff": picker_after_deactivation.get("pickerActive") is False,
-        "deactivatedPickerRestoresClicks": int(after_deactivation_metrics.get("oauthClicks", 0)) == int(after_activation_metrics.get("oauthClicks", 0)) + 1,
-    }
-
-    observations = {
         "activePickerShowsConfirmDialog": confirm_after_activation is True,
         "activePickerBlocksPageAction": int(after_activation_metrics.get("oauthClicks", 0)) == int(after_injection_metrics.get("oauthClicks", 0)),
+        "deactivateTurnsPickerOff": picker_after_deactivation.get("pickerActive") is False,
+        "deactivatedPickerRestoresClicks": int(after_deactivation_metrics.get("oauthClicks", 0)) == int(after_activation_metrics.get("oauthClicks", 0)) + 1,
     }
 
     return {
         "ok": all(checks.values()),
         "checks": checks,
-        "observations": observations,
         "samples": {
             "initialMetrics": initial_metrics,
             "afterInjectionMetrics": after_injection_metrics,
@@ -221,7 +226,7 @@ def main() -> int:
 
                 page.wait_for_timeout(300)
                 picker_after_activation = collect_picker_state(extension_page, target_url)
-                click_oauth(page)
+                click_oauth_at_position(page)
                 confirm_after_activation = is_confirm_dialog_visible(page)
                 after_activation_metrics = collect_metrics(page)
 
