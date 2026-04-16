@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Managed External Navigation Guard</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 320px)); gap: 16px; }
+    a, button { display: inline-flex; align-items: center; justify-content: center; min-height: 56px; }
+    .thumb-link { display: block; width: 240px; border: 1px solid #999; text-decoration: none; color: inherit; }
+    .thumb { width: 240px; height: 140px; background: linear-gradient(135deg, #444, #999); }
+    .label { padding: 8px 10px; font-size: 14px; }
+    button { width: 240px; }
+  </style>
+</head>
+<body>
+  <h1>Managed External Navigation Guard</h1>
+  <p id="status">ready</p>
+  <div class="grid">
+    <a id="same-site-image-link" class="thumb-link" href="/tests/test-managed-external-nav-same-site.html">
+      <div class="thumb" aria-hidden="true"></div>
+      <span class="label">Same-site related card</span>
+    </a>
+    <a id="external-image-link" class="thumb-link" href="#">
+      <div class="thumb" aria-hidden="true"></div>
+      <span class="label"></span>
+    </a>
+    <a id="external-text-link" href="#">External source article</a>
+    <button id="external-window-open-self" type="button">window.open _self</button>
+    <button id="external-location-assign" type="button">location.assign external</button>
+  </div>
+
+  <script>
+    const status = document.getElementById('status');
+    const externalUrl = new URL('/tests/test-managed-external-nav-external.html', window.location.href);
+    externalUrl.hostname = 'external-redirect.test';
+
+    const externalImageLink = document.getElementById('external-image-link');
+    const externalTextLink = document.getElementById('external-text-link');
+    externalImageLink.href = externalUrl.toString();
+    externalTextLink.href = externalUrl.toString();
+
+    document.getElementById('external-window-open-self').addEventListener('click', () => {
+      status.textContent = 'window-open-self-clicked';
+      window.open(externalUrl.toString(), '_self');
+    });
+
+    document.getElementById('external-location-assign').addEventListener('click', () => {
+      status.textContent = 'location-assign-clicked';
+      window.location.assign(externalUrl.toString());
+    });
+  </script>
+</body>
+</html>

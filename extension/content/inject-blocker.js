@@ -61,6 +61,7 @@ const DEFAULT_COMPATIBILITY_MODE_SITES = [
     'boyfriendtv.com'
 ];
 let compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
+let popupDirectIframeHosts = [];
 const DEFAULT_KNOWN_OVERLAY_SELECTORS = [
     '.cvpboxOverlay', '.cvpcolorbox', '#cvpboxOverlay', '#cvpcolorbox',
     '[class*="cvpbox"]', '[id*="cvpbox"]',
@@ -447,18 +448,202 @@ function reportOverlayStats(removed = 1) {
 const originalOpen = window.open;
 
 let lastUserInteractionTime = 0;
+let lastUserInteractionContext = {
+    ts: 0,
+    fromLink: false,
+    imageLike: false,
+    lowIntent: false,
+    href: '',
+    target: ''
+};
 const USER_INTERACTION_GRACE_PERIOD = 300;
+
+function normalizeInteractionText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function buildInteractionSignature(target, link) {
+    const parts = [];
+    if (target) {
+        parts.push(target.tagName || '');
+        parts.push(target.className || '');
+        parts.push(target.id || '');
+        parts.push(target.getAttribute?.('role') || '');
+    }
+    if (link) {
+        parts.push(link.className || '');
+        parts.push(link.id || '');
+        parts.push(link.getAttribute?.('rel') || '');
+    }
+    return parts.join(' ').toLowerCase();
+}
+
+function isImageLikeInteractionTarget(target, link) {
+    const imageLikeNode = target?.closest?.('img, picture, figure, svg, [data-thumbnail], [data-poster], [data-preview], [class*="thumb"], [class*="poster"], [class*="preview"], [class*="cover"]');
+    if (imageLikeNode) return true;
+    if (!link) return false;
+    if (link.querySelector?.('img, picture, figure, svg, [data-thumbnail], [data-poster], [data-preview], [class*="thumb"], [class*="poster"], [class*="preview"], [class*="cover"]')) {
+        return true;
+    }
+    const signature = buildInteractionSignature(target, link);
+    return /thumb|thumbnail|poster|preview|cover|card|tile|banner|sponsor|promo/.test(signature);
+}
+
+function getNavigationInteractionContext(target) {
+    const link = target?.closest?.('a[href]') || null;
+    const text = normalizeInteractionText(link?.textContent || target?.textContent || '');
+    const href = link?.getAttribute?.('href') || link?.href || '';
+    const targetAttr = link?.target || '';
+    const imageLike = isImageLikeInteractionTarget(target, link);
+    const lowIntent = text.length < 24;
+
+    return {
+        ts: Date.now(),
+        fromLink: Boolean(link),
+        imageLike,
+        lowIntent: text.length < 8,
+        href,
+        target: targetAttr
+    };
+}
+
+function shouldTrackPotentialExternalNavigation(interaction = {}) {
+    if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    return interaction.fromLink !== true || interaction.imageLike === true || interaction.lowIntent === true;
+}
+
+function notifyPotentialExternalNavigationTrap(interaction = {}) {
+    if (!shouldTrackPotentialExternalNavigation(interaction)) return;
+    try {
+        window.postMessage({
+            type: '__SHIELD_POTENTIAL_EXTERNAL_NAV_TRAP__',
+            payload: {
+                pageUrl: window.location.href,
+                interaction: {
+                    fromLink: interaction.fromLink === true,
+                    imageLike: interaction.imageLike === true,
+                    lowIntent: interaction.lowIntent === true,
+                    href: String(interaction.href || '').slice(0, 300),
+                    target: String(interaction.target || '').slice(0, 64)
+                }
+            }
+        }, '*');
+    } catch (e) {}
+}
 
 ['click', 'keydown', 'touchend', 'mousedown'].forEach(eventType => {
     document.addEventListener(eventType, (e) => {
         if (e.isTrusted) {
             lastUserInteractionTime = Date.now();
+            if (eventType !== 'keydown') {
+                lastUserInteractionContext = getNavigationInteractionContext(e.target);
+                if (eventType === 'click' || eventType === 'touchend') {
+                    notifyPotentialExternalNavigationTrap(lastUserInteractionContext);
+                }
+            }
         }
     }, true);
 });
 
 function isUserTriggered() {
     return (Date.now() - lastUserInteractionTime) < USER_INTERACTION_GRACE_PERIOD;
+}
+
+function isTopFrameWindow() {
+    try {
+        return window.self === window.top;
+    } catch (e) {
+        return false;
+    }
+}
+
+function getNavigationTargetInfo(url) {
+    if (!url) return null;
+    try {
+        const urlText = String(url);
+        if (urlText.startsWith('chrome-extension://') || urlText.startsWith('moz-extension://')) {
+            return {
+                url: null,
+                normalizedUrl: urlText,
+                hostname: '',
+                internal: true
+            };
+        }
+        const parsed = new URL(url, window.location.origin);
+        return {
+            url: parsed,
+            normalizedUrl: parsed.href,
+            hostname: String(parsed.hostname || '').toLowerCase(),
+            internal: false
+        };
+    } catch {
+        return null;
+    }
+}
+
+function isApprovedExternalNavigationHost(hostname) {
+    const host = String(hostname || '').toLowerCase();
+    if (!host) return false;
+    const currentHost = String(window.location.hostname || '').toLowerCase();
+    if (isDomainOrSubdomain(host, currentHost) || isDomainOrSubdomain(currentHost, host)) {
+        return true;
+    }
+    return popupDirectIframeHosts.some((domain) => isDomainOrSubdomain(host, domain));
+}
+
+function getRecentInteractionContext() {
+    if ((Date.now() - Number(lastUserInteractionContext.ts || 0)) >= USER_INTERACTION_GRACE_PERIOD) {
+        return {
+            ts: 0,
+            fromLink: false,
+            imageLike: false,
+            lowIntent: false,
+            href: '',
+            target: ''
+        };
+    }
+    return lastUserInteractionContext;
+}
+
+function shouldBlockManagedExternalNavigation(url, options = {}) {
+    if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+
+    const info = getNavigationTargetInfo(url);
+    if (!info || info.internal) return false;
+    if (!info.hostname || isApprovedExternalNavigationHost(info.hostname)) return false;
+
+    const recent = getRecentInteractionContext();
+    const fromLink = options.fromLink === true || recent.fromLink === true;
+    const imageLike = options.imageLike === true || recent.imageLike === true;
+    const lowIntent = options.lowIntent === true || recent.lowIntent === true;
+    const userTriggered = options.userTriggered === true || isUserTriggered();
+
+    if (!userTriggered) {
+        return true;
+    }
+
+    if (isBlockedUrl(info.normalizedUrl)) {
+        return true;
+    }
+
+    if (isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) {
+        return true;
+    }
+
+    if (options.navigationKind === 'anchor_click') {
+        return imageLike || lowIntent;
+    }
+
+    return !fromLink || imageLike || lowIntent;
+}
+
+function shouldBlockManagedRedirectListener(interaction = {}) {
+    if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return true;
+    return interaction.fromLink !== true || interaction.imageLike === true || interaction.lowIntent === true;
 }
 
 function isSafeUrl(url) {
@@ -470,6 +655,7 @@ function isSafeUrl(url) {
         }
         const targetUrl = new URL(url, window.location.origin);
         if (targetUrl.origin === window.location.origin) return true;
+        if (isPlayerSite() && isApprovedExternalNavigationHost(targetUrl.hostname)) return true;
         return !isBlockedUrl(url);
     } catch {
         return false;
@@ -576,6 +762,8 @@ function createFakeWindow() {
 
 const blockedOpen = function(url, target, features) {
     const urlStr = url ? String(url) : '';
+    const normalizedTarget = String(target || '').toLowerCase();
+    const sameTabTarget = normalizedTarget === '' || normalizedTarget === '_self' || normalizedTarget === '_top' || normalizedTarget === '_parent';
 
     // 相容模式：保留站點原生開窗流程，避免播放器初始化失敗
     if (isCompatibilityModeSite()) {
@@ -585,6 +773,18 @@ const blockedOpen = function(url, target, features) {
     // L0/L1: 不做進階彈窗攔截，保留基礎播放器功能
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) {
         return originalOpen.call(window, url, target, features);
+    }
+
+    if (sameTabTarget && shouldBlockManagedExternalNavigation(url, {
+        navigationKind: 'window_open_same_tab'
+    })) {
+        warn('已阻擋 managed player 外站同頁導流:', urlStr.substring(0, 80));
+        emitAiEvent('blocked_malicious_navigation', {
+            severity: 1.35,
+            confidence: 0.9,
+            detail: { reason: 'managed_external_same_tab_window_open', url: urlStr.substring(0, 300) }
+        });
+        return createFakeWindow();
     }
     
     // 隱蔽模式：對播放器網站只攔截確定的惡意 URL
@@ -783,6 +983,20 @@ HTMLFormElement.prototype.submit = function() {
 function shouldBlockLocationNavigation(url, reason) {
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
 
+    if (shouldBlockManagedExternalNavigation(url, {
+        navigationKind: reason,
+        userTriggered: isUserTriggered()
+    })) {
+        const urlText = String(url || '').substring(0, 300);
+        warn(`已阻擋 managed player 外站導流 ${reason}:`, urlText.substring(0, 80));
+        emitAiEvent('blocked_malicious_navigation', {
+            severity: 1.35,
+            confidence: 0.9,
+            detail: { reason: `managed_external_navigation_${reason}`, url: urlText }
+        });
+        return true;
+    }
+
     const normalizedUrl = String(url || '').trim().toLowerCase();
     // about:blank guard: only for top-level frames to avoid breaking iframe-based players
     let isTopFrame = false;
@@ -895,13 +1109,35 @@ function neutralizeMetaRefresh() {
 }
 
 document.addEventListener('click', function(e) {
-    if (!isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return;
     const target = e.target;
     if (!target || !target.closest) return;
     if (isInternalElement(target)) return;
     const link = target.closest('a[href]');
     if (!link) return;
     const href = link.getAttribute('href') || link.href || '';
+    const interaction = getNavigationInteractionContext(target);
+
+    if (shouldBlockManagedExternalNavigation(href, {
+        navigationKind: 'anchor_click',
+        fromLink: interaction.fromLink,
+        imageLike: interaction.imageLike,
+        lowIntent: interaction.lowIntent,
+        userTriggered: true
+    })) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        emitAiEvent('blocked_malicious_navigation', {
+            severity: 1.3,
+            confidence: 0.88,
+            detail: { reason: 'managed_external_anchor_click', href: href.substring(0, 300) }
+        });
+        warn('已阻擋 managed player 外站連結導流:', href.substring(0, 80));
+        return false;
+    }
+
+    if (!isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return;
     if (!href || !isDangerousNavigationUrl(href)) return;
 
     e.preventDefault();
@@ -1337,7 +1573,7 @@ EventTarget.prototype.addEventListener = function(type, listener, options) {
         // 只攔截明顯的彈窗行為；L3 追加常見導流語法
         const hasPopupBehavior = listenerStr.includes('window.open') ||
                                   listenerStr.includes("['open']");
-        const hasRedirectBehavior = isLevelAtLeast(BLOCKING_LEVEL.HARDENED) && (
+        const hasRedirectBehavior = (
             listenerStr.includes('location.href') ||
             listenerStr.includes('window.location') ||
             listenerStr.includes('location.assign') ||
@@ -1348,8 +1584,21 @@ EventTarget.prototype.addEventListener = function(type, listener, options) {
             // 替換為安全版本，但仍允許用戶觸發時執行
             const originalListener = listener;
             const safeListener = function(e) {
+                const interaction = getNavigationInteractionContext(e?.target);
                 // 用戶觸發的正常點擊 -> 執行原函數
                 if (e.isTrusted && isUserTriggered() && !isClickjackingLayer(e.target)) {
+                    if (hasRedirectBehavior && shouldBlockManagedRedirectListener(interaction)) {
+                        warn('已阻擋 managed player listener 導流');
+                        emitAiEvent('blocked_malicious_navigation', {
+                            severity: 1.32,
+                            confidence: 0.86,
+                            detail: { reason: 'managed_external_listener_redirect' }
+                        });
+                        e.preventDefault?.();
+                        e.stopPropagation?.();
+                        e.stopImmediatePropagation?.();
+                        return false;
+                    }
                     return originalListener.call(this, e);
                 }
                 // 非用戶觸發或覆蓋層 -> 阻擋
@@ -1511,7 +1760,8 @@ function requestSiteProfiles() {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
         siteProfilesLoadPromise = Promise.resolve({
             compatibilityModeSites,
-            knownOverlaySelectors
+            knownOverlaySelectors,
+            popupDirectIframeHosts
         });
         return siteProfilesLoadPromise;
     }
@@ -1523,32 +1773,39 @@ function requestSiteProfiles() {
                 if (runtimeFailed) {
                     compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
                     knownOverlaySelectors = DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+                    popupDirectIframeHosts = [];
                     resolve({
                         compatibilityModeSites,
-                        knownOverlaySelectors
+                        knownOverlaySelectors,
+                        popupDirectIframeHosts
                     });
                     return;
                 }
 
                 const configuredDomains = normalizeDomainList(response?.profiles?.compatibilityModeSites);
                 const configuredSelectors = normalizeSelectorList(response?.profiles?.injectBlocker?.knownOverlaySelectors);
+                const configuredPopupHosts = normalizeDomainList(response?.profiles?.popupDirectIframeHosts);
                 compatibilityModeSites = configuredDomains.length > 0
                     ? configuredDomains
                     : DEFAULT_COMPATIBILITY_MODE_SITES.slice();
                 knownOverlaySelectors = configuredSelectors.length > 0
                     ? configuredSelectors
                     : DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+                popupDirectIframeHosts = configuredPopupHosts;
                 resolve({
                     compatibilityModeSites,
-                    knownOverlaySelectors
+                    knownOverlaySelectors,
+                    popupDirectIframeHosts
                 });
             });
         } catch (_) {
             compatibilityModeSites = DEFAULT_COMPATIBILITY_MODE_SITES.slice();
             knownOverlaySelectors = DEFAULT_KNOWN_OVERLAY_SELECTORS.slice();
+            popupDirectIframeHosts = [];
             resolve({
                 compatibilityModeSites,
-                knownOverlaySelectors
+                knownOverlaySelectors,
+                popupDirectIframeHosts
             });
         }
     });

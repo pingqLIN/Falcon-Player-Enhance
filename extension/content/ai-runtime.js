@@ -421,6 +421,19 @@
     if (event.source !== window) return;
 
     const data = event.data;
+    if (data?.type === '__SHIELD_POTENTIAL_EXTERNAL_NAV_TRAP__' && data.payload) {
+      try {
+        chrome.runtime.sendMessage({
+          action: 'recordPotentialExternalNavigationTrap',
+          pageUrl: String(data.payload.pageUrl || window.location.href),
+          interaction: data.payload.interaction || {}
+        }).catch(() => {});
+      } catch (_) {
+        // no-op
+      }
+      return;
+    }
+
     if (!data || data.type !== '__SHIELD_AI_EVENT__' || !data.payload) return;
 
     const payload = data.payload;
