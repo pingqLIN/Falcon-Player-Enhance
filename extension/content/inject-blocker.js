@@ -458,6 +458,8 @@ let lastUserInteractionContext = {
     target: ''
 };
 const USER_INTERACTION_GRACE_PERIOD = 300;
+const LOW_INTENT_TEXT_LENGTH = 8;
+const IMAGE_LIKE_SIGNATURE_PATTERN = /thumb|thumbnail|poster|preview|cover/;
 
 function normalizeInteractionText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
@@ -487,7 +489,7 @@ function isImageLikeInteractionTarget(target, link) {
         return true;
     }
     const signature = buildInteractionSignature(target, link);
-    return /thumb|thumbnail|poster|preview|cover|card|tile|banner|sponsor|promo/.test(signature);
+    return IMAGE_LIKE_SIGNATURE_PATTERN.test(signature);
 }
 
 function getNavigationInteractionContext(target) {
@@ -496,13 +498,13 @@ function getNavigationInteractionContext(target) {
     const href = link?.getAttribute?.('href') || link?.href || '';
     const targetAttr = link?.target || '';
     const imageLike = isImageLikeInteractionTarget(target, link);
-    const lowIntent = text.length < 24;
+    const lowIntent = text.length < LOW_INTENT_TEXT_LENGTH;
 
     return {
         ts: Date.now(),
         fromLink: Boolean(link),
         imageLike,
-        lowIntent: text.length < 8,
+        lowIntent,
         href,
         target: targetAttr
     };
@@ -642,11 +644,10 @@ function shouldBlockManagedExternalNavigation(url, options = {}) {
     return !fromLink || imageLike || lowIntent;
 }
 
-function shouldBlockManagedRedirectListener(interaction = {}) {
+function shouldFlagManagedRedirectListener(interaction = {}) {
     if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
     if (sameTabRedirectGuardEnabled !== true) return false;
-    if (isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return true;
     return interaction.fromLink !== true || interaction.imageLike === true || interaction.lowIntent === true;
 }
 
@@ -1595,17 +1596,12 @@ EventTarget.prototype.addEventListener = function(type, listener, options) {
                 const interaction = getNavigationInteractionContext(e?.target);
                 // 用戶觸發的正常點擊 -> 執行原函數
                 if (e.isTrusted && isUserTriggered() && !isClickjackingLayer(e.target)) {
-                    if (hasRedirectBehavior && shouldBlockManagedRedirectListener(interaction)) {
-                        warn('已阻擋 managed player listener 導流');
-                        emitAiEvent('blocked_malicious_navigation', {
-                            severity: 1.32,
-                            confidence: 0.86,
-                            detail: { reason: 'managed_external_listener_redirect' }
+                    if (hasRedirectBehavior && shouldFlagManagedRedirectListener(interaction)) {
+                        emitAiEvent('managed_redirect_listener_candidate', {
+                            severity: 0.45,
+                            confidence: 0.72,
+                            detail: { reason: 'managed_external_listener_redirect_candidate' }
                         });
-                        e.preventDefault?.();
-                        e.stopPropagation?.();
-                        e.stopImmediatePropagation?.();
-                        return false;
                     }
                     return originalListener.call(this, e);
                 }

@@ -26,6 +26,7 @@
       <span class="label"></span>
     </a>
     <a id="external-text-link" href="#">External source article</a>
+    <a id="external-card-text-link" class="article-card" href="#">External research article</a>
     <button id="external-window-open-self" type="button">window.open _self</button>
     <button id="external-location-assign" type="button">location.assign external</button>
   </div>
@@ -37,8 +38,10 @@
 
     const externalImageLink = document.getElementById('external-image-link');
     const externalTextLink = document.getElementById('external-text-link');
+    const externalCardTextLink = document.getElementById('external-card-text-link');
     externalImageLink.href = externalUrl.toString();
     externalTextLink.href = externalUrl.toString();
+    externalCardTextLink.href = externalUrl.toString();
 
     document.getElementById('external-window-open-self').addEventListener('click', () => {
       status.textContent = 'window-open-self-clicked';

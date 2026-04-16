@@ -23,9 +23,6 @@
     'magsrv',
     'clickadu',
     'adsterra',
-    'doubleclick',
-    'casino',
-    'bet',
     'trackingclick'
   ];
 

@@ -99,6 +99,11 @@ def main() -> int:
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
+                external_card_text_url = click_and_wait(page, "#external-card-text-link", args.wait_ms)
+                external_card_text_allowed = external_card_text_url == external_target
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
                 external_image_url = click_and_wait(page, "#external-image-link", args.wait_ms)
                 external_image_blocked = external_image_url == start_url
 
@@ -127,6 +132,7 @@ def main() -> int:
                     "ok": all([
                         same_site_allowed,
                         external_text_allowed,
+                        external_card_text_allowed,
                         external_image_blocked,
                         open_self_blocked,
                         assign_blocked,
@@ -135,6 +141,7 @@ def main() -> int:
                     "checks": {
                         "sameSiteImageAllowed": same_site_allowed,
                         "externalTextAllowed": external_text_allowed,
+                        "externalCardTextAllowed": external_card_text_allowed,
                         "externalImageBlocked": external_image_blocked,
                         "windowOpenSelfBlocked": open_self_blocked,
                         "locationAssignBlocked": assign_blocked,
@@ -144,6 +151,7 @@ def main() -> int:
                         "startUrl": start_url,
                         "sameSiteUrl": same_site_url,
                         "externalTextUrl": external_text_url,
+                        "externalCardTextUrl": external_card_text_url,
                         "externalImageUrl": external_image_url,
                         "windowOpenSelfUrl": open_self_url,
                         "locationAssignUrl": assign_url,
