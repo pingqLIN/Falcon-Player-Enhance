@@ -44,9 +44,15 @@ This helper audits the parent Falcon extension repo by default. It does not own 
 - the captured host evidence shows `WindowsSandboxRemoteSession.exe` crashes immediately
 - the latest captured .NET runtime error is:
   - missing assembly `WinRT.Runtime, Version=2.2.0.0`
+- further inspection shows the assembly file exists inside the Sandbox package, so the blocker is now treated as host runtime / component-store corruption, not a missing project file
+- `DISM /RestoreHealth` was attempted and failed with `0x800f0915`, which means a repair source is still required
 - practical consequence:
   - `Windows Sandbox` is not yet a usable execution path on this machine
   - the production testing path remains the disposable host browser profile
+
+See the host repair runbook:
+
+- [WINDOWS_SANDBOX_HOST_REPAIR.zh-TW.md](Q:\Projects\Falcon-Player-Enhance\projects\falcon-safe-audit\docs\WINDOWS_SANDBOX_HOST_REPAIR.zh-TW.md)
 
 ## Startup
 

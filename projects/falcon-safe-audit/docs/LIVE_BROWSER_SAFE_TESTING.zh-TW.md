@@ -108,6 +108,26 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 `
 
 代表目前問題不在本專案的 guest script，也不在 `browser_judge.py`，而是在這台機器的 Windows Sandbox host runtime。
 
+後續更進一步確認：
+
+- Sandbox 套件目錄內其實有 `WinRT.Runtime.dll`
+- 該 DLL 的 assembly version 也是 `2.2.0.0`
+- 因此目前阻塞已收斂為：
+  - host component store / package load chain 損壞
+
+另外本輪嘗試過：
+
+- `DISM /Online /Cleanup-Image /RestoreHealth`
+
+結果：
+
+- 失敗碼 `0x800f0915`
+- 需要改用 `/Source`
+
+修復細節與下一步請看：
+
+- [WINDOWS_SANDBOX_HOST_REPAIR.zh-TW.md](Q:\Projects\Falcon-Player-Enhance\projects\falcon-safe-audit\docs\WINDOWS_SANDBOX_HOST_REPAIR.zh-TW.md)
+
 ## 判讀原則
 
 - 若結果落到 `security interstitial`，先視為環境阻擋，不直接歸咎於 extension heuristics
