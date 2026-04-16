@@ -196,10 +196,10 @@ target 檔已建立，但還沒有針對這 5 個樣本跑出第一份固定報�
 
 | 檔案 | 語言 | 說明 |
 |------|------|------|
-| `docs/PROJECT_REVIEW_REPORT.md` | English | 策略/安全/架構/AI 整合審查 |
-| `docs/PROJECT_REVIEW_REPORT.zh-TW.md` | 繁體中文 | 同上（中文版） |
-| `docs/DESIGN_REVIEW.md` | English | UI/UX 設計 7-Pass 審查 |
-| `docs/DESIGN_REVIEW.zh-TW.md` | 繁體中文 | 同上（中文版） |
+| `docs/PROJECT_REVIEW_REPORT.md` | English | 歷史策略/安全/架構/AI 整合審查快照 |
+| `docs/PROJECT_REVIEW_REPORT.zh-TW.md` | 繁體中文 | 同上（中文版，歷史快照） |
+| `docs/DESIGN_REVIEW.md` | English | 歷史 UI/UX 設計 7-Pass 審查 |
+| `docs/DESIGN_REVIEW.zh-TW.md` | 繁體中文 | 同上（中文版，歷史快照） |
 
 ### 7.1 已在本輪前確認修復的問題
 
