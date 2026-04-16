@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnAbB = document.getElementById('btn-ab-b');
     const shortcutsReference = document.getElementById('shortcuts-reference');
     const whitelistEnhanceOnlyToggle = document.getElementById('whitelist-enhance-only-toggle');
+    const popupGuardToggle = document.getElementById('popup-guard-toggle');
+    const sameTabRedirectGuardToggle = document.getElementById('same-tab-redirect-guard-toggle');
     const aiMonitorToggle = document.getElementById('ai-monitor-toggle');
     const aiMonitorPanel = document.getElementById('ai-monitor-panel');
     const aiRiskTier = document.getElementById('ai-risk-tier');
@@ -354,6 +356,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'blockingLevel',
             'lastActiveBlockingLevel',
             'whitelistEnhanceOnly',
+            'popupGuardEnabled',
+            'sameTabRedirectGuardEnabled',
             POPUP_AI_MONITOR_VISIBILITY_KEY
         ]);
         const levelResponse = await runtimeMessage({ action: 'getBlockingLevel' });
@@ -382,6 +386,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whitelistEnhanceOnlyToggle) {
             whitelistEnhanceOnlyToggle.checked = whitelistEnhanceOnly;
             updateWhitelistEnhanceOnlyLabel(whitelistEnhanceOnly);
+        }
+        if (popupGuardToggle) {
+            popupGuardToggle.checked = levelResponse?.success
+                ? levelResponse.popupGuardEnabled !== false
+                : result.popupGuardEnabled !== false;
+        }
+        if (sameTabRedirectGuardToggle) {
+            sameTabRedirectGuardToggle.checked = levelResponse?.success
+                ? levelResponse.sameTabRedirectGuardEnabled !== false
+                : result.sameTabRedirectGuardEnabled !== false;
         }
         updateAiMonitorVisibility(result[POPUP_AI_MONITOR_VISIBILITY_KEY] === true);
         setAiPanelExpanded(isPinnedWindowMode);
@@ -1450,6 +1464,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    async function persistNavigationGuardSettings(nextSettings) {
+        const response = await runtimeMessage({
+            action: 'setNavigationGuardSettings',
+            popupGuardEnabled: nextSettings.popupGuardEnabled,
+            sameTabRedirectGuardEnabled: nextSettings.sameTabRedirectGuardEnabled
+        });
+        return response?.success === true;
+    }
+
+    if (popupGuardToggle) {
+        popupGuardToggle.addEventListener('change', async () => {
+            const nextValue = popupGuardToggle.checked;
+            const success = await persistNavigationGuardSettings({
+                popupGuardEnabled: nextValue,
+                sameTabRedirectGuardEnabled: sameTabRedirectGuardToggle?.checked
+            });
+            if (!success) {
+                popupGuardToggle.checked = !nextValue;
+            }
+        });
+    }
+
+    if (sameTabRedirectGuardToggle) {
+        sameTabRedirectGuardToggle.addEventListener('change', async () => {
+            const nextValue = sameTabRedirectGuardToggle.checked;
+            const success = await persistNavigationGuardSettings({
+                popupGuardEnabled: popupGuardToggle?.checked,
+                sameTabRedirectGuardEnabled: nextValue
+            });
+            if (!success) {
+                sameTabRedirectGuardToggle.checked = !nextValue;
+            }
+        });
+    }
+
     if (btnExportAi) {
         btnExportAi.addEventListener('click', async () => {
             await exportAiDataset();
@@ -1553,6 +1602,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (changes[POPUP_AI_MONITOR_VISIBILITY_KEY]) {
             updateAiMonitorVisibility(changes[POPUP_AI_MONITOR_VISIBILITY_KEY].newValue === true);
+        }
+        if (changes.popupGuardEnabled && popupGuardToggle) {
+            popupGuardToggle.checked = changes.popupGuardEnabled.newValue !== false;
+        }
+        if (changes.sameTabRedirectGuardEnabled && sameTabRedirectGuardToggle) {
+            sameTabRedirectGuardToggle.checked = changes.sameTabRedirectGuardEnabled.newValue !== false;
         }
     });
 

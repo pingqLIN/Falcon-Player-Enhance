@@ -444,6 +444,8 @@ let pinnedPopupBoundsRestoreGuards = new Map();
 let blockingLevel = BLOCKING_LEVEL_DEFAULT;
 let lastActiveBlockingLevel = BLOCKING_LEVEL_DEFAULT;
 let runtimeExtensionEnabled = null;
+let popupGuardEnabled = true;
+let sameTabRedirectGuardEnabled = true;
 
 let aiState = {
   enabled: true,
@@ -523,6 +525,8 @@ async function initStorage(reason = 'update') {
     'extensionEnabled',
     'blockingLevel',
     'lastActiveBlockingLevel',
+    'popupGuardEnabled',
+    'sameTabRedirectGuardEnabled',
     'pinnedPopupPlayers',
     'aiMonitorEnabled',
     'aiProfiles',
@@ -570,6 +574,14 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.extensionEnabled !== 'boolean') {
     patch.extensionEnabled = true;
+  }
+
+  if (typeof result.popupGuardEnabled !== 'boolean') {
+    patch.popupGuardEnabled = true;
+  }
+
+  if (typeof result.sameTabRedirectGuardEnabled !== 'boolean') {
+    patch.sameTabRedirectGuardEnabled = true;
   }
 
   const normalizedLevel = Number.isFinite(Number(result.blockingLevel))
@@ -670,7 +682,13 @@ async function loadStats() {
 }
 
 async function loadBlockingSettings() {
-  const result = await chrome.storage.local.get(['blockingLevel', 'lastActiveBlockingLevel', 'extensionEnabled']);
+  const result = await chrome.storage.local.get([
+    'blockingLevel',
+    'lastActiveBlockingLevel',
+    'extensionEnabled',
+    'popupGuardEnabled',
+    'sameTabRedirectGuardEnabled'
+  ]);
 
   const levelFromStorage = Number.isFinite(Number(result.blockingLevel))
     ? normalizeBlockingLevel(result.blockingLevel)
@@ -686,6 +704,8 @@ async function loadBlockingSettings() {
 
   blockingLevel = levelFromStorage;
   lastActiveBlockingLevel = levelFromStorage > 0 ? normalizeActiveBlockingLevel(levelFromStorage) : activeLevelFromStorage;
+  popupGuardEnabled = result.popupGuardEnabled !== false;
+  sameTabRedirectGuardEnabled = result.sameTabRedirectGuardEnabled !== false;
 
   const enabled = resolveEnabledByBlockingLevel(blockingLevel);
   const patch = {};
@@ -697,6 +717,12 @@ async function loadBlockingSettings() {
   }
   if (result.extensionEnabled !== enabled) {
     patch.extensionEnabled = enabled;
+  }
+  if (typeof result.popupGuardEnabled !== 'boolean') {
+    patch.popupGuardEnabled = true;
+  }
+  if (typeof result.sameTabRedirectGuardEnabled !== 'boolean') {
+    patch.sameTabRedirectGuardEnabled = true;
   }
   if (Object.keys(patch).length > 0) {
     await chrome.storage.local.set(patch);
@@ -744,6 +770,56 @@ function sanitizePopupPlayerPayload(input = {}) {
       input.remoteControlPreferred === true || String(input.remoteControlPreferred || '') === '1',
     pin: input.pin === true || String(input.pin || '') === '1'
   };
+}
+
+async function setNavigationGuardSettings(settings = {}) {
+  const patch = {};
+
+  if (typeof settings.popupGuardEnabled === 'boolean') {
+    popupGuardEnabled = settings.popupGuardEnabled;
+    patch.popupGuardEnabled = popupGuardEnabled;
+    if (!popupGuardEnabled) {
+      Object.keys(playerPopupGuardTabs).forEach((tabId) => {
+        clearPlayerPopupGuardTab(tabId);
+      });
+    }
+  }
+
+  if (typeof settings.sameTabRedirectGuardEnabled === 'boolean') {
+    sameTabRedirectGuardEnabled = settings.sameTabRedirectGuardEnabled;
+    patch.sameTabRedirectGuardEnabled = sameTabRedirectGuardEnabled;
+    if (!sameTabRedirectGuardEnabled) {
+      Object.keys(sameTabNavigationGuardTabs).forEach((tabId) => {
+        clearSameTabNavigationGuardTab(tabId);
+      });
+    }
+  }
+
+  if (Object.keys(patch).length > 0) {
+    await chrome.storage.local.set(patch);
+  }
+
+  await syncSameTabRedirectGuardToAllTabs();
+
+  return {
+    popupGuardEnabled,
+    sameTabRedirectGuardEnabled
+  };
+}
+
+async function syncSameTabRedirectGuardToAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (!Number.isFinite(Number(tab?.id)) || Number(tab.id) <= 0) return;
+      try {
+        await chrome.tabs.sendMessage(Number(tab.id), {
+          action: 'setNavigationGuardState',
+          sameTabRedirectGuardEnabled
+        });
+      } catch (_) {}
+    })
+  );
 }
 
 function sanitizePopupWindowBounds(input = {}) {
@@ -961,6 +1037,11 @@ async function restoreGuardedSameTabNavigation(tabId, entry, tabUrl = '') {
 }
 
 async function evaluateSameTabNavigationGuardTab(tabId, tabUrl = '') {
+  if (!sameTabRedirectGuardEnabled) {
+    clearSameTabNavigationGuardTab(tabId);
+    return;
+  }
+
   const entry = sameTabNavigationGuardTabs[String(tabId)];
   if (!entry) return;
 
@@ -1034,6 +1115,11 @@ async function closeGuardedPlayerPopupTab(tabId, entry, tabUrl = '') {
 }
 
 async function evaluatePlayerPopupGuardTab(tabId, tabUrl = '') {
+  if (!popupGuardEnabled) {
+    clearPlayerPopupGuardTab(tabId);
+    return;
+  }
+
   const entry = playerPopupGuardTabs[String(tabId)];
   if (!entry) return;
 
@@ -1081,6 +1167,10 @@ async function evaluatePlayerPopupGuardTab(tabId, tabUrl = '') {
 }
 
 async function registerPlayerPopupGuardTab(tab) {
+  if (!popupGuardEnabled) {
+    return;
+  }
+
   const tabId = Number(tab?.id || 0);
   const openerTabId = Number(tab?.openerTabId || 0);
   if (!Number.isFinite(tabId) || tabId <= 0 || !Number.isFinite(openerTabId) || openerTabId <= 0) {
@@ -1950,6 +2040,7 @@ async function applyExtensionState(enabled, source = 'unknown') {
     notifyAllTabs({
       action: 'applyBlockingLevel',
       level: blockingLevel,
+      sameTabRedirectGuardEnabled,
       source
     });
   }
@@ -5417,7 +5508,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'setNavigationGuardSettings') {
+    (async () => {
+      const result = await setNavigationGuardSettings({
+        popupGuardEnabled: request.popupGuardEnabled,
+        sameTabRedirectGuardEnabled: request.sameTabRedirectGuardEnabled
+      });
+      sendResponse({ success: true, ...result });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
   if (request.action === 'recordPotentialExternalNavigationTrap') {
+    if (!sameTabRedirectGuardEnabled) {
+      clearSameTabNavigationGuardTab(sender?.tab?.id);
+      sendResponse({ success: true, ignored: true });
+      return true;
+    }
+
     const tabId = Number(sender?.tab?.id || 0);
     const sourceUrl = String(request.pageUrl || sender?.tab?.url || '').trim();
     const sourceHost = normalizePopupHost(getHostname(sourceUrl));
@@ -5439,7 +5549,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       success: true,
       blockingLevel,
       lastActiveBlockingLevel,
-      enabled: resolveEnabledByBlockingLevel(blockingLevel)
+      enabled: resolveEnabledByBlockingLevel(blockingLevel),
+      popupGuardEnabled,
+      sameTabRedirectGuardEnabled
     });
     return true;
   }
@@ -6206,6 +6318,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     .sendMessage(tabId, {
       action: 'applyBlockingLevel',
       level: blockingLevel,
+      sameTabRedirectGuardEnabled,
       source: 'tab_updated'
     })
     .catch(() => {});
@@ -6220,6 +6333,29 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
   clearPlayerPopupGuardTab(tabId);
   clearSameTabNavigationGuardTab(tabId);
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+
+  if (changes.popupGuardEnabled) {
+    popupGuardEnabled = changes.popupGuardEnabled.newValue !== false;
+    if (!popupGuardEnabled) {
+      Object.keys(playerPopupGuardTabs).forEach((tabId) => {
+        clearPlayerPopupGuardTab(tabId);
+      });
+    }
+  }
+
+  if (changes.sameTabRedirectGuardEnabled) {
+    sameTabRedirectGuardEnabled = changes.sameTabRedirectGuardEnabled.newValue !== false;
+    if (!sameTabRedirectGuardEnabled) {
+      Object.keys(sameTabNavigationGuardTabs).forEach((tabId) => {
+        clearSameTabNavigationGuardTab(tabId);
+      });
+    }
+    syncSameTabRedirectGuardToAllTabs().catch(() => {});
+  }
 });
 
 chrome.windows?.onBoundsChanged?.addListener((popupWindow) => {

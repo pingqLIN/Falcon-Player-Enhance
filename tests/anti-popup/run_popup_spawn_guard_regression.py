@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import shutil
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -72,26 +73,36 @@ def get_external_page_urls(context) -> list[str]:
     return urls
 
 
+def set_popup_guard_enabled(context, enabled: bool) -> None:
+    worker = smoke.get_extension_worker(context)
+    worker.evaluate(
+        """async ({ enabled }) => {
+            await chrome.storage.local.set({ popupGuardEnabled: enabled === true });
+            return true;
+        }""",
+        {"enabled": enabled},
+    )
+    time.sleep(0.25)
+
+
 def build_report(
-    before_urls: list[str],
-    after_click_urls: list[str],
-    current_url: str,
-    after_back_url: str,
+    enabled_sample: dict[str, object],
+    disabled_sample: dict[str, object],
 ) -> dict[str, object]:
     checks = {
-        "suspiciousPopupClosed": not any("displayendpointstarring.com" in url for url in after_click_urls),
-        "openerStayedOnManagedPage": "javboys.com" in current_url,
-        "backNavigationReturnedToStart": "starter.test" in after_back_url,
+        "enabledGuardClosedPopup": not any("displayendpointstarring.com" in url for url in enabled_sample["afterClickUrls"]),
+        "enabledOpenerStayedOnManagedPage": "javboys.com" in str(enabled_sample["currentUrl"]),
+        "enabledBackNavigationReturnedToStart": "starter.test" in str(enabled_sample["afterBackUrl"]),
+        "disabledGuardLeavesPopupOpen": any("displayendpointstarring.com" in url for url in disabled_sample["afterClickUrls"]),
+        "disabledOpenerStayedOnManagedPage": "javboys.com" in str(disabled_sample["currentUrl"]),
     }
 
     return {
         "ok": all(checks.values()),
         "checks": checks,
         "samples": {
-            "beforeUrls": before_urls,
-            "afterClickUrls": after_click_urls,
-            "currentUrl": current_url,
-            "afterBackUrl": after_back_url,
+            "enabled": enabled_sample,
+            "disabled": disabled_sample,
         },
     }
 
@@ -123,6 +134,7 @@ def main() -> int:
                 page.goto(host_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
 
+                set_popup_guard_enabled(context, True)
                 before_urls = get_external_page_urls(context)
                 point = get_iframe_click_point(page)
                 page.mouse.click(point["x"], point["y"])
@@ -135,7 +147,37 @@ def main() -> int:
                 page.wait_for_timeout(800)
                 after_back_url = page.url
 
-                report = build_report(before_urls, after_click_urls, current_url, after_back_url)
+                enabled_sample = {
+                    "beforeUrls": before_urls,
+                    "afterClickUrls": after_click_urls,
+                    "currentUrl": current_url,
+                    "afterBackUrl": after_back_url,
+                }
+
+                for popup_page in list(context.pages):
+                    if popup_page is page or popup_page.is_closed():
+                        continue
+                    if "displayendpointstarring.com" in popup_page.url:
+                        popup_page.close()
+
+                set_popup_guard_enabled(context, False)
+                page.goto(host_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+
+                disabled_before_urls = get_external_page_urls(context)
+                point = get_iframe_click_point(page)
+                page.mouse.click(point["x"], point["y"])
+                page.wait_for_timeout(args.wait_ms)
+
+                disabled_after_click_urls = get_external_page_urls(context)
+                disabled_current_url = page.url
+                disabled_sample = {
+                    "beforeUrls": disabled_before_urls,
+                    "afterClickUrls": disabled_after_click_urls,
+                    "currentUrl": disabled_current_url,
+                }
+
+                report = build_report(enabled_sample, disabled_sample)
                 print(json.dumps({
                     "ok": report["ok"],
                     "extensionId": extension_id,

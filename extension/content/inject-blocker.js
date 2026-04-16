@@ -40,6 +40,7 @@ const L3_REDIRECT_TRAP_DOMAINS = [
     'playafterdark.com'
 ];
 let protectionLevel = BLOCKING_LEVEL.BASIC;
+let sameTabRedirectGuardEnabled = true;
 const aiRuntimeState = {
     popupStrictMode: false,
     sensitivityBoost: 0,
@@ -510,6 +511,7 @@ function getNavigationInteractionContext(target) {
 function shouldTrackPotentialExternalNavigation(interaction = {}) {
     if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (sameTabRedirectGuardEnabled !== true) return false;
     return interaction.fromLink !== true || interaction.imageLike === true || interaction.lowIntent === true;
 }
 
@@ -609,6 +611,7 @@ function getRecentInteractionContext() {
 function shouldBlockManagedExternalNavigation(url, options = {}) {
     if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (sameTabRedirectGuardEnabled !== true) return false;
 
     const info = getNavigationTargetInfo(url);
     if (!info || info.internal) return false;
@@ -642,6 +645,7 @@ function shouldBlockManagedExternalNavigation(url, options = {}) {
 function shouldBlockManagedRedirectListener(interaction = {}) {
     if (!isPlayerSite() || isCompatibilityModeSite() || !isTopFrameWindow()) return false;
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (sameTabRedirectGuardEnabled !== true) return false;
     if (isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return true;
     return interaction.fromLink !== true || interaction.imageLike === true || interaction.lowIntent === true;
 }
@@ -785,6 +789,10 @@ const blockedOpen = function(url, target, features) {
             detail: { reason: 'managed_external_same_tab_window_open', url: urlStr.substring(0, 300) }
         });
         return createFakeWindow();
+    }
+
+    if (sameTabTarget) {
+        return originalOpen.call(window, url, target, features);
     }
     
     // 隱蔽模式：對播放器網站只攔截確定的惡意 URL
@@ -1720,13 +1728,21 @@ function setupMessageListener() {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (request.action === 'applyBlockingLevel') {
                 setProtectionLevel(request.level);
+                sameTabRedirectGuardEnabled = request.sameTabRedirectGuardEnabled !== false;
                 recoverFromRedirectTrap();
                 sendResponse({ success: true, blockingLevel: protectionLevel });
                 return true;
             }
 
+            if (request.action === 'setNavigationGuardState') {
+                sameTabRedirectGuardEnabled = request.sameTabRedirectGuardEnabled !== false;
+                sendResponse({ success: true, sameTabRedirectGuardEnabled });
+                return true;
+            }
+
             if (request.action === 'disableBlocking') {
                 setProtectionLevel(BLOCKING_LEVEL.OFF);
+                sameTabRedirectGuardEnabled = false;
                 sendResponse({ success: true, blockingLevel: protectionLevel });
                 return true;
             }
@@ -1749,6 +1765,7 @@ function requestBlockingLevel() {
             if (chrome.runtime.lastError) return;
             if (response?.success) {
                 setProtectionLevel(response.blockingLevel);
+                sameTabRedirectGuardEnabled = response.sameTabRedirectGuardEnabled !== false;
                 recoverFromRedirectTrap();
             }
         });

@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -47,6 +48,18 @@ def click_and_wait(page, selector: str, wait_ms: int) -> str:
     return page.url
 
 
+def set_same_tab_redirect_guard_enabled(context, enabled: bool) -> None:
+    worker = smoke.get_extension_worker(context)
+    worker.evaluate(
+        """async ({ enabled }) => {
+            await chrome.storage.local.set({ sameTabRedirectGuardEnabled: enabled === true });
+            return true;
+        }""",
+        {"enabled": enabled},
+    )
+    time.sleep(0.25)
+
+
 def main() -> int:
     args = parse_args()
     server = smoke.StaticServer(REPO_ROOT)
@@ -75,6 +88,7 @@ def main() -> int:
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
 
+                set_same_tab_redirect_guard_enabled(context, True)
                 same_site_url = click_and_wait(page, "#same-site-image-link", args.wait_ms)
                 same_site_allowed = same_site_url == same_site_target
 
@@ -98,6 +112,17 @@ def main() -> int:
                 assign_url = click_and_wait(page, "#external-location-assign", args.wait_ms)
                 assign_blocked = assign_url == start_url
 
+                set_same_tab_redirect_guard_enabled(context, False)
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                disabled_open_self_url = click_and_wait(page, "#external-window-open-self", args.wait_ms)
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                disabled_assign_url = click_and_wait(page, "#external-location-assign", args.wait_ms)
+                disabled_assign_allowed = disabled_assign_url == external_target
+
                 report = {
                     "ok": all([
                         same_site_allowed,
@@ -105,6 +130,7 @@ def main() -> int:
                         external_image_blocked,
                         open_self_blocked,
                         assign_blocked,
+                        disabled_assign_allowed,
                     ]),
                     "checks": {
                         "sameSiteImageAllowed": same_site_allowed,
@@ -112,6 +138,7 @@ def main() -> int:
                         "externalImageBlocked": external_image_blocked,
                         "windowOpenSelfBlocked": open_self_blocked,
                         "locationAssignBlocked": assign_blocked,
+                        "disabledLocationAssignAllowed": disabled_assign_allowed,
                     },
                     "samples": {
                         "startUrl": start_url,
@@ -120,6 +147,8 @@ def main() -> int:
                         "externalImageUrl": external_image_url,
                         "windowOpenSelfUrl": open_self_url,
                         "locationAssignUrl": assign_url,
+                        "disabledWindowOpenSelfUrl": disabled_open_self_url,
+                        "disabledLocationAssignUrl": disabled_assign_url,
                     },
                 }
                 print(json.dumps({

@@ -31,6 +31,7 @@
 
   let monitorEnabled = true;
   let currentBlockingLevel = 2;
+  let sameTabRedirectGuardEnabled = true;
   let aiPolicy = {
     version: 2,
     policyVersion: 2,
@@ -206,7 +207,7 @@
   }
 
   function onClickCapture(event) {
-    if (!monitorEnabled || !aiPolicy.guardExternalNavigation) return;
+    if (!monitorEnabled || !aiPolicy.guardExternalNavigation || sameTabRedirectGuardEnabled !== true) return;
 
     const target = event.target;
     if (!target || !target.closest) return;
@@ -470,6 +471,7 @@
       chrome.runtime.sendMessage({ action: 'getBlockingLevel' }, (response) => {
         if (chrome.runtime.lastError) return;
         if (response?.success) {
+          sameTabRedirectGuardEnabled = response.sameTabRedirectGuardEnabled !== false;
           publishBlockingLevelToPage(response.blockingLevel, 'runtime_bootstrap');
         }
       });
@@ -548,8 +550,15 @@
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'applyBlockingLevel') {
+      sameTabRedirectGuardEnabled = request.sameTabRedirectGuardEnabled !== false;
       publishBlockingLevelToPage(request.level, request.source || 'background');
       sendResponse({ success: true, blockingLevel: currentBlockingLevel });
+      return true;
+    }
+
+    if (request.action === 'setNavigationGuardState') {
+      sameTabRedirectGuardEnabled = request.sameTabRedirectGuardEnabled !== false;
+      sendResponse({ success: true, sameTabRedirectGuardEnabled });
       return true;
     }
 
@@ -564,6 +573,7 @@
       request.action === 'disableBlocking' ||
       request.action === 'clearAIPolicy'
     ) {
+      sameTabRedirectGuardEnabled = false;
       stopRuntime();
       sendResponse({ success: true });
       return true;
