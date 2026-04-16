@@ -21,6 +21,7 @@ $sampleTargetsPath = Join-Path $runRoot 'live-browser-sampled-targets.json'
 $sandboxMarkerPath = Join-Path $runRoot 'run-complete.json'
 $sandboxGuestScriptPath = Join-Path $runRoot 'run-live-browser-in-sandbox.ps1'
 $sandboxConfigPath = Join-Path $runRoot 'live-browser-audit.wsb'
+$sandboxLaunchLogPath = Join-Path $runRoot 'sandbox-launch.log'
 
 function New-RunDirectory {
     New-Item -ItemType Directory -Force -Path $runRoot | Out-Null
@@ -112,6 +113,7 @@ function New-SandboxGuestScript {
         [string]$HostPlaywrightDir
     )
 
+    $headlessArgLiteral = if ($Headless) { "'--headless'" } else { '$null' }
     $content = @"
 `$ErrorActionPreference = 'Stop'
 `$env:PYTHONPATH = 'C:\FalconTools\PythonSite'
@@ -126,20 +128,34 @@ function New-SandboxGuestScript {
 `$markerPath = Join-Path `$outputRoot 'run-complete.json'
 `$logPath = Join-Path `$outputRoot 'judge-console.log'
 
-Push-Location `$repoRoot
-try {
-    & `$pythonExe 'C:\FalconRepo\tests\live-browser\browser_judge.py' `
-        --targets `$targetsPath `
-        --extension-dir 'C:\FalconRepo\extension' `
-        --out `$reportPath `
-        --timeout-ms $TimeoutMs `
-        --settle-ms $SettleMs `
-        $(if ($Headless) { '--headless' })
-        *>&1 | Tee-Object -FilePath `$logPath
+`$args = @(
+    'C:\FalconRepo\tests\live-browser\browser_judge.py',
+    '--targets', `$targetsPath,
+    '--extension-dir', 'C:\FalconRepo\extension',
+    '--out', `$reportPath,
+    '--timeout-ms', '$TimeoutMs',
+    '--settle-ms', '$SettleMs'
+)
 
+if ($headlessArgLiteral -ne '$null') {
+    `$args += $headlessArgLiteral
+}
+
+`$exitCode = 1
+`$failure = `$null
+
+try {
+    Push-Location `$repoRoot
+    & `$pythonExe @`$args *>&1 | Tee-Object -FilePath `$logPath
     `$exitCode = `$LASTEXITCODE
+} catch {
+    `$failure = `$_.Exception.Message
+    "Sandbox guest failure: `$failure" | Tee-Object -FilePath `$logPath -Append | Out-Null
 } finally {
-    Pop-Location
+    try {
+        Pop-Location
+    } catch {
+    }
 }
 
 @{
@@ -147,6 +163,7 @@ try {
     exitCode = `$exitCode
     reportPath = `$reportPath
     logPath = `$logPath
+    failure = `$failure
 } | ConvertTo-Json | Set-Content `$markerPath
 "@
 
@@ -224,18 +241,23 @@ function Invoke-SandboxAudit {
     }
 
     Remove-Item $sandboxMarkerPath -ErrorAction SilentlyContinue
+    Remove-Item $sandboxLaunchLogPath -ErrorAction SilentlyContinue
+    "[$((Get-Date).ToString('s'))] Launch requested." | Set-Content $sandboxLaunchLogPath
     Write-Host 'Launching Windows Sandbox for isolated live-browser audit...'
     Start-Process 'C:\Windows\System32\WindowsSandbox.exe' -ArgumentList "`"$sandboxConfigPath`""
+    "[$((Get-Date).ToString('s'))] WindowsSandbox.exe launched with config $sandboxConfigPath" | Add-Content $sandboxLaunchLogPath
 
     $deadline = (Get-Date).AddSeconds($WaitTimeoutSec)
     while ((Get-Date) -lt $deadline) {
         if (Test-Path $sandboxMarkerPath) {
             Write-Host "Sandbox audit completed: $sandboxMarkerPath"
+            "[$((Get-Date).ToString('s'))] Completion marker detected." | Add-Content $sandboxLaunchLogPath
             return
         }
         Start-Sleep -Seconds 5
     }
 
+    "[$((Get-Date).ToString('s'))] Timed out waiting for marker $sandboxMarkerPath" | Add-Content $sandboxLaunchLogPath
     throw "Timed out waiting for Windows Sandbox completion marker: $sandboxMarkerPath"
 }
 

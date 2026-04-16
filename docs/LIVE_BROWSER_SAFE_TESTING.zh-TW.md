@@ -58,8 +58,25 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 -Mode Auto -SampleCount 10 -Headl
 - `live-browser-report.json`
 - `judge-console.log`（Sandbox 模式）
 - `run-complete.json`（Sandbox 模式）
+- `sandbox-launch.log`（Sandbox 模式）
 - `screenshots/`
 - `browser-profile/`
+
+## 目前驗證狀態
+
+- 已驗證可穩定完成：
+  - host disposable browser profile 模式
+- 已驗證可正確產生：
+  - Windows Sandbox `.wsb`
+  - guest 執行腳本
+  - launch 診斷 log
+- 尚未在此主機完成：
+  - Windows Sandbox end-to-end 回寫 `run-complete.json`
+
+因此目前的實務建議是：
+
+1. 真站批次測試先使用 host disposable profile
+2. 若要把 Sandbox 升級為正式主流程，先處理 host 端的 Sandbox feature / guest 啟動問題
 
 ## 判讀原則
 
