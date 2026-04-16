@@ -67,9 +67,12 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 `
 
 - `live-browser-sampled-targets.json`
 - `live-browser-report.json`
+- `sandbox-started.json`（Sandbox guest script 一進入就會寫）
+- `sandbox-bootstrap.log`（Sandbox guest 啟動與 Python preflight 診斷）
 - `judge-console.log`（Sandbox 模式）
 - `run-complete.json`（Sandbox 模式）
 - `sandbox-launch.log`（Sandbox 模式）
+- `sandbox-host-evidence.txt`（Sandbox timeout 時自動擷取的 host 端錯誤證據）
 - `screenshots/`
 - `browser-profile/`
 
@@ -81,6 +84,9 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 `
   - Windows Sandbox `.wsb`
   - guest 執行腳本
   - launch 診斷 log
+- 已補強：
+  - host 端可區分「Sandbox 已啟動但 guest script 沒跑」與「guest 已跑但未完成」
+  - Sandbox timeout 時會自動抓 `Application Error` / `Windows Error Reporting` 證據
 - 尚未在此主機完成：
   - Windows Sandbox end-to-end 回寫 `run-complete.json`
 
@@ -88,6 +94,19 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 `
 
 1. 真站批次測試先使用 host disposable profile
 2. 若要把 Sandbox 升級為正式主流程，先處理 host 端的 Sandbox feature / guest 啟動問題
+
+## 目前已知阻塞
+
+最新 host-side 證據顯示：
+
+- `WindowsSandbox.exe` 會被呼叫
+- 但 2 秒內已沒有存活中的 `WindowsSandbox` process
+- guest 端沒有寫出 `sandbox-started.json`
+- host 端 `Application Error` / `.NET Runtime` 顯示：
+  - `WindowsSandboxRemoteSession.exe` 啟動即崩潰
+  - 未處理例外來自缺少 `WinRT.Runtime, Version=2.2.0.0`
+
+代表目前問題不在本專案的 guest script，也不在 `browser_judge.py`，而是在這台機器的 Windows Sandbox host runtime。
 
 ## 判讀原則
 

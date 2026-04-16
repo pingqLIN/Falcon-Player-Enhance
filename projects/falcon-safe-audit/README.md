@@ -38,6 +38,16 @@ This project coordinates local browser automation, Windows Sandbox launch attemp
 
 This helper audits the parent Falcon extension repo by default. It does not own the extension code; it owns the isolation workflow, sampling policy, and artifact management.
 
+## Current blocker
+
+- `Windows Sandbox` launch diagnostics currently fail before any guest script runs on this host
+- the captured host evidence shows `WindowsSandboxRemoteSession.exe` crashes immediately
+- the latest captured .NET runtime error is:
+  - missing assembly `WinRT.Runtime, Version=2.2.0.0`
+- practical consequence:
+  - `Windows Sandbox` is not yet a usable execution path on this machine
+  - the production testing path remains the disposable host browser profile
+
 ## Startup
 
 ```powershell

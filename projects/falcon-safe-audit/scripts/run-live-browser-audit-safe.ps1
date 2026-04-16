@@ -39,10 +39,12 @@ $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runRoot = Join-Path $projectRoot "runs/live-browser-safe/$timestamp"
 $reportPath = Join-Path $runRoot 'live-browser-report.json'
 $sampleTargetsPath = Join-Path $runRoot 'live-browser-sampled-targets.json'
+$sandboxStartedPath = Join-Path $runRoot 'sandbox-started.json'
 $sandboxMarkerPath = Join-Path $runRoot 'run-complete.json'
 $sandboxGuestScriptPath = Join-Path $runRoot 'run-live-browser-in-sandbox.ps1'
 $sandboxConfigPath = Join-Path $runRoot 'live-browser-audit.wsb'
 $sandboxLaunchLogPath = Join-Path $runRoot 'sandbox-launch.log'
+$sandboxHostEvidencePath = Join-Path $runRoot 'sandbox-host-evidence.txt'
 
 function New-RunDirectory {
     New-Item -ItemType Directory -Force -Path $runRoot | Out-Null
@@ -152,6 +154,61 @@ function Get-PlaywrightBrowsersPath {
     throw 'Playwright browser cache was not found under the expected host paths.'
 }
 
+function Write-SandboxHostEvidence {
+    param(
+        [datetime]$Since
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("capturedAt=$((Get-Date).ToString('s'))")
+
+    try {
+        $sandboxCommand = Get-Command WindowsSandbox.exe -ErrorAction Stop
+        $lines.Add("windowsSandboxSource=$($sandboxCommand.Source)")
+        $lines.Add("windowsSandboxVersion=$($sandboxCommand.Version)")
+    } catch {
+        $lines.Add("windowsSandboxLookupFailure=$($_.Exception.Message)")
+    }
+
+    try {
+        $sandboxProcesses = @(Get-Process WindowsSandbox -ErrorAction SilentlyContinue)
+        $lines.Add("windowsSandboxProcessCount=$($sandboxProcesses.Count)")
+    } catch {
+        $lines.Add("windowsSandboxProcessLookupFailure=$($_.Exception.Message)")
+    }
+
+    try {
+        $events = @(
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $Since } -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Message -like '*WindowsSandboxRemoteSession.exe*' -or
+                    $_.Message -like '*WindowsSandbox.exe*' -or
+                    $_.ProviderName -in @('Application Error', 'Windows Error Reporting')
+                } |
+                Select-Object -First 10
+        )
+
+        if ($events.Count -eq 0) {
+            $lines.Add('applicationEvents=none')
+        } else {
+            $lines.Add('applicationEventsBegin')
+            foreach ($event in $events) {
+                $lines.Add('---')
+                $lines.Add("timeCreated=$($event.TimeCreated.ToString('s'))")
+                $lines.Add("providerName=$($event.ProviderName)")
+                $lines.Add("id=$($event.Id)")
+                $lines.Add("level=$($event.LevelDisplayName)")
+                $lines.Add("message=$($event.Message -replace '\r?\n', ' | ')")
+            }
+            $lines.Add('applicationEventsEnd')
+        }
+    } catch {
+        $lines.Add("applicationEventQueryFailure=$($_.Exception.Message)")
+    }
+
+    Set-Content -Path $sandboxHostEvidencePath -Value $lines
+}
+
 function Invoke-HostAudit {
     $args = @(
         (Join-Path $AuditedRepoRoot 'tests/live-browser/browser_judge.py'),
@@ -186,10 +243,24 @@ function New-SandboxGuestScript {
 `$pythonExe = 'C:\FalconTools\Python\python.exe'
 `$repoRoot = 'C:\FalconRepo'
 `$outputRoot = 'C:\FalconOutput'
+`$startedPath = Join-Path `$outputRoot 'sandbox-started.json'
 `$reportPath = Join-Path `$outputRoot 'live-browser-report.json'
 `$targetsPath = Join-Path `$outputRoot 'live-browser-sampled-targets.json'
 `$markerPath = Join-Path `$outputRoot 'run-complete.json'
+`$bootstrapLogPath = Join-Path `$outputRoot 'sandbox-bootstrap.log'
 `$logPath = Join-Path `$outputRoot 'judge-console.log'
+
+@{
+    startedAt = (Get-Date).ToString('s')
+    machineName = `$env:COMPUTERNAME
+    userName = `$env:USERNAME
+    pythonExe = `$pythonExe
+} | ConvertTo-Json | Set-Content `$startedPath
+
+"[`$((Get-Date).ToString('s'))] guest script entered" | Set-Content `$bootstrapLogPath
+"[`$((Get-Date).ToString('s'))] repoRoot=`$repoRoot" | Add-Content `$bootstrapLogPath
+"[`$((Get-Date).ToString('s'))] pythonExe exists=$([bool](Test-Path `$pythonExe))" | Add-Content `$bootstrapLogPath
+"[`$((Get-Date).ToString('s'))] targetsPath exists=$([bool](Test-Path `$targetsPath))" | Add-Content `$bootstrapLogPath
 
 `$args = @(
     'C:\FalconRepo\tests\live-browser\browser_judge.py',
@@ -209,6 +280,7 @@ if ($headlessArgLiteral -ne '$null') {
 
 try {
     Push-Location `$repoRoot
+    "[`$((Get-Date).ToString('s'))] launching browser_judge.py" | Add-Content `$bootstrapLogPath
     & `$pythonExe @`$args *>&1 | Tee-Object -FilePath `$logPath
     `$exitCode = `$LASTEXITCODE
 } catch {
@@ -221,7 +293,9 @@ try {
 @{
     finishedAt = (Get-Date).ToString('s')
     exitCode = `$exitCode
+    startedPath = `$startedPath
     reportPath = `$reportPath
+    bootstrapLogPath = `$bootstrapLogPath
     logPath = `$logPath
     failure = `$failure
 } | ConvertTo-Json | Set-Content `$markerPath
@@ -273,7 +347,7 @@ function New-SandboxConfig {
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-    <Command>powershell.exe -ExecutionPolicy Bypass -File C:\FalconOutput\run-live-browser-in-sandbox.ps1</Command>
+    <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File C:\FalconOutput\run-live-browser-in-sandbox.ps1</Command>
   </LogonCommand>
 </Configuration>
 "@
@@ -285,6 +359,7 @@ function Invoke-SandboxAudit {
     $pythonInfo = Get-HostPythonInfo
     $playwrightDir = Get-PlaywrightBrowsersPath
     $pythonDir = Split-Path -Parent $pythonInfo.PythonExe
+    $sandboxAttemptStartedAt = Get-Date
 
     New-SandboxGuestScript
     New-SandboxConfig -HostPythonDir $pythonDir -HostUserSite $pythonInfo.UserSite -HostPlaywrightDir $playwrightDir
@@ -301,14 +376,21 @@ function Invoke-SandboxAudit {
     }
 
     Remove-Item $sandboxMarkerPath -ErrorAction SilentlyContinue
+    Remove-Item $sandboxStartedPath -ErrorAction SilentlyContinue
     Remove-Item $sandboxLaunchLogPath -ErrorAction SilentlyContinue
     "[$((Get-Date).ToString('s'))] Launch requested." | Set-Content $sandboxLaunchLogPath
     Write-Host 'Launching Windows Sandbox for isolated live-browser audit...'
     Start-Process 'C:\Windows\System32\WindowsSandbox.exe' -ArgumentList "`"$sandboxConfigPath`""
     "[$((Get-Date).ToString('s'))] WindowsSandbox.exe launched with config $sandboxConfigPath" | Add-Content $sandboxLaunchLogPath
+    Start-Sleep -Seconds 2
+    $sandboxProcesses = @(Get-Process WindowsSandbox -ErrorAction SilentlyContinue)
+    "[$((Get-Date).ToString('s'))] WindowsSandbox process count after launch: $($sandboxProcesses.Count)" | Add-Content $sandboxLaunchLogPath
 
     $deadline = (Get-Date).AddSeconds($WaitTimeoutSec)
     while ((Get-Date) -lt $deadline) {
+        if (Test-Path $sandboxStartedPath) {
+            "[$((Get-Date).ToString('s'))] Guest bootstrap marker detected." | Add-Content $sandboxLaunchLogPath
+        }
         if (Test-Path $sandboxMarkerPath) {
             Write-Host "Sandbox audit completed: $sandboxMarkerPath"
             "[$((Get-Date).ToString('s'))] Completion marker detected." | Add-Content $sandboxLaunchLogPath
@@ -317,8 +399,15 @@ function Invoke-SandboxAudit {
         Start-Sleep -Seconds 5
     }
 
-    "[$((Get-Date).ToString('s'))] Timed out waiting for marker $sandboxMarkerPath" | Add-Content $sandboxLaunchLogPath
-    throw "Timed out waiting for Windows Sandbox completion marker: $sandboxMarkerPath"
+    if (Test-Path $sandboxStartedPath) {
+        "[$((Get-Date).ToString('s'))] Timed out after guest bootstrap marker appeared." | Add-Content $sandboxLaunchLogPath
+        Write-SandboxHostEvidence -Since $sandboxAttemptStartedAt
+        throw "Windows Sandbox guest script started but never completed: $sandboxMarkerPath"
+    }
+
+    "[$((Get-Date).ToString('s'))] Timed out before any guest bootstrap marker appeared." | Add-Content $sandboxLaunchLogPath
+    Write-SandboxHostEvidence -Since $sandboxAttemptStartedAt
+    throw "Windows Sandbox launched but no guest bootstrap marker was written: $sandboxStartedPath"
 }
 
 New-RunDirectory
