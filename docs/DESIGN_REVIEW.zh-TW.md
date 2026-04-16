@@ -4,6 +4,10 @@
 > 分支：`claude/bold-gagarin`  
 > 審查範圍：Popup UI、Dashboard UI、設計系統一致性、互動狀態、可及性  
 > 方法：/plan-design-review（Designer's Eye Plan Review）
+>
+> 2026-04-16 歷史註記：
+> 本文件記錄的是 2026-03-19 的設計審查基線。
+> 其中設計系統與可及性 findings 應先視為歷史資訊，除非你已在目前程式碼上重新驗證仍然成立。
 
 ---
 

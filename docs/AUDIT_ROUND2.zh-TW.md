@@ -5,6 +5,10 @@
 > **審查方法：** 直接原始碼比對（background.js、popup.html、popup.js、popup.css、manifest.json、.gitignore）  
 > **審查範圍：** 安全分發、AI 功能設計、Popup/Dashboard UX 實作一致性、測試 QA 能力  
 > **審查人：** GitHub Copilot CLI（Claude Sonnet 4.6）
+>
+> **2026-04-16 歷史註記：**
+> 本文件保留為第二輪審查快照；其中部分問題已在後續提交中修正，或已被後續文件重新界定。
+> 若與目前 repo 狀態衝突，請以最新 `git status`、`docs/PROGRESS_SNAPSHOT.zh-TW.md` 與最新 release gate 證據為準。
 
 ---
 

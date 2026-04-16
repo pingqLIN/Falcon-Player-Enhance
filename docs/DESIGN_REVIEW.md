@@ -5,6 +5,10 @@
 > Scope: Popup UI, Dashboard UI, Design System Consistency, Interaction States, Accessibility
 > Method: /plan-design-review (Designer's Eye Plan Review)
 > [繁體中文版](DESIGN_REVIEW.zh-TW.md)
+>
+> Historical note as of 2026-04-16:
+> this document records the 2026-03-19 design review baseline.
+> Design-system and accessibility findings here should be read as historical unless they still reproduce against current code.
 
 ---
 

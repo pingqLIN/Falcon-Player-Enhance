@@ -141,7 +141,7 @@ This setup is meant for defensive validation of your extension, not blind browsi
 python tests/live-browser/browser_judge.py `
   --targets tests/live-browser/targets.example.json `
   --extension-dir extension `
-  --browser-profile-dir C:\temp\shield-pro-profile `
+  --browser-profile-dir C:\temp\falcon-player-enhance-profile `
   --out tests/live-browser/reports/latest-report.json
 ```
 
@@ -149,7 +149,7 @@ python tests/live-browser/browser_judge.py `
 python tests/live-browser/self_learning_loop.py `
   --targets tests/live-browser/targets.example.json `
   --extension-dir extension `
-  --browser-profile-dir C:\temp\shield-pro-profile `
+  --browser-profile-dir C:\temp\falcon-player-enhance-profile `
   --review-agent codex `
   --patch-agent codex `
   --max-iterations 3

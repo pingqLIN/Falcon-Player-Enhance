@@ -4,6 +4,10 @@
 > Version: v4.4.0
 > Scope: Architecture, Code Quality, Security, AI Integration, Testing Strategy, Distribution Feasibility
 > [繁體中文版](PROJECT_REVIEW_REPORT.zh-TW.md)
+>
+> Historical note as of 2026-04-16:
+> this report is preserved as a 2026-03-19 review snapshot, not current release guidance.
+> Some findings here have since been fixed or reframed; use `docs/PROGRESS_SNAPSHOT.zh-TW.md` and the latest Phase 5 gate evidence for current state.
 
 ---
 
