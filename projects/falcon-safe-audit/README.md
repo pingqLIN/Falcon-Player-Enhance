@@ -1,0 +1,51 @@
+# Falcon Safe Audit
+
+## Chosen archetype
+
+- Desktop helper
+- Operating mode: foreground CLI helper for Windows-first isolated live-browser audits
+
+## Why this archetype
+
+This project coordinates local browser automation, Windows Sandbox launch attempts, disposable browser profiles, and local audit artifacts. It is not a browser extension and not a generic worker service. The primary surface is a local operator command.
+
+## Hard requirements
+
+- one obvious startup path
+- explicit boundary between the audited repo and the helper project
+- explicit local state directories for config, runs, logs, cache
+- no machine-specific paths in source defaults
+- Windows-first assumptions remain configurable
+
+## Storage model
+
+- local file storage only
+- `config/` for defaults
+- `runs/` for audit artifacts
+- `logs/` for helper diagnostics
+- `cache/` reserved for future reusable state
+
+## Repo layout
+
+- `scripts/` primary entrypoint
+- `docs/` operator docs
+- `config/` defaults
+- `runs/` generated artifacts
+- `logs/` generated helper logs
+- `cache/` reserved runtime cache
+
+## Current scope
+
+This helper audits the parent Falcon extension repo by default. It does not own the extension code; it owns the isolation workflow, sampling policy, and artifact management.
+
+## Startup
+
+```powershell
+pwsh ./scripts/run-live-browser-audit-safe.ps1 -Mode Host -Headless
+```
+
+To audit the parent Falcon repo explicitly:
+
+```powershell
+pwsh ./scripts/run-live-browser-audit-safe.ps1 -AuditedRepoRoot ../.. -Mode Host -Headless
+```
