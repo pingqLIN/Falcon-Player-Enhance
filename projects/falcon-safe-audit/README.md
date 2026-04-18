@@ -38,6 +38,12 @@ This project coordinates local browser automation, Windows Sandbox launch attemp
 
 This helper audits the parent Falcon extension repo by default. It does not own the extension code; it owns the isolation workflow, sampling policy, and artifact management.
 
+Current live-audit report semantics:
+
+- `pass`: playable target inspected without a regression finding
+- `invalid_target`: sampled URL resolved to a listing/index page rather than a playable detail page; this is target-pool drift, not a player-detection failure
+- `fail`: real regression signal or environment blocker that still needs action
+
 ## Current blocker
 
 - `Windows Sandbox` launch diagnostics currently fail before any guest script runs on this host

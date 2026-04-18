@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -150,6 +151,26 @@ def detect_interstitial_type(page_title: str, page_body_preview: str, page_url: 
     return None
 
 
+LISTING_PATH_SEGMENTS = {
+    "tag",
+    "tags",
+    "category",
+    "categories",
+    "archive",
+    "archives",
+    "author",
+    "all-models",
+}
+LISTING_QUERY_KEYS = {"_page", "page", "paged"}
+LISTING_BODY_MARKERS = (
+    "posted in",
+    "tagged with",
+    "related posts",
+    "select month",
+)
+PAGINATION_PATTERN = re.compile(r"(?:^|\s)(?:‹|«)?\s*1\s+2(?:\s+3)?(?:\s+4)?\s*(?:›|»|next)?(?:\s|$)")
+
+
 def describe_interstitial_type(interstitial_type: str) -> str:
     labels = {
         "security_interstitial": "security interstitial",
@@ -159,10 +180,95 @@ def describe_interstitial_type(interstitial_type: str) -> str:
     return labels.get(interstitial_type, interstitial_type.replace("_", " "))
 
 
+def classify_target_page(snapshot: dict[str, Any], page_url: str) -> dict[str, str | bool]:
+    interstitial_type = str(snapshot.get("interstitialType") or "").strip()
+    if interstitial_type:
+        return {
+            "kind": "interstitial",
+            "invalidTarget": False,
+            "evidence": interstitial_type,
+        }
+
+    if snapshot.get("playerDetected"):
+        return {
+            "kind": "player_page",
+            "invalidTarget": False,
+            "evidence": "playable_media_detected",
+        }
+
+    if any(
+        int(snapshot.get(key, 0)) > 0
+        for key in ("overlayCount", "popupCount", "suspiciousNavCount")
+    ):
+        return {
+            "kind": "nonplayer_page",
+            "invalidTarget": False,
+            "evidence": "passive_guard_activity_detected",
+        }
+
+    parsed = urlparse(page_url)
+    path_segments = [segment for segment in parsed.path.lower().split("/") if segment]
+    query = parse_qs(parsed.query)
+    body = normalize_text(str(snapshot.get("pageBodyPreview") or ""))
+    title = normalize_text(str(snapshot.get("pageTitle") or ""))
+
+    has_listing_path = any(segment in LISTING_PATH_SEGMENTS for segment in path_segments)
+    has_listing_query = any(key in query for key in LISTING_QUERY_KEYS)
+    listing_marker_hits = sum(1 for marker in LISTING_BODY_MARKERS if marker in body)
+    has_pagination = bool(PAGINATION_PATTERN.search(body))
+    archive_like_title = "archives" in title or title.startswith("page ")
+
+    if (
+        has_listing_path
+        and (has_listing_query or has_pagination or listing_marker_hits >= 1 or archive_like_title)
+    ) or (
+        has_listing_query
+        and (has_pagination or listing_marker_hits >= 1 or archive_like_title)
+    ):
+        evidence = []
+        if has_listing_path:
+            evidence.append("listing_path")
+        if has_listing_query:
+            evidence.append("pagination_query")
+        if has_pagination:
+            evidence.append("pagination_body")
+        if listing_marker_hits >= 1:
+            evidence.append(f"listing_markers:{listing_marker_hits}")
+        if archive_like_title:
+            evidence.append("archive_title")
+        return {
+            "kind": "invalid_target",
+            "invalidTarget": True,
+            "evidence": ",".join(evidence) or "listing_like_no_media",
+        }
+
+    if int(snapshot.get("videoCount", 0)) > 0 or int(snapshot.get("iframeCount", 0)) > 0:
+        return {
+            "kind": "nonplayer_page",
+            "invalidTarget": False,
+            "evidence": "media_present_without_primary_candidate",
+        }
+
+    return {
+        "kind": "nonplayer_page",
+        "invalidTarget": False,
+        "evidence": "no_playable_media",
+    }
+
+
 def score_snapshot(snapshot: dict[str, Any]) -> tuple[float, list[str]]:
     score = 100.0
     reasons: list[str] = []
     interstitial_type = snapshot.get("interstitialType")
+    invalid_target = bool(snapshot.get("invalidTarget"))
+    page_kind = str(snapshot.get("pageKind") or "")
+
+    if invalid_target:
+        score = 75.0
+        reasons.append(
+            "Target resolved to a listing/index page with no playable media, so this should be treated as target-pool drift rather than a player-detection regression."
+        )
+        return score, reasons
 
     if interstitial_type:
         score -= 40
@@ -195,12 +301,23 @@ def score_snapshot(snapshot: dict[str, Any]) -> tuple[float, list[str]]:
         score -= min(10, int(snapshot["consoleErrorCount"]) * 2)
         reasons.append("The page emitted console errors during inspection.")
 
+    if page_kind == "nonplayer_page" and not reasons:
+        reasons.append("The page finished passive inspection without exposing a credible playable surface.")
+
     return max(0.0, round(score, 2)), reasons
 
 
 def build_suggestions(snapshot: dict[str, Any], reasons: list[str]) -> list[str]:
     suggestions: list[str] = []
     interstitial_type = snapshot.get("interstitialType")
+    if snapshot.get("invalidTarget"):
+        suggestions.append(
+            "Move this URL into a listing/manual-review pool or exclude it from playable-target smoke runs."
+        )
+        suggestions.append(
+            "Prefer direct detail pages with an embedded player when building the live-audit target set."
+        )
+        return suggestions
 
     if interstitial_type:
         suggestions.append(
@@ -299,10 +416,13 @@ def evaluate_page(page, settle_ms: int) -> dict[str, Any]:
               const rect = el.getBoundingClientRect();
               const tag = el.tagName.toLowerCase();
               const area = rect.width * rect.height;
-              const src = tag === "video" ? (el.currentSrc || el.src || "") : (el.src || "");
-              return { el, rect, tag, area, src };
+              const lazySrc = el.dataset?.src || el.dataset?.lazySrc || el.getAttribute("data-original") || "";
+              const rawSrc = tag === "video" ? (el.currentSrc || el.src || lazySrc || "") : (el.src || lazySrc || "");
+              const src = /^(about:blank|javascript:|data:|blob:)\b/i.test(rawSrc) ? "" : rawSrc;
+              const usable = tag === "video" ? true : Boolean(src);
+              return { el, rect, tag, area, src, usable };
             })
-            .filter((item) => item.area >= areaThreshold)
+            .filter((item) => item.area >= areaThreshold && item.usable)
             .sort((a, b) => b.area - a.area);
 
           const player = mediaCandidates[0] || null;
@@ -472,11 +592,21 @@ def run() -> int:
                         pass
 
                     snapshot = evaluate_page(page, args.settle_ms)
+                    target_classification = classify_target_page(snapshot, page.url)
+                    snapshot["pageKind"] = target_classification["kind"]
+                    snapshot["invalidTarget"] = bool(target_classification["invalidTarget"])
+                    snapshot["classificationEvidence"] = target_classification["evidence"]
                     page.screenshot(path=str(screenshot_path), full_page=True)
                     score, reasons = score_snapshot(snapshot)
+                    status = (
+                        "invalid_target"
+                        if snapshot.get("invalidTarget")
+                        else ("pass" if score >= args.pass_threshold and snapshot.get("playerDetected") and snapshot.get("overlayCount", 0) == 0 else "fail")
+                    )
                     result.update(
                         {
-                            "ok": score >= args.pass_threshold and snapshot.get("playerDetected") and snapshot.get("overlayCount", 0) == 0,
+                            "ok": status != "fail",
+                            "status": status,
                             "score": score,
                             "reasons": reasons,
                             "suggestions": build_suggestions(snapshot, reasons),
@@ -506,14 +636,16 @@ def run() -> int:
 
                 results.append(result)
                 print(
-                    f"[{'PASS' if result['ok'] else 'FAIL'}] {name} "
+                    f"[{result.get('status', 'pass').upper()}] {name} "
                     f"score={result['score']} overlays={result['snapshot'].get('overlayCount', 0)} "
                     f"popups={result['snapshot'].get('popupCount', 0)}"
                 )
         finally:
             context.close()
 
-    passed = sum(1 for item in results if item["ok"])
+    passed = sum(1 for item in results if item.get("status") == "pass")
+    invalid_targets = sum(1 for item in results if item.get("status") == "invalid_target")
+    failed = sum(1 for item in results if item.get("status") == "fail")
     report = {
         "generatedAt": started_at,
         "extensionDir": str(shield_dir),
@@ -521,14 +653,16 @@ def run() -> int:
         "browserProfileDir": str(user_data_dir),
         "registeredContentScriptCount": registered_script_count,
         "targetCount": len(results),
+        "countedTargets": len(results) - invalid_targets,
         "passed": passed,
-        "failed": len(results) - passed,
+        "invalidTargets": invalid_targets,
+        "failed": failed,
         "passThreshold": args.pass_threshold,
         "results": results
     }
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Report written: {report_path}")
-    return 0 if report["failed"] == 0 else 1
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":

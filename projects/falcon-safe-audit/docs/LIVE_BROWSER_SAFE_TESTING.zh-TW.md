@@ -76,6 +76,12 @@ pwsh ./scripts/run-live-browser-audit-safe.ps1 `
 - `screenshots/`
 - `browser-profile/`
 
+`live-browser-report.json` 的結果判讀：
+
+- `pass`: 可播放 detail page，且本輪 audit 沒看到回歸
+- `invalid_target`: 抽樣到 listing/index page，應視為 target pool drift，不算 player-detection regression
+- `fail`: 仍需處理的真實 blocker，例如 security interstitial、導流、overlay、或可信 player 缺失
+
 ## 目前驗證狀態
 
 - 已驗證可穩定完成：
