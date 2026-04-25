@@ -1,8 +1,0 @@
-{
-  "defaultMode": "Auto",
-  "sourceTargets": "tests/live-browser/targets.from-bookmarks.filtered.json",
-  "sampleCount": 10,
-  "timeoutMs": 45000,
-  "settleMs": 3500,
-  "waitTimeoutSec": 1800
-}

@@ -1,8 +1,0 @@
-runs/**
-!runs/.gitkeep
-!runs/archive/
-!runs/archive/.gitkeep
-logs/**
-!logs/.gitkeep
-cache/**
-!cache/.gitkeep
