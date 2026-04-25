@@ -11,6 +11,7 @@
     .thumb { width: 240px; height: 140px; background: linear-gradient(135deg, #444, #999); }
     .label { padding: 8px 10px; font-size: 14px; }
     button { width: 240px; }
+    iframe { width: 320px; height: 140px; border: 1px solid #999; }
   </style>
 </head>
 <body>
@@ -29,6 +30,14 @@
     <a id="external-card-text-link" class="article-card" href="#">External research article</a>
     <button id="external-window-open-self" type="button">window.open _self</button>
     <button id="external-location-assign" type="button">location.assign external</button>
+    <button id="external-document-location" type="button">document.location external</button>
+    <button id="external-top-document-location" type="button">top.document.location external</button>
+    <iframe
+      id="same-origin-trap-frame"
+      name="same-origin-trap-frame"
+      src="/tests/test-managed-external-nav-child.html"
+      title="same-origin top navigation trap"
+    ></iframe>
   </div>
 
   <script>
@@ -51,6 +60,16 @@
     document.getElementById('external-location-assign').addEventListener('click', () => {
       status.textContent = 'location-assign-clicked';
       window.location.assign(externalUrl.toString());
+    });
+
+    document.getElementById('external-document-location').addEventListener('click', () => {
+      status.textContent = 'document-location-clicked';
+      document.location = externalUrl.toString();
+    });
+
+    document.getElementById('external-top-document-location').addEventListener('click', () => {
+      status.textContent = 'top-document-location-clicked';
+      window.top.document.location = externalUrl.toString();
     });
   </script>
 </body>

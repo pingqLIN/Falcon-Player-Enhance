@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Managed External Navigation Child</title>
+  <style>
+    body { font-family: sans-serif; margin: 12px; }
+    button { min-height: 56px; width: 260px; }
+  </style>
+</head>
+<body>
+  <p id="child-status">child-ready</p>
+  <button id="child-top-document-location" type="button">child top.document.location external</button>
+  <script>
+    const status = document.getElementById('child-status');
+    const externalUrl = new URL('/tests/test-managed-external-nav-external.html', window.location.href);
+    externalUrl.hostname = 'external-redirect.test';
+
+    document.getElementById('child-top-document-location').addEventListener('click', () => {
+      status.textContent = 'child-top-document-location-clicked';
+      window.top.document.location = externalUrl.toString();
+    });
+  </script>
+</body>
+</html>

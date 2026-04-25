@@ -117,6 +117,27 @@ def main() -> int:
                 assign_url = click_and_wait(page, "#external-location-assign", args.wait_ms)
                 assign_blocked = assign_url == start_url
 
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                document_location_url = click_and_wait(page, "#external-document-location", args.wait_ms)
+                document_location_blocked = document_location_url == start_url
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                top_document_location_url = click_and_wait(page, "#external-top-document-location", args.wait_ms)
+                top_document_location_blocked = top_document_location_url == start_url
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                child_frame = page.frame(name="same-origin-trap-frame")
+                if child_frame is None:
+                    raise RuntimeError("same_origin_trap_frame_missing")
+                child_frame.click("#child-top-document-location")
+                page.wait_for_timeout(args.wait_ms)
+                child_top_document_location_url = page.url
+                child_top_document_location_blocked = child_top_document_location_url == start_url
+                child_top_document_location_exposes_gap = child_top_document_location_url == external_target
+
                 set_same_tab_redirect_guard_enabled(context, False)
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
@@ -128,6 +149,21 @@ def main() -> int:
                 disabled_assign_url = click_and_wait(page, "#external-location-assign", args.wait_ms)
                 disabled_assign_allowed = disabled_assign_url == external_target
 
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                disabled_document_location_url = click_and_wait(page, "#external-document-location", args.wait_ms)
+                disabled_document_location_allowed = disabled_document_location_url == external_target
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                disabled_child_frame = page.frame(name="same-origin-trap-frame")
+                if disabled_child_frame is None:
+                    raise RuntimeError("disabled_same_origin_trap_frame_missing")
+                disabled_child_frame.click("#child-top-document-location")
+                page.wait_for_timeout(args.wait_ms)
+                disabled_child_top_document_location_url = page.url
+                disabled_child_top_document_location_allowed = disabled_child_top_document_location_url == external_target
+
                 report = {
                     "ok": all([
                         same_site_allowed,
@@ -136,7 +172,11 @@ def main() -> int:
                         external_image_blocked,
                         open_self_blocked,
                         assign_blocked,
+                        document_location_blocked,
+                        top_document_location_blocked,
                         disabled_assign_allowed,
+                        disabled_document_location_allowed,
+                        disabled_child_top_document_location_allowed,
                     ]),
                     "checks": {
                         "sameSiteImageAllowed": same_site_allowed,
@@ -145,7 +185,12 @@ def main() -> int:
                         "externalImageBlocked": external_image_blocked,
                         "windowOpenSelfBlocked": open_self_blocked,
                         "locationAssignBlocked": assign_blocked,
+                        "documentLocationBlocked": document_location_blocked,
+                        "topDocumentLocationBlocked": top_document_location_blocked,
+                        "childTopDocumentLocationKnownGap": child_top_document_location_exposes_gap,
                         "disabledLocationAssignAllowed": disabled_assign_allowed,
+                        "disabledDocumentLocationAllowed": disabled_document_location_allowed,
+                        "disabledChildTopDocumentLocationAllowed": disabled_child_top_document_location_allowed,
                     },
                     "samples": {
                         "startUrl": start_url,
@@ -155,8 +200,13 @@ def main() -> int:
                         "externalImageUrl": external_image_url,
                         "windowOpenSelfUrl": open_self_url,
                         "locationAssignUrl": assign_url,
+                        "documentLocationUrl": document_location_url,
+                        "topDocumentLocationUrl": top_document_location_url,
+                        "childTopDocumentLocationUrl": child_top_document_location_url,
                         "disabledWindowOpenSelfUrl": disabled_open_self_url,
                         "disabledLocationAssignUrl": disabled_assign_url,
+                        "disabledDocumentLocationUrl": disabled_document_location_url,
+                        "disabledChildTopDocumentLocationUrl": disabled_child_top_document_location_url,
                     },
                 }
                 print(json.dumps({
