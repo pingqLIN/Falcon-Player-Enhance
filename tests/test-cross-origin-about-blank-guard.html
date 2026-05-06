@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cross-Origin about:blank Guard</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    iframe { width: 480px; height: 180px; border: 1px solid #999; }
+  </style>
+</head>
+<body>
+  <h1>Cross-Origin about:blank Guard</h1>
+  <p id="status">ready</p>
+  <iframe id="playmogo-trap-frame" name="playmogo-trap-frame" title="playmogo top blank trap"></iframe>
+  <script>
+    const frameUrl = new URL('/tests/test-cross-origin-about-blank-guard-frame.html', window.location.href);
+    frameUrl.hostname = 'playmogo.com';
+    document.getElementById('playmogo-trap-frame').src = frameUrl.toString();
+  </script>
+</body>
+</html>

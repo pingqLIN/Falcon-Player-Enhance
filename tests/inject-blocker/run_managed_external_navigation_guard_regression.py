@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
 def build_browser_args() -> list[str]:
     host_rules = ",".join([
         "MAP javboys.com 127.0.0.1",
+        "MAP playmogo.com 127.0.0.1",
         "MAP external-redirect.test 127.0.0.1",
     ])
     return [f"--host-resolver-rules={host_rules}"]
@@ -138,6 +139,20 @@ def main() -> int:
                 child_top_document_location_blocked = child_top_document_location_url == start_url
                 child_top_document_location_exposes_gap = child_top_document_location_url == external_target
 
+                cross_origin_guard_url = managed_url(
+                    server.base_url,
+                    "/tests/test-cross-origin-about-blank-guard.html",
+                    "javboys.com"
+                )
+                page.goto(cross_origin_guard_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                cross_origin_frame = page.frame(name="playmogo-trap-frame")
+                if cross_origin_frame is None:
+                    raise RuntimeError("playmogo_trap_frame_missing")
+                page.wait_for_timeout(args.wait_ms)
+                cross_origin_about_blank_guard_url = page.url
+                cross_origin_player_frame_about_blank_blocked = cross_origin_about_blank_guard_url == cross_origin_guard_url
+
                 set_same_tab_redirect_guard_enabled(context, False)
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
@@ -174,6 +189,7 @@ def main() -> int:
                         assign_blocked,
                         document_location_blocked,
                         top_document_location_blocked,
+                        cross_origin_player_frame_about_blank_blocked,
                         disabled_assign_allowed,
                         disabled_document_location_allowed,
                         disabled_child_top_document_location_allowed,
@@ -188,6 +204,7 @@ def main() -> int:
                         "documentLocationBlocked": document_location_blocked,
                         "topDocumentLocationBlocked": top_document_location_blocked,
                         "childTopDocumentLocationKnownGap": child_top_document_location_exposes_gap,
+                        "crossOriginPlayerFrameAboutBlankBlocked": cross_origin_player_frame_about_blank_blocked,
                         "disabledLocationAssignAllowed": disabled_assign_allowed,
                         "disabledDocumentLocationAllowed": disabled_document_location_allowed,
                         "disabledChildTopDocumentLocationAllowed": disabled_child_top_document_location_allowed,
@@ -203,6 +220,7 @@ def main() -> int:
                         "documentLocationUrl": document_location_url,
                         "topDocumentLocationUrl": top_document_location_url,
                         "childTopDocumentLocationUrl": child_top_document_location_url,
+                        "crossOriginAboutBlankGuardUrl": cross_origin_about_blank_guard_url,
                         "disabledWindowOpenSelfUrl": disabled_open_self_url,
                         "disabledLocationAssignUrl": disabled_assign_url,
                         "disabledDocumentLocationUrl": disabled_document_location_url,

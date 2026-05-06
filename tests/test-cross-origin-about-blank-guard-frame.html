@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cross-Origin about:blank Guard Frame</title>
+</head>
+<body>
+  <p id="frame-status">frame-ready</p>
+  <script>
+    setTimeout(() => {
+      document.getElementById('frame-status').textContent = 'blanking-top';
+      window.top.location.href = 'about:blank';
+    }, 250);
+  </script>
+</body>
+</html>

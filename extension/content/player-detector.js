@@ -103,8 +103,8 @@
         },
         // 成人影片平台 (主要使用場景)
         javboys: {
-            iframeSrc: ['javboys.online', 'myvidplay', 'luluvdoo', 'streamtape', 'dood'],
-            hostnames: ['javboys.online', 'javboys.com', 'poapan.xyz']
+            iframeSrc: ['javboys.online', 'myvidplay', 'luluvdoo', 'streamtape', 'dood', 'playmogo.com', 'voe.sx'],
+            hostnames: ['javboys.online', 'javboys.com', 'poapan.xyz', 'playmogo.com', 'voe.sx']
         },
         missav: {
             iframeSrc: ['missav.com', 'surrit.com'],

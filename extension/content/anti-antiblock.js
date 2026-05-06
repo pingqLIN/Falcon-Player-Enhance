@@ -418,8 +418,8 @@ function handleJavboysPlayer() {
     const host = window.location.hostname;
     
     // 適用於 javboys 相關網站和播放器 (包括播放器 iframe 內部)
-    const isJavboysSite = host.includes('javboys') || host.includes('myvidplay') || host.includes('luluvdoo');
-    const isPlayerIframe = host === 'player.javboys.online' || host === 'player.javboys.com' || host.includes('luluvdoo');
+    const isJavboysSite = host.includes('javboys') || host.includes('myvidplay') || host.includes('luluvdoo') || host.includes('playmogo') || host.includes('voe.sx');
+    const isPlayerIframe = host === 'player.javboys.online' || host === 'player.javboys.com' || host.includes('luluvdoo') || host.includes('playmogo') || host.includes('voe.sx');
 
     
     if (!isJavboysSite && !isPlayerIframe) {
@@ -660,7 +660,9 @@ function handleJavboysPlayer() {
             'iframe[src*="player.javboys"]',
             'iframe[src*="myvidplay"]',
             'iframe[src*="upn.one"]',
-            'iframe[src*="luluvdoo"]'
+            'iframe[src*="luluvdoo"]',
+            'iframe[src*="playmogo.com"]',
+            'iframe[src*="voe.sx"]'
         ].join(', ');
 
         const neutralizeCoveringLayers = (iframe) => {

@@ -54,6 +54,7 @@ def fetch_site_registry_contract(page, extension_id: str) -> dict[str, object]:
             const result = await chrome.runtime.sendMessage({ action: 'getSiteRegistry' });
             return {
                 success: Boolean(result?.success),
+                builtinDomains: result?.domains || [],
                 popupDirectIframeHosts: result?.profiles?.popupDirectIframeHosts || [],
                 compatibilityModeSites: result?.profiles?.compatibilityModeSites || [],
                 basicProtectionExcludedDomains: result?.profiles?.basicProtectionExcludedDomains || [],
@@ -91,6 +92,7 @@ def build_report(contract: dict[str, object]) -> dict[str, object]:
     basic_excluded_domains = contract["basicProtectionExcludedDomains"]
     overlay_selectors = contract["injectBlockerKnownOverlaySelectors"]
     cosmetic_selectors = contract["cosmeticFilterGlobalSelectors"]
+    builtin_domains = contract["builtinDomains"]
 
     checks = {
         "success": bool(contract["success"]),
@@ -98,7 +100,8 @@ def build_report(contract: dict[str, object]) -> dict[str, object]:
         "compatibilityModeSites": isinstance(compatibility_sites, list) and "boyfriendtv.com" in compatibility_sites,
         "basicProtectionExcludedDomains": isinstance(basic_excluded_domains, list) and "lovable.dev" in basic_excluded_domains and "auth.lovable.dev" in basic_excluded_domains,
         "injectOverlaySelectors": isinstance(overlay_selectors, list) and ".cvpboxOverlay" in overlay_selectors,
-        "cosmeticFilterSelectors": isinstance(cosmetic_selectors, list) and '[class*="player-overlay-ad"]' in cosmetic_selectors
+        "cosmeticFilterSelectors": isinstance(cosmetic_selectors, list) and '[class*="player-overlay-ad"]' in cosmetic_selectors,
+        "poapanEmbedHosts": isinstance(builtin_domains, list) and "playmogo.com" in builtin_domains and "voe.sx" in builtin_domains
     }
 
     return {

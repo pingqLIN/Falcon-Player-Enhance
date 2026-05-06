@@ -39,6 +39,9 @@ const L3_REDIRECT_TRAP_DOMAINS = [
     'nn125.com',
     'playafterdark.com'
 ];
+const DEVTOOLS_TOP_BLANK_TRAP_HOSTS = [
+    'playmogo.com'
+];
 let protectionLevel = BLOCKING_LEVEL.BASIC;
 let sameTabRedirectGuardEnabled = true;
 const aiRuntimeState = {
@@ -690,6 +693,11 @@ function isDomainOrSubdomain(hostname, domain) {
     return host === base || host.endsWith(`.${base}`);
 }
 
+function isDevtoolsTopBlankTrapHost(hostname = window.location.hostname) {
+    const host = String(hostname || '').toLowerCase();
+    return DEVTOOLS_TOP_BLANK_TRAP_HOSTS.some((domain) => isDomainOrSubdomain(host, domain));
+}
+
 function shouldRecoverFromRedirectTrap() {
     const currentHost = String(window.location.hostname || '').toLowerCase();
     if (!currentHost) return false;
@@ -1007,12 +1015,14 @@ function shouldBlockLocationNavigation(url, reason) {
     }
 
     const normalizedUrl = String(url || '').trim().toLowerCase();
-    // about:blank guard: only for top-level frames to avoid breaking iframe-based players
+    // about:blank guard: top-level player pages, plus known player iframes whose
+    // anti-debug script blanks the opener/top frame from inside the embed.
     let isTopFrame = false;
     try { isTopFrame = window.self === window.top; } catch (e) { /* cross-origin iframe */ }
+    const shouldGuardAboutBlank = isTopFrame ||
+        (isDevtoolsTopBlankTrapHost() && !isUserTriggered());
     if (
-        isTopFrame &&
-        isLevelAtLeast(BLOCKING_LEVEL.HARDENED) &&
+        shouldGuardAboutBlank &&
         isPlayerSite() &&
         !isUserTriggered() &&
         (normalizedUrl === 'about:blank' || normalizedUrl.startsWith('about:blank#') || normalizedUrl.startsWith('about:blank?'))

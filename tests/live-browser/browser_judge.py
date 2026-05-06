@@ -32,6 +32,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--extension-dir", default=str(DEFAULT_EXTENSION_DIR), help="Falcon-Player-Enhance unpacked extension path.")
     parser.add_argument("--ublock-extension-dir", help="Optional unpacked uBlock extension directory.")
     parser.add_argument(
+        "--ublock-complete-filtering",
+        action="store_true",
+        help="When uBlock Origin Lite is loaded, set its default filtering mode to complete for this browser profile."
+    )
+    parser.add_argument(
         "--browser-profile-dir",
         help="Optional persistent Chromium profile directory. Useful when uBlock is already installed there."
     )
@@ -85,23 +90,93 @@ def build_extension_args(shield_dir: Path, ublock_dir: Path | None) -> list[str]
     ]
 
 
+def get_falcon_worker_status(worker) -> dict[str, Any] | None:
+    try:
+        return worker.evaluate(
+            """async () => {
+                const manifest = chrome.runtime.getManifest();
+                if (manifest.name !== 'Falcon-Player-Enhance') return null;
+                return {
+                    name: manifest.name,
+                    registered: (await chrome.scripting.getRegisteredContentScripts()).length
+                };
+            }"""
+        )
+    except Exception:
+        return None
+
+
+def get_ublock_lite_worker_status(worker) -> dict[str, Any] | None:
+    try:
+        return worker.evaluate(
+            """async () => {
+                const manifest = chrome.runtime.getManifest();
+                if (!/uBlock Origin Lite/i.test(manifest.name || '')) return null;
+                const { filteringModeDetails = {} } = await chrome.storage.local.get('filteringModeDetails');
+                const hasAllUrls = key => Array.isArray(filteringModeDetails[key]) &&
+                    filteringModeDetails[key].includes('all-urls');
+                const defaultFilteringMode = hasAllUrls('complete') ? 3 :
+                    hasAllUrls('optimal') ? 2 :
+                    hasAllUrls('basic') ? 1 :
+                    hasAllUrls('none') ? 0 :
+                    1;
+                return {
+                    name: manifest.name,
+                    defaultFilteringMode
+                };
+            }"""
+        )
+    except Exception:
+        return None
+
+
+def set_ublock_lite_complete_filtering(context, timeout_ms: int = 12000) -> int:
+    deadline = time.time() + (timeout_ms / 1000)
+
+    while time.time() < deadline:
+        for worker in list(context.service_workers):
+            status = get_ublock_lite_worker_status(worker)
+            if not status:
+                continue
+            try:
+                mode = int(worker.evaluate(
+                    """async () => {
+                        const filteringModeDetails = {
+                            none: [],
+                            basic: [],
+                            optimal: [],
+                            complete: [ 'all-urls' ]
+                        };
+                        await chrome.storage.local.set({ filteringModeDetails });
+                        await chrome.storage.session.set({ filteringModeDetails });
+                        chrome.runtime.reload();
+                        return 3;
+                    }"""
+                ))
+                time.sleep(1)
+                return mode
+            except Exception:
+                return int(status.get("defaultFilteringMode", 0))
+
+        time.sleep(0.25)
+
+    return 0
+
+
 def wait_for_extension_ready(context, timeout_ms: int = 12000) -> int:
     deadline = time.time() + (timeout_ms / 1000)
 
     while time.time() < deadline:
-        worker = context.service_workers[0] if context.service_workers else None
-        if worker is None:
+        workers = list(context.service_workers)
+        if not workers:
             time.sleep(0.25)
             continue
 
-        try:
-            registered = worker.evaluate(
-                """async () => (await chrome.scripting.getRegisteredContentScripts()).length"""
-            )
-            if int(registered) > 0:
-                return int(registered)
-        except Exception:
-            pass
+        for worker in workers:
+            status = get_falcon_worker_status(worker)
+            registered = int(status.get("registered", 0)) if status else 0
+            if registered > 0:
+                return registered
 
         time.sleep(0.25)
 
@@ -572,6 +647,9 @@ def run() -> int:
         )
         registered_script_count = wait_for_extension_ready(context)
         print(f"Extension ready: registered content scripts={registered_script_count}")
+        if args.ublock_complete_filtering:
+            ublock_filtering_mode = set_ublock_lite_complete_filtering(context)
+            print(f"uBlock Origin Lite default filtering mode={ublock_filtering_mode}")
 
         try:
             for target in targets:

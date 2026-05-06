@@ -30,6 +30,9 @@ _metadata/
 # Playwright MCP browser profiles
 .playwright-mcp/
 
+# Local browser profile snapshots
+.browser-profiles/
+
 # Temporary scan files
 .tmp_*.js
 
