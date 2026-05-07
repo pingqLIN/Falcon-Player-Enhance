@@ -21,6 +21,7 @@ const DEFAULT_WHITELIST = [
 ];
 
 const CONTENT_SCRIPT_IDS = [
+  'shield-embedded-player-anti-detect',
   'shield-basic-docidle',
   'shield-ai-runtime',
   'shield-main-world',
@@ -273,6 +274,15 @@ function getEffectiveEnhancedMatchPatterns(customSites = []) {
 }
 
 const BASIC_GLOBAL_CONTENT_SCRIPT_DEFINITIONS = [
+  {
+    id: 'shield-embedded-player-anti-detect',
+    matches: ['<all_urls>'],
+    js: ['content/embedded-player-anti-detect.js'],
+    runAt: 'document_start',
+    world: 'MAIN',
+    allFrames: true,
+    persistAcrossSessions: true
+  },
   {
     id: 'shield-basic-docidle',
     matches: ['<all_urls>'],

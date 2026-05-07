@@ -227,21 +227,34 @@ function createBaitElements() {
 // 5. 攔截 Fetch 和 XHR 對 adblock 偵測的請求
 // ============================================================================
 function interceptDetectionRequests() {
+    const isDetectionEndpoint = (value) => {
+        const url = String(value || '').toLowerCase();
+        return url.includes('adblock') ||
+            url.includes('blocker') ||
+            url.includes('pagead') ||
+            url.includes('botd') ||
+            url.includes('bot-detect') ||
+            url.includes('bot_detect') ||
+            url.includes('fingerprint') ||
+            url.includes('fingerprintjs') ||
+            url.includes('fpjs') ||
+            /(?:^|[/?#._-])fp(?:[/?#._-]|$)/.test(url) ||
+            (url.includes('detect') && (url.includes('ad') || url.includes('block') || url.includes('bot')));
+    };
+
     // 攔截 fetch
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
-        const url = String(args[0] || '').toLowerCase();
+        const url = String(args[0]?.url || args[0] || '').toLowerCase();
         
         // 阻擋常見的 adblock 偵測 endpoint
-        if (url.includes('adblock') ||
-            url.includes('blocker') ||
-            url.includes('pagead') ||
-            (url.includes('detect') && (url.includes('ad') || url.includes('block')))) {
+        if (isDetectionEndpoint(url)) {
             
             // 返回假的成功響應
             return Promise.resolve(new Response(JSON.stringify({
                 detected: false,
                 blocked: false,
+                bot: false,
                 success: true
             }), {
                 status: 200,
@@ -264,14 +277,12 @@ function interceptDetectionRequests() {
     XMLHttpRequest.prototype.send = function(...args) {
         const url = String(this._url || '').toLowerCase();
         
-        if (url.includes('adblock') || 
-            url.includes('detect') ||
-            url.includes('blocker')) {
+        if (isDetectionEndpoint(url)) {
             
             // 模擬成功響應
             Object.defineProperty(this, 'status', { value: 200 });
             Object.defineProperty(this, 'responseText', { 
-                value: JSON.stringify({ detected: false }) 
+                value: JSON.stringify({ detected: false, blocked: false, bot: false })
             });
             setTimeout(() => {
                 if (this.onload) this.onload();
