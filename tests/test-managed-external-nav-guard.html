@@ -32,6 +32,8 @@
     <button id="external-location-assign" type="button">location.assign external</button>
     <button id="external-document-location" type="button">document.location external</button>
     <button id="external-top-document-location" type="button">top.document.location external</button>
+    <button id="popup-then-location" type="button">popup then location external</button>
+    <button id="popup-then-history" type="button">popup then history trap</button>
     <iframe
       id="same-origin-trap-frame"
       name="same-origin-trap-frame"
@@ -70,6 +72,22 @@
     document.getElementById('external-top-document-location').addEventListener('click', () => {
       status.textContent = 'top-document-location-clicked';
       window.top.document.location = externalUrl.toString();
+    });
+
+    document.getElementById('popup-then-location').addEventListener('click', () => {
+      status.textContent = 'popup-then-location-clicked';
+      window.open(externalUrl.toString(), '_blank');
+      setTimeout(() => {
+        window.location.assign(externalUrl.toString());
+      }, 60);
+    });
+
+    document.getElementById('popup-then-history').addEventListener('click', () => {
+      status.textContent = 'popup-then-history-clicked';
+      window.open(externalUrl.toString(), '_blank');
+      setTimeout(() => {
+        history.pushState({ trap: true }, '', '/tests/ad-redirect-trap.html');
+      }, 60);
     });
   </script>
 </body>

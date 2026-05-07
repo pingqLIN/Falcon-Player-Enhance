@@ -15,6 +15,12 @@ if (window.__shieldEmbeddedPlayerAntiDetectLoaded) {
 
 const PLAYER_PATH_PATTERN = /(?:^|\/)(?:e|embed|embeds|player|video|watch|v|stream)(?:[/?#._-]|$)|\.(?:m3u8|mp4)(?:[?#]|$)/i;
 const DETECTION_ENDPOINT_PATTERN = /(?:adblock|ad-block|ad_block|adblocker|antiadblock|anti-adblock|blockadblock|fuckadblock|detectadblock|blocker|botd|bot-detect|bot_detect|fingerprint|fingerprintjs|fpjs|\/fp(?:[/?#._-]|$)|\/bots?(?:[/?#._-]|$))/i;
+const POST_POPUP_NAVIGATION_GUARD_MS = 12000;
+let lastExternalPopupOpen = {
+    ts: 0,
+    url: '',
+    target: ''
+};
 
 function isHttpLikeUrl(value) {
     return /^https?:\/\//i.test(String(value || ''));
@@ -33,6 +39,20 @@ function getRequestUrl(input) {
     if (input instanceof URL) return input.href;
     if (input && typeof input.url === 'string') return input.url;
     return String(input || '');
+}
+
+function getHostname(value) {
+    const url = safeUrl(value);
+    return String(url?.hostname || '').toLowerCase();
+}
+
+function isSameHostOrInternalUrl(value) {
+    const url = safeUrl(value);
+    if (!url) return true;
+    if (!/^https?:$/i.test(url.protocol)) return true;
+    const currentHost = String(window.location.hostname || '').toLowerCase();
+    const targetHost = String(url.hostname || '').toLowerCase();
+    return !targetHost || targetHost === currentHost || targetHost.endsWith(`.${currentHost}`) || currentHost.endsWith(`.${targetHost}`);
 }
 
 function isEmbeddedFrame() {
@@ -108,6 +128,9 @@ function installAdblockFlags() {
         'google_ads_loaded',
         'google_ad_loaded'
     ].forEach((name) => defineReadOnlyFlag(name, true));
+
+    defineReadOnlyFlag('googleAd', { loaded: true });
+    defineReadOnlyFlag('googleAdLoaded', true);
 }
 
 function createFakeDetector() {
@@ -187,6 +210,58 @@ function createCleanResponse() {
     return JSON.stringify(createCleanDetectionResult());
 }
 
+function createFakeWindow() {
+    return {
+        closed: true,
+        close: () => {},
+        focus: () => {},
+        blur: () => {},
+        postMessage: () => {},
+        location: { href: '', assign: () => {}, replace: () => {} },
+        document: { write: () => {}, writeln: () => {} }
+    };
+}
+
+function shouldTrackPopupOpen(url, target) {
+    const normalizedTarget = String(target || '').toLowerCase();
+    const sameTabTarget = normalizedTarget === '' || normalizedTarget === '_self' || normalizedTarget === '_top' || normalizedTarget === '_parent';
+    if (sameTabTarget) return false;
+    const targetUrl = safeUrl(url);
+    if (!targetUrl || !/^https?:$/i.test(targetUrl.protocol)) return false;
+    return !isSameHostOrInternalUrl(url);
+}
+
+function rememberExternalPopupOpen(url, target) {
+    if (!shouldTrackPopupOpen(url, target)) return;
+    lastExternalPopupOpen = {
+        ts: Date.now(),
+        url: String(url || '').slice(0, 500),
+        target: String(target || '').slice(0, 64)
+    };
+}
+
+function getRecentExternalPopupOpen() {
+    if ((Date.now() - Number(lastExternalPopupOpen.ts || 0)) > POST_POPUP_NAVIGATION_GUARD_MS) {
+        return null;
+    }
+    return lastExternalPopupOpen;
+}
+
+function shouldBlockPostPopupNavigation(url, reason) {
+    const popup = getRecentExternalPopupOpen();
+    if (!popup) return false;
+    if (!url || isSameHostOrInternalUrl(url)) {
+        return false;
+    }
+    window.__shieldLastPostPopupNavigationBlock = {
+        reason,
+        url: String(url || '').slice(0, 500),
+        popupUrl: String(popup.url || '').slice(0, 500),
+        ts: Date.now()
+    };
+    return true;
+}
+
 function installFetchGuard() {
     if (typeof window.fetch !== 'function' || typeof window.Response !== 'function') return;
 
@@ -237,6 +312,61 @@ function installXhrGuard() {
     };
 }
 
+function installPostPopupNavigationGuard() {
+    if (typeof window.open === 'function') {
+        const originalOpen = window.open;
+        window.open = function(url, target, features) {
+            if (shouldTrackPopupOpen(url, target)) {
+                rememberExternalPopupOpen(url, target);
+                return createFakeWindow();
+            }
+            return originalOpen.call(this, url, target, features);
+        };
+    }
+
+    try {
+        const proto = Object.getPrototypeOf(window.location);
+        ['assign', 'replace'].forEach((methodName) => {
+            const original = proto?.[methodName];
+            if (typeof original !== 'function') return;
+            proto[methodName] = function(url) {
+                if (shouldBlockPostPopupNavigation(url, `location_${methodName}`)) {
+                    return;
+                }
+                return original.call(this, url);
+            };
+        });
+
+        const desc = Object.getOwnPropertyDescriptor(proto, 'href');
+        if (desc?.set && desc?.get) {
+            Object.defineProperty(proto, 'href', {
+                configurable: desc.configurable,
+                enumerable: desc.enumerable,
+                get: desc.get,
+                set(url) {
+                    if (shouldBlockPostPopupNavigation(url, 'location_href')) {
+                        return;
+                    }
+                    return desc.set.call(this, url);
+                }
+            });
+        }
+    } catch (error) {}
+
+    try {
+        ['pushState', 'replaceState'].forEach((methodName) => {
+            const original = History.prototype[methodName];
+            if (typeof original !== 'function') return;
+            History.prototype[methodName] = function(state, title, url) {
+                if (url && shouldBlockPostPopupNavigation(url, `history_${methodName}`)) {
+                    return;
+                }
+                return original.call(this, state, title, url);
+            };
+        });
+    } catch (error) {}
+}
+
 function dispatchScriptLoad(script) {
     setTimeout(() => {
         const event = new Event('load');
@@ -280,6 +410,7 @@ installAdblockFlags();
 installDetectorLibraries();
 installFetchGuard();
 installXhrGuard();
+installPostPopupNavigationGuard();
 installScriptLoadGuard();
 window.__shieldEmbeddedPlayerAntiDetectReady = true;
 

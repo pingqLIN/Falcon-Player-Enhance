@@ -86,6 +86,8 @@ function fakeAdAPIs() {
     window.trafficjunky.loaded = true;
     
     // Generic ad loaders
+    window.googleAd = window.googleAd || { loaded: true };
+    window.googleAdLoaded = true;
     window.adsLoaded = true;
     window.ads_loaded = true;
     window.adLoaded = true;
@@ -504,6 +506,9 @@ function handleJavboysPlayer() {
                 'turn off ad blocker',
                 'adblock detected',
                 'ad blocker detected',
+                'publisher doesnt allow adblock',
+                'doesnt allow adblock',
+                "doesn't allow adblock",
                 'whitelist this site',
                 'does not allow adblock',
                 'error: init',
@@ -539,7 +544,7 @@ function handleJavboysPlayer() {
             });
             
             // 移除任何包含錯誤文字的元素（更積極的搜尋）
-            const allElements = document.querySelectorAll('.player-error, .error-message, .adblock-message, [class*="error"], [class*="adblock"], [class*="blocker"], [class*="warning"], [class*="notice"]');
+            const allElements = document.querySelectorAll('.player-error, .player-msg, .error-message, .adblock-message, [class*="error"], [class*="adblock"], [class*="blocker"], [class*="warning"], [class*="notice"], [class*="msg"]');
             allElements.forEach(el => {
                 const text = (el.textContent || '').toLowerCase();
                 const hasBlockText = blockTexts.some(bt => text.includes(bt));

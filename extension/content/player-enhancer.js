@@ -1516,6 +1516,43 @@
         return (position === 'absolute' || position === 'fixed') && zIndex > 0;
     }
 
+    function isMediaResumeDialog(element) {
+        if (!element) return false;
+
+        const classSignals = [
+            'checkresume', 'resume-dialog', 'resume-modal', 'resume-overlay',
+            'continue-watching', 'continuewatching', 'playback-resume',
+            'restore-playback', 'watched-position', 'last-position'
+        ];
+        const textSignals = [
+            'resume playing', 'welcome back', 'left off', 'resume watching',
+            'continue watching', 'where you left off', 'last playback',
+            'previously watched', 'yes, please', 'no, thanks'
+        ];
+
+        let cursor = element;
+        let depth = 0;
+        while (cursor && depth < 5) {
+            const className = (cursor.className || '').toString().toLowerCase();
+            const id = (cursor.id || '').toLowerCase();
+            const combined = `${className} ${id}`;
+
+            if (id === 'yesplease' || id === 'no_thanks') return true;
+            if (classSignals.some(signal => combined.includes(signal))) return true;
+
+            cursor = cursor.parentElement;
+            depth += 1;
+        }
+
+        const text = (element.innerText || element.textContent || '').toLowerCase().substring(0, 1000);
+        if (!text) return false;
+
+        const hasInteraction = Boolean(element.querySelector?.(
+            '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
+        ));
+        return hasInteraction && textSignals.some(signal => text.includes(signal));
+    }
+
     /**
      * 移除播放器上的覆蓋元素 (增強版)
      */
@@ -1540,6 +1577,7 @@
                 if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
                 if (element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return;
                 if (element.classList.contains('player-enhanced-badge')) return;
+                if (isMediaResumeDialog(element)) return;
                 
                 // 檢查是否為播放控制項 (白名單)
                 const elemClass = (element.className || '').toString().toLowerCase();
@@ -1576,6 +1614,7 @@
 
             // 跳過我們自己的標籤
             if (element.classList.contains('player-enhanced-badge')) return;
+            if (isMediaResumeDialog(element)) return;
             
             // 檢查是否為播放控制項 (白名單)
             const classNameStr = (element.className || '').toString().toLowerCase();

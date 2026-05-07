@@ -193,6 +193,18 @@
         'age-modal', 'age-overlay', 'age-confirm'
     ];
 
+    const MEDIA_RESUME_DIALOG_CLASS_SIGNALS = [
+        'checkresume', 'resume-dialog', 'resume-modal', 'resume-overlay',
+        'continue-watching', 'continuewatching', 'playback-resume',
+        'restore-playback', 'watched-position', 'last-position'
+    ];
+
+    const MEDIA_RESUME_DIALOG_TEXT_KEYWORDS = [
+        'resume playing', 'welcome back', 'left off', 'resume watching',
+        'continue watching', 'where you left off', 'last playback',
+        'previously watched', 'yes, please', 'no, thanks'
+    ];
+
     /**
      * 判斷元素是否為年齡驗證對話框（應保留，不得移除）
      */
@@ -229,6 +241,60 @@
         }
 
         return false;
+    }
+
+    function hasResumeDialogInteraction(element) {
+        return Boolean(element?.querySelector?.(
+            '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
+        ));
+    }
+
+    function isMediaResumeDialog(element) {
+        if (!element) return false;
+
+        let cursor = element;
+        let depth = 0;
+        while (cursor && depth < 5) {
+            const className = (cursor.className || '').toString().toLowerCase();
+            const id = (cursor.id || '').toLowerCase();
+            const combined = `${className} ${id}`;
+
+            if (id === 'yesplease' || id === 'no_thanks') return true;
+            if (MEDIA_RESUME_DIALOG_CLASS_SIGNALS.some(signal => combined.includes(signal))) return true;
+
+            cursor = cursor.parentElement;
+            depth += 1;
+        }
+
+        const text = (element.innerText || element.textContent || '').toLowerCase().substring(0, 1000);
+        if (!text || !hasResumeDialogInteraction(element)) return false;
+        return MEDIA_RESUME_DIALOG_TEXT_KEYWORDS.some(keyword => text.includes(keyword));
+    }
+
+    function isVisibleElement(element) {
+        if (!element) return false;
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 1 && rect.height > 1;
+    }
+
+    function restoreMediaResumeDialogInteractivity(root = document) {
+        const dialogs = root.querySelectorAll?.(
+            '.checkresume, [class*="resume-dialog"], [class*="resume-modal"], ' +
+            '[class*="continue-watching"], [class*="playback-resume"], [class*="restore-playback"]'
+        ) || [];
+
+        dialogs.forEach((dialog) => {
+            if (!isMediaResumeDialog(dialog) || !isVisibleElement(dialog)) return;
+
+            dialog.style.setProperty('pointer-events', 'auto', 'important');
+            dialog.querySelectorAll?.(
+                '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
+            ).forEach((control) => {
+                control.style.setProperty('pointer-events', 'auto', 'important');
+            });
+        });
     }
 
     let removedCount = 0;
@@ -317,6 +383,8 @@
     }
 
     function hasAggressiveOverlaySignals(element, style, rect, playerRect) {
+        if (isMediaResumeDialog(element)) return false;
+
         const zIndex = parseInt(style.zIndex) || 0;
         const overlapRatio = playerRect ? getOverlapRatio(rect, playerRect) : 0;
         const viewportCoverage =
@@ -337,6 +405,7 @@
 
     function isPlayerStructureElement(element, player) {
         if (!element || !player) return false;
+        if (isMediaResumeDialog(element)) return true;
         if (element === player) return true;
         if (player.contains && player.contains(element)) return true;
         if (element.contains && element.contains(player)) return true;
@@ -403,6 +472,8 @@
      * 檢查元素是否為播放器控制項
      */
     function isPlayerControl(element) {
+        if (isMediaResumeDialog(element)) return true;
+
         // 檢查選擇器白名單
         for (const selector of PLAYER_CONTROLS_WHITELIST) {
             try {
@@ -567,6 +638,7 @@
                     if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
                     if (element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return;
                     if (isPlayerControl(element)) return;
+                    if (isMediaResumeDialog(element)) return;
                     if (processedElements.has(element)) return;
                     if (isSafeMediaHost() && containsProtectedMedia(element)) return;
                     
@@ -631,6 +703,7 @@
         suspiciousElements.forEach(element => {
             if (isPlayerStructureElement(element, player)) return;
             if (isPlayerControl(element)) return;
+            if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;
             if (isSafeMediaHost() && containsProtectedMedia(element)) return;
             
@@ -663,6 +736,7 @@
         const insetOverlays = document.querySelectorAll('[class*="inset-0"], [style*="inset: 0"]');
         insetOverlays.forEach(element => {
             if (isPlayerControl(element)) return;
+            if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;
             if (element.querySelector('video, iframe')) return; // 包含播放器的容器
             if (isSafeMediaHost() && containsProtectedMedia(element)) return;
@@ -690,6 +764,7 @@
         const highZElements = document.querySelectorAll('[style*="z-index"]');
         highZElements.forEach(element => {
             if (isPlayerControl(element)) return;
+            if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;
             if (containsProtectedMedia(element)) return;
             
@@ -723,6 +798,8 @@
      */
     function processAllPlayers() {
         if (!blockingEnabled) return;
+        restoreMediaResumeDialogInteractivity();
+
         const players = document.querySelectorAll(
             '.shield-detected-player, .shield-detected-container, .player-enhanced-active, video, iframe[src*="player"], iframe[src*="embed"]'
         );

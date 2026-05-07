@@ -17,6 +17,40 @@
       border: 1px solid #ccc;
       background: #fff;
     }
+
+    .player-stage {
+      position: relative;
+      width: 640px;
+      height: 360px;
+      margin-top: 24px;
+      background: #111;
+    }
+
+    .player-stage video {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #222;
+    }
+
+    .checkresume.clear {
+      position: absolute;
+      inset: 0;
+      z-index: 2200;
+      display: grid;
+      place-content: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0);
+      color: #fff;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .checkresume.clear button {
+      margin: 4px;
+      padding: 8px 12px;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -24,6 +58,29 @@
     <div id="known-global-overlay" class="card player-overlay-ad">global overlay candidate</div>
     <div id="known-javboys-overlay" class="card cvpboxOverlay">javboys overlay candidate</div>
     <div id="safe-content" class="card content-card">safe content should remain visible</div>
+    <p id="resume-status">resume-ready</p>
+    <div class="player-stage shield-detected-player">
+      <video id="fixture-player" muted playsinline></video>
+      <div id="resume-dialog" class="checkresume clear">
+        <strong>Resume playing?</strong>
+        <span>Welcome back. You left off at 0:00:10. Would you like to resume watching where you left off?</span>
+        <span>
+          <button id="yesplease" type="button">Yes, please</button>
+          <button id="no_thanks" type="button">No, thanks</button>
+        </span>
+      </div>
+    </div>
   </main>
+  <script>
+    const resumeStatus = document.getElementById('resume-status');
+    document.getElementById('yesplease').addEventListener('click', () => {
+      resumeStatus.textContent = 'resume-accepted';
+      document.getElementById('resume-dialog')?.remove();
+    });
+    document.getElementById('no_thanks').addEventListener('click', () => {
+      resumeStatus.textContent = 'resume-dismissed';
+      document.getElementById('resume-dialog')?.remove();
+    });
+  </script>
 </body>
 </html>

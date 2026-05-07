@@ -46,8 +46,10 @@ const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 const directPopupOverlayTabs = {};
 const playerPopupGuardTabs = {};
 const sameTabNavigationGuardTabs = {};
+const managedTabLastGoodUrls = {};
 const PLAYER_POPUP_GUARD_MAX_AGE_MS = 15000;
 const SAME_TAB_NAVIGATION_GUARD_MAX_AGE_MS = 4000;
+const MANAGED_ABOUT_BLANK_RECOVERY_MAX_AGE_MS = 15000;
 let siteRegistryLoadPromise = null;
 let siteRegistryState = {
   domains: [],
@@ -1009,6 +1011,74 @@ function clearPlayerPopupGuardTab(tabId) {
 
 function clearSameTabNavigationGuardTab(tabId) {
   delete sameTabNavigationGuardTabs[String(tabId)];
+}
+
+function isAboutBlankUrl(url = '') {
+  const value = String(url || '').trim().toLowerCase();
+  return value === 'about:blank' || value.startsWith('about:blank#') || value.startsWith('about:blank?');
+}
+
+function getManagedTabLastGoodUrlStorageKey(tabId) {
+  return `managedTabLastGoodUrl:${String(tabId)}`;
+}
+
+async function getManagedTabLastGoodUrl(tabId) {
+  const memoryEntry = managedTabLastGoodUrls[String(tabId)];
+  if (memoryEntry?.url) return memoryEntry;
+
+  try {
+    const key = getManagedTabLastGoodUrlStorageKey(tabId);
+    const result = await chrome.storage.session.get([key]);
+    const entry = result?.[key];
+    if (entry?.url) {
+      managedTabLastGoodUrls[String(tabId)] = entry;
+      return entry;
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+async function rememberManagedTabUrl(tabId, tabUrl = '', tab = {}) {
+  const url = String(tabUrl || '').trim();
+  if (!url || isInternalBrowserUrl(url)) return;
+
+  const host = normalizePopupHost(getHostname(url));
+  if (!host || !(await isManagedEnhancedHost(host))) return;
+
+  const entry = {
+    url,
+    host,
+    windowId: Number(tab?.windowId || 0),
+    updatedAt: getNow()
+  };
+  managedTabLastGoodUrls[String(tabId)] = entry;
+
+  try {
+    await chrome.storage.session.set({
+      [getManagedTabLastGoodUrlStorageKey(tabId)]: entry
+    });
+  } catch (_) {}
+}
+
+async function recoverManagedAboutBlankNavigation(tabId, tabUrl = '') {
+  if (!sameTabRedirectGuardEnabled) return false;
+  if (!isAboutBlankUrl(tabUrl)) return false;
+
+  const entry = await getManagedTabLastGoodUrl(tabId);
+  if (!entry?.url) return false;
+  if (getNow() - Number(entry.updatedAt || 0) > MANAGED_ABOUT_BLANK_RECOVERY_MAX_AGE_MS) return false;
+
+  try {
+    await chrome.tabs.update(tabId, { url: String(entry.url) });
+    updateStatsWith((next) => {
+      next.totalBlocked += 1;
+    }).catch(() => {});
+    console.log(`🛡️ 已還原 managed player about:blank 導流: ${String(entry.url).slice(0, 180)}`);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function restoreGuardedSameTabNavigation(tabId, entry, tabUrl = '') {
@@ -6294,6 +6364,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  const currentUrl = String(changeInfo.url || tab?.url || '').trim();
+  if (currentUrl) {
+    if (await recoverManagedAboutBlankNavigation(tabId, currentUrl)) {
+      return;
+    }
+    rememberManagedTabUrl(tabId, currentUrl, tab).catch(() => {});
+  }
+
   if (changeInfo.url || changeInfo.status === 'complete') {
     evaluatePlayerPopupGuardTab(tabId, changeInfo.url || tab?.url || '').catch(() => {});
     evaluateSameTabNavigationGuardTab(tabId, changeInfo.url || tab?.url || '').catch(() => {});
@@ -6333,6 +6411,22 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     })
     .catch(() => {});
 });
+
+chrome.webNavigation?.onCommitted?.addListener((details) => {
+  if (Number(details?.frameId || 0) !== 0) return;
+
+  const tabId = Number(details?.tabId || 0);
+  const url = String(details?.url || '').trim();
+  if (!Number.isFinite(tabId) || tabId <= 0 || !url) return;
+
+  if (isAboutBlankUrl(url)) {
+    recoverManagedAboutBlankNavigation(tabId, url).catch(() => {});
+    return;
+  }
+
+  rememberManagedTabUrl(tabId, url, { windowId: details?.windowId }).catch(() => {});
+});
+
 chrome.tabs.onCreated.addListener((tab) => {
   registerPlayerPopupGuardTab(tab).catch(() => {});
 });
@@ -6343,6 +6437,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
   clearPlayerPopupGuardTab(tabId);
   clearSameTabNavigationGuardTab(tabId);
+  delete managedTabLastGoodUrls[String(tabId)];
+  chrome.storage.session.remove([getManagedTabLastGoodUrlStorageKey(tabId)]).catch(() => {});
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {

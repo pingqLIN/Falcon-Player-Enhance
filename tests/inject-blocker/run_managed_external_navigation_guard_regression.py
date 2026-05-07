@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
 def build_browser_args() -> list[str]:
     host_rules = ",".join([
         "MAP javboys.com 127.0.0.1",
+        "MAP javcock.com 127.0.0.1",
         "MAP playmogo.com 127.0.0.1",
         "MAP external-redirect.test 127.0.0.1",
     ])
@@ -47,6 +48,15 @@ def click_and_wait(page, selector: str, wait_ms: int) -> str:
     page.click(selector)
     page.wait_for_timeout(wait_ms)
     return page.url
+
+
+def close_external_pages(context, keep_page) -> None:
+    for current_page in list(context.pages):
+        if current_page is keep_page or current_page.is_closed():
+            continue
+        url = current_page.url or ""
+        if "external-redirect.test" in url:
+            current_page.close()
 
 
 def set_same_tab_redirect_guard_enabled(context, enabled: bool) -> None:
@@ -130,6 +140,18 @@ def main() -> int:
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
+                popup_then_location_url = click_and_wait(page, "#popup-then-location", args.wait_ms)
+                popup_then_location_blocked = popup_then_location_url == start_url
+                close_external_pages(context, page)
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                popup_then_history_url = click_and_wait(page, "#popup-then-history", args.wait_ms)
+                popup_then_history_blocked = popup_then_history_url == start_url
+                close_external_pages(context, page)
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
                 child_frame = page.frame(name="same-origin-trap-frame")
                 if child_frame is None:
                     raise RuntimeError("same_origin_trap_frame_missing")
@@ -153,6 +175,18 @@ def main() -> int:
                 cross_origin_about_blank_guard_url = page.url
                 cross_origin_player_frame_about_blank_blocked = cross_origin_about_blank_guard_url == cross_origin_guard_url
 
+                javcock_guard_url = managed_url(
+                    server.base_url,
+                    "/tests/test-managed-external-nav-guard.html",
+                    "javcock.com"
+                )
+                page.goto(javcock_guard_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                page.evaluate("window.location.href = 'about:blank'")
+                page.wait_for_timeout(args.wait_ms)
+                managed_about_blank_recovery_url = page.url
+                managed_about_blank_recovered = managed_about_blank_recovery_url == javcock_guard_url
+
                 set_same_tab_redirect_guard_enabled(context, False)
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
@@ -168,6 +202,12 @@ def main() -> int:
                 page.wait_for_timeout(args.wait_ms)
                 disabled_document_location_url = click_and_wait(page, "#external-document-location", args.wait_ms)
                 disabled_document_location_allowed = disabled_document_location_url == external_target
+
+                page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                disabled_popup_then_location_url = click_and_wait(page, "#popup-then-location", args.wait_ms)
+                disabled_popup_then_location_allowed = disabled_popup_then_location_url == external_target
+                close_external_pages(context, page)
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
@@ -189,9 +229,13 @@ def main() -> int:
                         assign_blocked,
                         document_location_blocked,
                         top_document_location_blocked,
+                        popup_then_location_blocked,
+                        popup_then_history_blocked,
                         cross_origin_player_frame_about_blank_blocked,
+                        managed_about_blank_recovered,
                         disabled_assign_allowed,
                         disabled_document_location_allowed,
+                        disabled_popup_then_location_allowed,
                         disabled_child_top_document_location_allowed,
                     ]),
                     "checks": {
@@ -203,10 +247,14 @@ def main() -> int:
                         "locationAssignBlocked": assign_blocked,
                         "documentLocationBlocked": document_location_blocked,
                         "topDocumentLocationBlocked": top_document_location_blocked,
+                        "popupThenLocationBlocked": popup_then_location_blocked,
+                        "popupThenHistoryBlocked": popup_then_history_blocked,
                         "childTopDocumentLocationKnownGap": child_top_document_location_exposes_gap,
                         "crossOriginPlayerFrameAboutBlankBlocked": cross_origin_player_frame_about_blank_blocked,
+                        "managedAboutBlankRecovered": managed_about_blank_recovered,
                         "disabledLocationAssignAllowed": disabled_assign_allowed,
                         "disabledDocumentLocationAllowed": disabled_document_location_allowed,
+                        "disabledPopupThenLocationAllowed": disabled_popup_then_location_allowed,
                         "disabledChildTopDocumentLocationAllowed": disabled_child_top_document_location_allowed,
                     },
                     "samples": {
@@ -219,11 +267,15 @@ def main() -> int:
                         "locationAssignUrl": assign_url,
                         "documentLocationUrl": document_location_url,
                         "topDocumentLocationUrl": top_document_location_url,
+                        "popupThenLocationUrl": popup_then_location_url,
+                        "popupThenHistoryUrl": popup_then_history_url,
                         "childTopDocumentLocationUrl": child_top_document_location_url,
                         "crossOriginAboutBlankGuardUrl": cross_origin_about_blank_guard_url,
+                        "managedAboutBlankRecoveryUrl": managed_about_blank_recovery_url,
                         "disabledWindowOpenSelfUrl": disabled_open_self_url,
                         "disabledLocationAssignUrl": disabled_assign_url,
                         "disabledDocumentLocationUrl": disabled_document_location_url,
+                        "disabledPopupThenLocationUrl": disabled_popup_then_location_url,
                         "disabledChildTopDocumentLocationUrl": disabled_child_top_document_location_url,
                     },
                 }

@@ -390,6 +390,43 @@ function containsProtectedMedia(element) {
     return false;
 }
 
+function isMediaResumeDialog(element) {
+    if (!element) return false;
+
+    const classSignals = [
+        'checkresume', 'resume-dialog', 'resume-modal', 'resume-overlay',
+        'continue-watching', 'continuewatching', 'playback-resume',
+        'restore-playback', 'watched-position', 'last-position'
+    ];
+    const textSignals = [
+        'resume playing', 'welcome back', 'left off', 'resume watching',
+        'continue watching', 'where you left off', 'last playback',
+        'previously watched', 'yes, please', 'no, thanks'
+    ];
+
+    let cursor = element;
+    let depth = 0;
+    while (cursor && depth < 5) {
+        const className = (cursor.className?.toString() || '').toLowerCase();
+        const id = (cursor.id || '').toLowerCase();
+        const combined = `${className} ${id}`;
+
+        if (id === 'yesplease' || id === 'no_thanks') return true;
+        if (classSignals.some(signal => combined.includes(signal))) return true;
+
+        cursor = cursor.parentElement;
+        depth++;
+    }
+
+    const text = (element.innerText || element.textContent || '').toLowerCase().substring(0, 1000);
+    if (!text) return false;
+
+    const hasInteraction = Boolean(element.querySelector?.(
+        '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
+    ));
+    return hasInteraction && textSignals.some(signal => text.includes(signal));
+}
+
 // 檢查是否為擴充功能內部元素
 function isInternalElement(element) {
     if (!element || !element.nodeType) return false;
@@ -461,8 +498,16 @@ let lastUserInteractionContext = {
     target: ''
 };
 const USER_INTERACTION_GRACE_PERIOD = 300;
+const POST_POPUP_NAVIGATION_GUARD_MS = 12000;
 const LOW_INTENT_TEXT_LENGTH = 8;
 const IMAGE_LIKE_SIGNATURE_PATTERN = /thumb|thumbnail|poster|preview|cover/;
+let lastExternalPopupOpen = {
+    ts: 0,
+    url: '',
+    target: '',
+    blocked: false,
+    userTriggered: false
+};
 
 function normalizeInteractionText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
@@ -565,6 +610,14 @@ function isTopFrameWindow() {
     }
 }
 
+function isEmbeddedFrameWindow() {
+    try {
+        return window.self !== window.top;
+    } catch (e) {
+        return true;
+    }
+}
+
 function getNavigationTargetInfo(url) {
     if (!url) return null;
     try {
@@ -597,6 +650,95 @@ function isApprovedExternalNavigationHost(hostname) {
         return true;
     }
     return popupDirectIframeHosts.some((domain) => isDomainOrSubdomain(host, domain));
+}
+
+function shouldTrackPopupOpenForNavigationGuard(url, target) {
+    if (!isPlayerSite() || isCompatibilityModeSite()) return false;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (sameTabRedirectGuardEnabled !== true) return false;
+
+    const normalizedTarget = String(target || '').toLowerCase();
+    const sameTabTarget = normalizedTarget === '' || normalizedTarget === '_self' || normalizedTarget === '_top' || normalizedTarget === '_parent';
+    if (sameTabTarget) return false;
+
+    const info = getNavigationTargetInfo(url);
+    if (!info || info.internal) return false;
+    if (!info.hostname || isApprovedExternalNavigationHost(info.hostname)) return false;
+    return true;
+}
+
+function rememberExternalPopupOpen(url, target, blocked = false) {
+    if (!shouldTrackPopupOpenForNavigationGuard(url, target)) return;
+    lastExternalPopupOpen = {
+        ts: Date.now(),
+        url: String(url || '').slice(0, 500),
+        target: String(target || '').slice(0, 64),
+        blocked: blocked === true,
+        userTriggered: isUserTriggered()
+    };
+}
+
+function rememberScriptedPopupRedirectIntent(reason) {
+    if (!isPlayerSite() || isCompatibilityModeSite()) return;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return;
+    if (sameTabRedirectGuardEnabled !== true) return;
+
+    lastExternalPopupOpen = {
+        ts: Date.now(),
+        url: String(reason || 'scripted_popup_redirect').slice(0, 500),
+        target: 'scripted-listener',
+        blocked: false,
+        userTriggered: isUserTriggered()
+    };
+}
+
+function getRecentExternalPopupOpen() {
+    if ((Date.now() - Number(lastExternalPopupOpen.ts || 0)) > POST_POPUP_NAVIGATION_GUARD_MS) {
+        return null;
+    }
+    return lastExternalPopupOpen;
+}
+
+function shouldBlockPostPopupNavigation(url, reason) {
+    if (!isPlayerSite() || isCompatibilityModeSite()) return false;
+    if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
+    if (sameTabRedirectGuardEnabled !== true) return false;
+
+    const popup = getRecentExternalPopupOpen();
+    if (!popup) return false;
+
+    const info = getNavigationTargetInfo(url);
+    if (!info || info.internal) return false;
+
+    const targetUrl = info.normalizedUrl || String(url || '');
+    const targetHost = info.hostname || '';
+    const currentHost = String(window.location.hostname || '').toLowerCase();
+    const sameDocumentUrl = targetUrl.split('#')[0] === String(window.location.href || '').split('#')[0];
+    if (sameDocumentUrl) return false;
+
+    const externalHost = targetHost && !isDomainOrSubdomain(targetHost, currentHost) && !isDomainOrSubdomain(currentHost, targetHost);
+    const suspiciousSameOriginHistory =
+        String(reason || '').includes('history_') &&
+        /(?:ad|ads|click|pop|promo|redirect|track|trap|watch-now|continue)/i.test(targetUrl);
+
+    if (!externalHost && !isDangerousNavigationUrl(targetUrl) && !suspiciousSameOriginHistory) {
+        return false;
+    }
+
+    const urlText = targetUrl.substring(0, 300);
+    warn(`已阻擋 popup 後原頁導流 ${reason}:`, urlText.substring(0, 80));
+    emitAiEvent('blocked_malicious_navigation', {
+        severity: 1.55,
+        confidence: 0.92,
+        detail: {
+            reason: `post_popup_${reason}`,
+            url: urlText,
+            popupUrl: String(popup.url || '').slice(0, 300),
+            popupTarget: String(popup.target || ''),
+            embeddedFrame: isEmbeddedFrameWindow()
+        }
+    });
+    return true;
 }
 
 function getRecentInteractionContext() {
@@ -777,6 +919,7 @@ const blockedOpen = function(url, target, features) {
     const urlStr = url ? String(url) : '';
     const normalizedTarget = String(target || '').toLowerCase();
     const sameTabTarget = normalizedTarget === '' || normalizedTarget === '_self' || normalizedTarget === '_top' || normalizedTarget === '_parent';
+    const trackPostPopupNavigation = shouldTrackPopupOpenForNavigationGuard(url, target);
 
     // 相容模式：保留站點原生開窗流程，避免播放器初始化失敗
     if (isCompatibilityModeSite()) {
@@ -822,6 +965,9 @@ const blockedOpen = function(url, target, features) {
         }
 
         if (isBlockedUrl(url) || (url && String(url).startsWith('blob:'))) {
+            if (trackPostPopupNavigation) {
+                rememberExternalPopupOpen(url, target, true);
+            }
             warn('已阻擋 Blob 彈窗:', urlStr.substring(0, 80));
             pageStats.popupsBlocked++;
             emitAiEvent('blocked_popup', {
@@ -831,10 +977,16 @@ const blockedOpen = function(url, target, features) {
             });
             return createFakeWindow();
         }
+        if (trackPostPopupNavigation) {
+            rememberExternalPopupOpen(url, target, false);
+        }
         return originalOpen.call(window, url, target, features);
     }
 
     if (isLevelAtLeast(BLOCKING_LEVEL.HARDENED) && url && isDangerousNavigationUrl(url)) {
+        if (trackPostPopupNavigation) {
+            rememberExternalPopupOpen(url, target, true);
+        }
         warn('L3 已阻擋可疑彈窗導流:', urlStr.substring(0, 80));
         pageStats.popupsBlocked++;
         reportStats();
@@ -848,6 +1000,9 @@ const blockedOpen = function(url, target, features) {
     
     // 策略 1: 已知惡意 URL 總是攔截
     if (isBlockedUrl(url)) {
+        if (trackPostPopupNavigation) {
+            rememberExternalPopupOpen(url, target, true);
+        }
         warn('已阻擋惡意彈窗:', urlStr.substring(0, 80));
         pageStats.popupsBlocked++;
         reportStats();
@@ -861,11 +1016,17 @@ const blockedOpen = function(url, target, features) {
     
     // 策略 2: 用戶主動觸發的操作允許通過（限安全 URL）
     if (isUserTriggered() && isSafeUrl(url)) {
+        if (trackPostPopupNavigation) {
+            rememberExternalPopupOpen(url, target, false);
+        }
         log('允許用戶觸發的彈窗:', urlStr.substring(0, 60));
         return originalOpen.call(window, url, target, features);
     }
 
     if (aiRuntimeState.popupStrictMode && url && !isSafeUrl(url)) {
+        if (trackPostPopupNavigation) {
+            rememberExternalPopupOpen(url, target, true);
+        }
         warn('AI 嚴格模式阻擋彈窗:', urlStr.substring(0, 80));
         pageStats.popupsBlocked++;
         reportStats();
@@ -883,6 +1044,9 @@ const blockedOpen = function(url, target, features) {
     }
     
     // 策略 4: 其他非用戶觸發的外部彈窗攔截
+    if (trackPostPopupNavigation) {
+        rememberExternalPopupOpen(url, target, true);
+    }
     warn('已阻擋自動彈窗:', urlStr.substring(0, 80));
     pageStats.popupsBlocked++;
     reportStats();
@@ -1000,6 +1164,10 @@ HTMLFormElement.prototype.submit = function() {
 function shouldBlockLocationNavigation(url, reason) {
     if (!isLevelAtLeast(BLOCKING_LEVEL.STANDARD)) return false;
 
+    if (shouldBlockPostPopupNavigation(url, reason)) {
+        return true;
+    }
+
     if (shouldBlockManagedExternalNavigation(url, {
         navigationKind: reason,
         userTriggered: isUserTriggered()
@@ -1099,6 +1267,27 @@ wrapLocationMethod('assign');
 wrapLocationMethod('replace');
 wrapLocationHrefSetter();
 
+function wrapHistoryMethod(methodName) {
+    try {
+        const original = History.prototype[methodName];
+        if (typeof original !== 'function') return;
+        if (original.__shieldWrapped) return;
+
+        const wrapped = function(state, title, url) {
+            if (url && shouldBlockPostPopupNavigation(url, `history_${methodName}_blocked`)) {
+                return;
+            }
+            return original.call(this, state, title, url);
+        };
+        wrapped.__shieldWrapped = true;
+        disguiseFunction(wrapped, original);
+        History.prototype[methodName] = wrapped;
+    } catch (e) {}
+}
+
+wrapHistoryMethod('pushState');
+wrapHistoryMethod('replaceState');
+
 function parseMetaRefreshUrl(content) {
     const text = String(content || '');
     const matched = text.match(/url\s*=\s*([^;]+)/i);
@@ -1183,6 +1372,7 @@ function neutralizeLevel3FullscreenOverlays() {
     document.querySelectorAll(selectors).forEach((el) => {
         if (!el || isInternalElement(el)) return;
         if (containsProtectedMedia(el)) return;
+        if (isMediaResumeDialog(el)) return;
         if (isMainPageContainer(el)) return;
 
         const style = window.getComputedStyle(el);
@@ -1218,6 +1408,7 @@ setInterval(neutralizeLevel3FullscreenOverlays, 700);
 // ============================================================================
 function isClickjackingLayer(element) {
     if (!element || element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return false;
+    if (isMediaResumeDialog(element)) return false;
 
     // 🔴 關鍵保護：絕不標記主頁面容器為覆蓋層
     if (isMainPageContainer(element)) return false;
@@ -1294,6 +1485,10 @@ function removeClickjackingLayer(element) {
     }
     if (containsProtectedMedia(element)) {
         log('跳過播放器容器:', element.id || element.className?.substring?.(0, 30));
+        return;
+    }
+    if (isMediaResumeDialog(element)) {
+        log('跳過播放器續播確認視窗:', element.id || element.className?.substring?.(0, 30));
         return;
     }
     
@@ -1390,6 +1585,10 @@ function removeKnownOverlays() {
                         log('跳過播放器容器:', el.id || el.className?.substring?.(0, 30));
                         return;
                     }
+                    if (isMediaResumeDialog(el)) {
+                        log('跳過播放器續播確認視窗:', el.id || el.className?.substring?.(0, 30));
+                        return;
+                    }
                     
                     el.style.setProperty('display', 'none', 'important');
                     el.style.setProperty('visibility', 'hidden', 'important');
@@ -1440,6 +1639,7 @@ function protectVideoElements() {
             if (el === media) return;
             if (el.tagName === 'HTML' || el.tagName === 'BODY') return;
             if (el.tagName === 'VIDEO' || el.tagName === 'IFRAME') return;
+            if (isMediaResumeDialog(el)) return;
             
             // 白名單：正常互動元素，絕不設置 pointer-events: none
             if (el.tagName === 'A' || el.tagName === 'BUTTON' || 
@@ -1606,6 +1806,9 @@ EventTarget.prototype.addEventListener = function(type, listener, options) {
                 const interaction = getNavigationInteractionContext(e?.target);
                 // 用戶觸發的正常點擊 -> 執行原函數
                 if (e.isTrusted && isUserTriggered() && !isClickjackingLayer(e.target)) {
+                    if (hasPopupBehavior && hasRedirectBehavior && shouldTrackPotentialExternalNavigation(interaction)) {
+                        rememberScriptedPopupRedirectIntent('click_listener_popup_then_redirect');
+                    }
                     if (hasRedirectBehavior && shouldFlagManagedRedirectListener(interaction)) {
                         emitAiEvent('managed_redirect_listener_candidate', {
                             severity: 0.45,

@@ -14,7 +14,7 @@ if str(POPUP_SMOKE_DIR) not in sys.path:
     sys.path.insert(0, str(POPUP_SMOKE_DIR))
 
 import run_popup_smoke as smoke  # noqa: E402
-from playwright.sync_api import Page, sync_playwright  # noqa: E402
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -99,25 +99,47 @@ def inspect_page(page: Page, url: str, timeout_ms: int, wait_ms: int) -> dict[st
     enable_standard_blocking(page, timeout_ms)
     page.wait_for_timeout(wait_ms)
 
-    return page.evaluate(
+    before_click = page.evaluate(
         """() => {
-            const ids = ['known-global-overlay', 'known-javboys-overlay', 'safe-content'];
+            const ids = ['known-global-overlay', 'known-javboys-overlay', 'safe-content', 'resume-dialog', 'no_thanks'];
             const elements = Object.fromEntries(ids.map((id) => {
                 const element = document.getElementById(id);
                 const style = element ? window.getComputedStyle(element) : null;
                 return [id, {
                     exists: Boolean(element),
                     display: style ? style.display : null,
-                    visibility: style ? style.visibility : null
+                    visibility: style ? style.visibility : null,
+                    pointerEvents: style ? style.pointerEvents : null
                 }];
             }));
 
             return {
                 hostname: window.location.hostname,
-                elements
+                elements,
+                resumeStatus: document.getElementById('resume-status')?.textContent || ''
             };
         }"""
     )
+
+    resume_click_error = ""
+    try:
+        page.click("#no_thanks", timeout=3000)
+        page.wait_for_timeout(250)
+    except PlaywrightTimeoutError as error:
+        resume_click_error = str(error)
+
+    after_click = page.evaluate(
+        """() => ({
+            resumeDialogExists: Boolean(document.getElementById('resume-dialog')),
+            resumeStatus: document.getElementById('resume-status')?.textContent || ''
+        })"""
+    )
+
+    return {
+        **before_click,
+        "resumeClickError": resume_click_error,
+        "afterResumeClick": after_click,
+    }
 
 
 def build_report(base_url: str, page: Page, timeout_ms: int, wait_ms: int) -> dict[str, object]:
@@ -129,6 +151,12 @@ def build_report(base_url: str, page: Page, timeout_ms: int, wait_ms: int) -> di
         or javboys["elements"]["known-javboys-overlay"]["display"] == "none",
         "safeContentVisible": javboys["elements"]["safe-content"]["exists"] is True
         and javboys["elements"]["safe-content"]["display"] != "none",
+        "resumeDialogPreserved": javboys["elements"]["resume-dialog"]["exists"] is True
+        and javboys["elements"]["resume-dialog"]["display"] != "none"
+        and javboys["elements"]["resume-dialog"]["pointerEvents"] != "none",
+        "resumeButtonClickable": javboys["resumeClickError"] == ""
+        and javboys["afterResumeClick"]["resumeStatus"] == "resume-dismissed"
+        and javboys["afterResumeClick"]["resumeDialogExists"] is False,
     }
     return {
         "ok": all(checks.values()),
