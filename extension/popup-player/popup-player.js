@@ -113,6 +113,7 @@
   let lumaLiftVideo = null;
   let remoteLumaLiftFrameTimer = null;
   let remoteLumaLiftFrameInFlight = false;
+  let sourceTabLumaLiftSafeMode = false;
 
   const visualState = { ...DEFAULT_VISUAL_STATE };
 
@@ -433,6 +434,9 @@
   }
 
   function stopLumaLift(status = 'LumaLift Standby', mode = 'idle') {
+    if (sourceTabLumaLiftSafeMode) {
+      void setSourceTabLumaLiftSafeMode(false);
+    }
     stopRemoteLumaLiftFrames();
     if (lumaLiftFrameRequest) {
       cancelAnimationFrame(lumaLiftFrameRequest);
@@ -589,6 +593,9 @@
 
   function startRemoteLumaLiftFrames() {
     stopRemoteLumaLiftFrames();
+    if (currentParams?.sourceTabId > 0) {
+      void setSourceTabLumaLiftSafeMode(true);
+    }
     lumaLiftVideo = null;
     ensureLumaLiftCanvas();
     setLumaLiftStatus('LumaLift Remote', 'waiting');
@@ -817,6 +824,27 @@
       return await chromeApi.tabs.sendMessage(sourceTabId, {
         ...message,
         playerId: currentParams?.playerId || message.playerId || undefined
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function setSourceTabLumaLiftSafeMode(enabled = false) {
+    const nextState = enabled === true;
+    const sourceTabId = Number(currentParams?.sourceTabId || 0);
+    if (!Number.isFinite(sourceTabId) || sourceTabId <= 0) {
+      sourceTabLumaLiftSafeMode = false;
+      return null;
+    }
+    if (sourceTabLumaLiftSafeMode === nextState) {
+      return null;
+    }
+    sourceTabLumaLiftSafeMode = nextState;
+    try {
+      return await sendRemotePlayerMessage({
+        action: 'setLumaLiftSafeMode',
+        enabled: nextState
       });
     } catch (_) {
       return null;
@@ -1881,6 +1909,7 @@
     setStageAspect(16, 9);
 
     if ((params.remoteControlPreferred || (!params.videoSrc && !params.iframeSrc)) && params.sourceTabId > 0) {
+      await setSourceTabLumaLiftSafeMode(true);
       setMode('remote');
       setLinkShield(false);
       stopLumaLift('LumaLift Remote', 'waiting');

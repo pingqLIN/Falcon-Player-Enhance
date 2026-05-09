@@ -44,6 +44,8 @@ const DEVTOOLS_TOP_BLANK_TRAP_HOSTS = [
 ];
 let protectionLevel = BLOCKING_LEVEL.BASIC;
 let sameTabRedirectGuardEnabled = true;
+let lumaLiftSafeMode = false;
+let requestedProtectionLevel = BLOCKING_LEVEL.BASIC;
 const aiRuntimeState = {
     popupStrictMode: false,
     sensitivityBoost: 0,
@@ -104,6 +106,9 @@ function isPlayerSite() {
 }
 
 function isCompatibilityModeSite() {
+    if (lumaLiftSafeMode) {
+        return true;
+    }
     const host = window.location.hostname.toLowerCase();
     return compatibilityModeSites.some((domain) => host === domain || host.endsWith('.' + domain));
 }
@@ -235,7 +240,11 @@ function refreshAiBlockedDomains() {
 }
 
 function setProtectionLevel(level) {
-    protectionLevel = normalizeBlockingLevel(level);
+    requestedProtectionLevel = normalizeBlockingLevel(level);
+    const targetLevel = lumaLiftSafeMode
+        ? Math.min(requestedProtectionLevel, BLOCKING_LEVEL.BASIC)
+        : requestedProtectionLevel;
+    protectionLevel = targetLevel;
     try {
         window.__shieldProtectionLevel = protectionLevel;
     } catch (e) {}
@@ -1935,6 +1944,14 @@ if (isPlayerSite() && !isCompatibilityModeSite() && isLevelAtLeast(BLOCKING_LEVE
 function setupMessageListener() {
     if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            if (request.action === 'setLumaLiftSafeMode') {
+                lumaLiftSafeMode = request.enabled === true;
+                setProtectionLevel(requestedProtectionLevel);
+                recoverFromRedirectTrap();
+                sendResponse({ success: true, lumaLiftSafeMode });
+                return true;
+            }
+
             if (request.action === 'applyBlockingLevel') {
                 setProtectionLevel(request.level);
                 sameTabRedirectGuardEnabled = request.sameTabRedirectGuardEnabled !== false;

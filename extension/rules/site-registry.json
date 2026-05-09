@@ -39,7 +39,9 @@
   ],
   "profiles": {
     "compatibilityModeSites": [
-      "boyfriendtv.com"
+      "boyfriendtv.com",
+      "javboys.com",
+      "javboys.online"
     ],
     "basicProtectionExcludedDomains": [
       "lovable.dev",

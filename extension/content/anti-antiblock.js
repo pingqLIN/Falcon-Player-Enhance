@@ -878,6 +878,7 @@ let fullCleanupBootstrapped = false;
 let siteStateHydrated = false;
 let adblockMessageObserver = null;
 let adblockMessageIntervalId = 0;
+let lumaLiftSafeMode = false;
 const hiddenAdblockMessages = new Map();
 
 function normalizeHostname(hostname) {
@@ -941,6 +942,12 @@ function deactivateFullCleanup() {
 }
 
 function syncProtectionMode() {
+    if (lumaLiftSafeMode) {
+        deactivateFullCleanup();
+        protectIframes();
+        return;
+    }
+
     if (!siteStateHydrated) {
         deactivateFullCleanup();
         protectIframes();
@@ -999,6 +1006,15 @@ function loadWhitelistState() {
 // 監聽 popup 切換事件
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
     chrome.runtime.onMessage.addListener((request) => {
+        if (request.action === 'setLumaLiftSafeMode') {
+            const nextState = request.enabled === true;
+            if (lumaLiftSafeMode !== nextState) {
+                lumaLiftSafeMode = nextState;
+                syncProtectionMode();
+            }
+            return true;
+        }
+
         if (request.action === 'setWhitelistEnhanceOnly') {
             applySiteState({
                 whitelistDomains,
