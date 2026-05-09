@@ -997,6 +997,12 @@ function hasPlayerPopupTrapToken(url = '', hostname = '') {
   return PLAYER_POPUP_TRAP_TOKENS.some((token) => haystack.includes(token));
 }
 
+function hasConfirmedPlayerPopupTrapSignal(url = '', hostname = '') {
+  // User-opened external tabs from managed player sites are valid navigation.
+  // Keep the tab-level guard limited to confirmed trap signals here.
+  return hasPlayerPopupTrapToken(url, hostname);
+}
+
 async function isManagedEnhancedHost(hostname = '') {
   const normalizedHost = normalizePopupHost(hostname);
   if (!normalizedHost) return false;
@@ -1238,12 +1244,12 @@ async function evaluatePlayerPopupGuardTab(tabId, tabUrl = '') {
     return;
   }
 
-  if (hasPlayerPopupTrapToken(resolvedUrl, targetHost)) {
+  if (hasConfirmedPlayerPopupTrapSignal(resolvedUrl, targetHost)) {
     await closeGuardedPlayerPopupTab(tabId, entry, resolvedUrl);
     return;
   }
 
-  await closeGuardedPlayerPopupTab(tabId, entry, resolvedUrl);
+  clearPlayerPopupGuardTab(tabId);
 }
 
 async function registerPlayerPopupGuardTab(tab) {

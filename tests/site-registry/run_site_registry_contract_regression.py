@@ -59,7 +59,8 @@ def fetch_site_registry_contract(page, extension_id: str) -> dict[str, object]:
                 compatibilityModeSites: result?.profiles?.compatibilityModeSites || [],
                 basicProtectionExcludedDomains: result?.profiles?.basicProtectionExcludedDomains || [],
                 injectBlockerKnownOverlaySelectors: result?.profiles?.injectBlocker?.knownOverlaySelectors || [],
-                cosmeticFilterGlobalSelectors: result?.profiles?.cosmeticFilter?.globalSelectors || []
+                cosmeticFilterGlobalSelectors: result?.profiles?.cosmeticFilter?.globalSelectors || [],
+                cosmeticFilterSiteSelectorGroups: result?.profiles?.cosmeticFilter?.siteSelectorGroups || []
             };
         }"""
     )
@@ -92,7 +93,18 @@ def build_report(contract: dict[str, object]) -> dict[str, object]:
     basic_excluded_domains = contract["basicProtectionExcludedDomains"]
     overlay_selectors = contract["injectBlockerKnownOverlaySelectors"]
     cosmetic_selectors = contract["cosmeticFilterGlobalSelectors"]
+    cosmetic_site_groups = contract["cosmeticFilterSiteSelectorGroups"]
     builtin_domains = contract["builtinDomains"]
+    javboys_group = next(
+        (
+            group for group in cosmetic_site_groups
+            if isinstance(group, dict)
+            and isinstance(group.get("domains"), list)
+            and "javboys.com" in group.get("domains", [])
+        ),
+        {}
+    )
+    javboys_selectors = javboys_group.get("selectors", []) if isinstance(javboys_group, dict) else []
 
     checks = {
         "success": bool(contract["success"]),
@@ -101,6 +113,8 @@ def build_report(contract: dict[str, object]) -> dict[str, object]:
         "basicProtectionExcludedDomains": isinstance(basic_excluded_domains, list) and "lovable.dev" in basic_excluded_domains and "auth.lovable.dev" in basic_excluded_domains,
         "injectOverlaySelectors": isinstance(overlay_selectors, list) and ".cvpboxOverlay" in overlay_selectors,
         "cosmeticFilterSelectors": isinstance(cosmetic_selectors, list) and '[class*="player-overlay-ad"]' in cosmetic_selectors,
+        "javboysTransparentClickCatcherSelector": isinstance(javboys_selectors, list)
+        and 'body > div[style*="z-index: 1001"][style*="position: absolute"][style*="background-image"]' in javboys_selectors,
         "poapanEmbedHosts": isinstance(builtin_domains, list) and "playmogo.com" in builtin_domains and "voe.sx" in builtin_domains
     }
 

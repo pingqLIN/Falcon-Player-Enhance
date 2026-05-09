@@ -70,7 +70,7 @@ def inspect_page(page, url: str, wait_ms: int) -> dict[str, object]:
     page.wait_for_timeout(wait_ms)
     return page.evaluate(
         """() => {
-            const ids = ['global-ad', 'javboys-site-ad', 'missav-site-ad', 'normal-card'];
+            const ids = ['global-ad', 'javboys-site-ad', 'javboys-transparent-click-catcher', 'missav-site-ad', 'normal-card'];
             const elements = Object.fromEntries(ids.map((id) => {
                 const element = document.getElementById(id);
                 const style = element ? window.getComputedStyle(element) : null;
@@ -115,11 +115,13 @@ def build_report(base_url: str, page, wait_ms: int) -> dict[str, object]:
     checks = {
         "javboysGlobalHidden": javboys["elements"]["global-ad"]["display"] == "none",
         "javboysSiteHidden": javboys["elements"]["javboys-site-ad"]["display"] == "none",
+        "javboysTransparentClickCatcherHidden": javboys["elements"]["javboys-transparent-click-catcher"]["display"] == "none",
         "javboysMissavStillVisible": javboys["elements"]["missav-site-ad"]["display"] != "none",
         "javboysNormalVisible": javboys["elements"]["normal-card"]["display"] != "none",
         "javboysStylePresent": bool(javboys["styleElementPresent"]) and int(javboys["styleLength"]) > 0,
         "missavGlobalHidden": missav["elements"]["global-ad"]["display"] == "none",
         "missavSiteHidden": missav["elements"]["missav-site-ad"]["display"] == "none",
+        "missavJavboysClickCatcherStillVisible": missav["elements"]["javboys-transparent-click-catcher"]["display"] != "none",
         "missavJavboysStillVisible": missav["elements"]["javboys-site-ad"]["display"] != "none",
         "missavNormalVisible": missav["elements"]["normal-card"]["display"] != "none",
         "missavStylePresent": bool(missav["styleElementPresent"]) and int(missav["styleLength"]) > 0,

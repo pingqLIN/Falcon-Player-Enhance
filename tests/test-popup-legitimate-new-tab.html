@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon Legitimate New Tab</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    main {
+      width: min(720px, calc(100vw - 48px));
+      display: grid;
+      gap: 20px;
+    }
+    a {
+      display: inline-grid;
+      place-items: center;
+      min-height: 48px;
+      width: fit-content;
+      padding: 0 18px;
+      color: white;
+      text-decoration: none;
+      font-weight: 700;
+      background: #2563eb;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Legitimate New Tab</h1>
+    <p>This managed player page represents a normal user-opened external link.</p>
+    <a
+      id="legit-new-tab"
+      href="http://legitimate-destination.test:0/tests/test-popup-legitimate-destination.html"
+      target="_blank"
+    >Open legitimate destination</a>
+  </main>
+  <script>
+    const link = document.getElementById('legit-new-tab');
+    const target = new URL(link.getAttribute('href'), window.location.href);
+    target.port = window.location.port;
+    link.href = target.toString();
+  </script>
+</body>
+</html>

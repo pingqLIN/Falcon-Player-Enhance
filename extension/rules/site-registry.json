@@ -75,6 +75,7 @@
             ".banner-zone",
             "[class*=\"sponsor\"]",
             "div[style*=\"position: fixed\"][style*=\"z-index: 9999\"]",
+            "body > div[style*=\"z-index: 1001\"][style*=\"position: absolute\"][style*=\"background-image\"]",
             ".cvpboxOverlay",
             ".cvpcolorbox"
           ]

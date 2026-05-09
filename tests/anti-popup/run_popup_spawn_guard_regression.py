@@ -36,6 +36,7 @@ def build_browser_args() -> list[str]:
         "MAP javboys.com 127.0.0.1",
         "MAP popup-source.test 127.0.0.1",
         "MAP displayendpointstarring.com 127.0.0.1",
+        "MAP legitimate-destination.test 127.0.0.1",
     ])
     return [f"--host-resolver-rules={host_rules}"]
 
@@ -85,14 +86,25 @@ def set_popup_guard_enabled(context, enabled: bool) -> None:
     time.sleep(0.25)
 
 
+def close_pages_matching(context, keep_page, host_fragment: str) -> None:
+    for current_page in list(context.pages):
+        if current_page is keep_page or current_page.is_closed():
+            continue
+        if host_fragment in current_page.url:
+            current_page.close()
+
+
 def build_report(
     enabled_sample: dict[str, object],
+    legitimate_sample: dict[str, object],
     disabled_sample: dict[str, object],
 ) -> dict[str, object]:
     checks = {
         "enabledGuardClosedPopup": not any("displayendpointstarring.com" in url for url in enabled_sample["afterClickUrls"]),
         "enabledOpenerStayedOnManagedPage": "javboys.com" in str(enabled_sample["currentUrl"]),
         "enabledBackNavigationReturnedToStart": "starter.test" in str(enabled_sample["afterBackUrl"]),
+        "enabledGuardLeavesLegitimateNewTabOpen": any("legitimate-destination.test" in url for url in legitimate_sample["afterClickUrls"]),
+        "enabledLegitimateOpenerStayedOnManagedPage": "javboys.com" in str(legitimate_sample["currentUrl"]),
         "disabledGuardLeavesPopupOpen": any("displayendpointstarring.com" in url for url in disabled_sample["afterClickUrls"]),
         "disabledOpenerStayedOnManagedPage": "javboys.com" in str(disabled_sample["currentUrl"]),
     }
@@ -102,6 +114,7 @@ def build_report(
         "checks": checks,
         "samples": {
             "enabled": enabled_sample,
+            "legitimate": legitimate_sample,
             "disabled": disabled_sample,
         },
     }
@@ -129,6 +142,7 @@ def main() -> int:
                 page = context.new_page()
                 start_url = f"{server.base_url}/tests/test-popup-spawn-guard-start.html".replace("127.0.0.1", "starter.test")
                 host_url = f"{server.base_url}/tests/test-popup-spawn-guard.html".replace("127.0.0.1", "javboys.com")
+                legitimate_host_url = f"{server.base_url}/tests/test-popup-legitimate-new-tab.html".replace("127.0.0.1", "javboys.com")
 
                 page.goto(start_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.goto(host_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
@@ -154,11 +168,25 @@ def main() -> int:
                     "afterBackUrl": after_back_url,
                 }
 
-                for popup_page in list(context.pages):
-                    if popup_page is page or popup_page.is_closed():
-                        continue
-                    if "displayendpointstarring.com" in popup_page.url:
-                        popup_page.close()
+                close_pages_matching(context, page, "displayendpointstarring.com")
+
+                page.goto(legitimate_host_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                legitimate_before_urls = get_external_page_urls(context)
+                with context.expect_page(timeout=args.timeout_ms) as legitimate_page_info:
+                    page.locator("#legit-new-tab").click(timeout=args.timeout_ms)
+                legitimate_popup = legitimate_page_info.value
+                legitimate_popup.wait_for_load_state("domcontentloaded", timeout=args.timeout_ms)
+                page.wait_for_timeout(args.wait_ms)
+                legitimate_after_click_urls = get_external_page_urls(context)
+                legitimate_current_url = page.url
+                legitimate_sample = {
+                    "beforeUrls": legitimate_before_urls,
+                    "afterClickUrls": legitimate_after_click_urls,
+                    "currentUrl": legitimate_current_url,
+                    "popupClosed": legitimate_popup.is_closed(),
+                }
+                close_pages_matching(context, page, "legitimate-destination.test")
 
                 set_popup_guard_enabled(context, False)
                 page.goto(host_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
@@ -177,7 +205,7 @@ def main() -> int:
                     "currentUrl": disabled_current_url,
                 }
 
-                report = build_report(enabled_sample, disabled_sample)
+                report = build_report(enabled_sample, legitimate_sample, disabled_sample)
                 print(json.dumps({
                     "ok": report["ok"],
                     "extensionId": extension_id,
