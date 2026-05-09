@@ -21,6 +21,7 @@
   const modeChip = document.getElementById('mode-chip');
   const playbackState = document.getElementById('playback-state');
   const shieldState = document.getElementById('shield-state');
+  const lumaLiftState = document.getElementById('lumalift-state');
   const timeReadout = document.getElementById('time-readout');
   const transportNote = document.getElementById('transport-note');
   const timelineNote = document.getElementById('timeline-note');
@@ -107,6 +108,11 @@
   let iframeShortcutTimelineRatio = 0;
   let iframeShortcutVolume = 1;
   let iframeShortcutSpeed = 1;
+  let lumaLiftCanvas = null;
+  let lumaLiftFrameRequest = 0;
+  let lumaLiftVideo = null;
+  let remoteLumaLiftFrameTimer = null;
+  let remoteLumaLiftFrameInFlight = false;
 
   const visualState = { ...DEFAULT_VISUAL_STATE };
 
@@ -399,6 +405,197 @@
     `;
     playbackState.textContent = 'Error';
     playbackState.classList.remove('active');
+    setLumaLiftStatus('LumaLift Standby');
+  }
+
+  function setLumaLiftStatus(label, mode = 'idle') {
+    if (!lumaLiftState) return;
+    lumaLiftState.textContent = label;
+    lumaLiftState.classList.toggle('active', mode === 'active');
+    lumaLiftState.classList.toggle('waiting', mode === 'waiting');
+  }
+
+  function ensureLumaLiftCanvas() {
+    if (lumaLiftCanvas?.isConnected) return lumaLiftCanvas;
+    lumaLiftCanvas = document.createElement('canvas');
+    lumaLiftCanvas.className = 'lumalift-canvas';
+    lumaLiftCanvas.setAttribute('aria-hidden', 'true');
+    playerContainer.appendChild(lumaLiftCanvas);
+    return lumaLiftCanvas;
+  }
+
+  function stopRemoteLumaLiftFrames() {
+    if (remoteLumaLiftFrameTimer) {
+      clearInterval(remoteLumaLiftFrameTimer);
+      remoteLumaLiftFrameTimer = null;
+    }
+    remoteLumaLiftFrameInFlight = false;
+  }
+
+  function stopLumaLift(status = 'LumaLift Standby', mode = 'idle') {
+    stopRemoteLumaLiftFrames();
+    if (lumaLiftFrameRequest) {
+      cancelAnimationFrame(lumaLiftFrameRequest);
+      lumaLiftFrameRequest = 0;
+    }
+    lumaLiftVideo = null;
+    if (lumaLiftCanvas) {
+      lumaLiftCanvas.remove();
+      lumaLiftCanvas = null;
+    }
+    setLumaLiftStatus(status, mode);
+  }
+
+  function drawLumaLiftFrame(video) {
+    if (lumaLiftVideo !== video || !video?.isConnected) return;
+
+    const canvas = ensureLumaLiftCanvas();
+    const rect = playerContainer.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.round(rect.width || video.clientWidth || video.videoWidth || 1));
+    const cssHeight = Math.max(1, Math.round(rect.height || video.clientHeight || video.videoHeight || 1));
+    const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const backingWidth = Math.round(cssWidth * pixelRatio);
+    const backingHeight = Math.round(cssHeight * pixelRatio);
+
+    if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
+    }
+
+    const context = canvas.getContext('2d', { alpha: true });
+    if (!context) {
+      setLumaLiftStatus('LumaLift Canvas Error');
+      return;
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, cssWidth, cssHeight);
+
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+      canvas.classList.remove('active');
+      setLumaLiftStatus('LumaLift Waiting', 'waiting');
+      lumaLiftFrameRequest = requestAnimationFrame(() => drawLumaLiftFrame(video));
+      return;
+    }
+
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const canvasRatio = cssWidth / cssHeight;
+    let drawWidth = cssWidth;
+    let drawHeight = cssHeight;
+    if (videoRatio > canvasRatio) {
+      drawHeight = cssWidth / videoRatio;
+    } else {
+      drawWidth = cssHeight * videoRatio;
+    }
+    const drawX = (cssWidth - drawWidth) / 2;
+    const drawY = (cssHeight - drawHeight) / 2;
+
+    try {
+      context.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+      canvas.classList.add('active');
+      setLumaLiftStatus('LumaLift Active', 'active');
+    } catch (_) {
+      canvas.classList.remove('active');
+      setLumaLiftStatus('LumaLift Waiting', 'waiting');
+    }
+
+    lumaLiftFrameRequest = requestAnimationFrame(() => drawLumaLiftFrame(video));
+  }
+
+  function startLumaLiftForVideo(video) {
+    if (!video) {
+      stopLumaLift();
+      return;
+    }
+    if (lumaLiftVideo === video) return;
+    stopLumaLift('LumaLift Waiting');
+    lumaLiftVideo = video;
+    ensureLumaLiftCanvas();
+    setLumaLiftStatus('LumaLift Waiting', 'waiting');
+    drawLumaLiftFrame(video);
+  }
+
+  function drawLumaLiftImage(image, sourceWidth, sourceHeight) {
+    const canvas = ensureLumaLiftCanvas();
+    const rect = playerContainer.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.round(rect.width || sourceWidth || image.width || 1));
+    const cssHeight = Math.max(1, Math.round(rect.height || sourceHeight || image.height || 1));
+    const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const backingWidth = Math.round(cssWidth * pixelRatio);
+    const backingHeight = Math.round(cssHeight * pixelRatio);
+
+    if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
+    }
+
+    const context = canvas.getContext('2d', { alpha: true });
+    if (!context) {
+      setLumaLiftStatus('LumaLift Canvas Error');
+      return;
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, cssWidth, cssHeight);
+
+    const sourceRatio = sourceWidth && sourceHeight
+      ? sourceWidth / sourceHeight
+      : image.width / image.height;
+    const canvasRatio = cssWidth / cssHeight;
+    let drawWidth = cssWidth;
+    let drawHeight = cssHeight;
+    if (sourceRatio > canvasRatio) {
+      drawHeight = cssWidth / sourceRatio;
+    } else {
+      drawWidth = cssHeight * sourceRatio;
+    }
+    const drawX = (cssWidth - drawWidth) / 2;
+    const drawY = (cssHeight - drawHeight) / 2;
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    canvas.classList.add('active');
+    setLumaLiftStatus('LumaLift Active', 'active');
+  }
+
+  function loadFrameImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = dataUrl;
+    });
+  }
+
+  async function refreshRemoteLumaLiftFrame() {
+    if (remoteLumaLiftFrameInFlight) return;
+    remoteLumaLiftFrameInFlight = true;
+    try {
+      const response = await sendRemotePlayerMessage({ action: 'captureLumaLiftFrame' });
+      if (!response?.handled || !response.found) {
+        setLumaLiftStatus('LumaLift Remote', 'waiting');
+        return;
+      }
+      if (!response.ready || !response.dataUrl) {
+        setLumaLiftStatus('LumaLift Waiting', 'waiting');
+        return;
+      }
+      const image = await loadFrameImage(response.dataUrl);
+      drawLumaLiftImage(image, response.videoWidth || response.width, response.videoHeight || response.height);
+    } catch (_) {
+      setLumaLiftStatus('LumaLift Waiting', 'waiting');
+    } finally {
+      remoteLumaLiftFrameInFlight = false;
+    }
+  }
+
+  function startRemoteLumaLiftFrames() {
+    stopRemoteLumaLiftFrames();
+    lumaLiftVideo = null;
+    ensureLumaLiftCanvas();
+    setLumaLiftStatus('LumaLift Remote', 'waiting');
+    refreshRemoteLumaLiftFrame().catch(() => {});
+    remoteLumaLiftFrameTimer = window.setInterval(() => {
+      refreshRemoteLumaLiftFrame().catch(() => {});
+    }, 260);
   }
 
   function canFallbackToRemoteMode() {
@@ -583,7 +780,7 @@
     btnFitToggle.disabled = isRemote;
     btnPip.disabled = !isVideo;
     [brightnessSlider, contrastSlider, saturationSlider, sharpnessSlider, hueSlider, temperatureSlider, btnResetImage].forEach((control) => {
-      if (control) control.disabled = isRemote;
+      if (control) control.disabled = false;
     });
     btnLinkShield.disabled = !isIframe;
     btnResetStage.disabled = false;
@@ -1165,6 +1362,7 @@
   }
 
   function cleanupPlayer() {
+    stopLumaLift();
     if (popupStatePersistTimer) {
       clearTimeout(popupStatePersistTimer);
       popupStatePersistTimer = null;
@@ -1685,9 +1883,11 @@
     if ((params.remoteControlPreferred || (!params.videoSrc && !params.iframeSrc)) && params.sourceTabId > 0) {
       setMode('remote');
       setLinkShield(false);
+      stopLumaLift('LumaLift Remote', 'waiting');
       playerContainer.appendChild(createRemoteControllerStage());
       bindRemoteControls();
       startRemoteSync();
+      startRemoteLumaLiftFrames();
       return;
     }
 
@@ -1697,12 +1897,14 @@
       currentVideo = createVideoPlayer(params.videoSrc, params.poster);
       playerContainer.appendChild(currentVideo);
       bindVideoControls(currentVideo);
+      startLumaLiftForVideo(currentVideo);
       return;
     }
 
     if (params.iframeSrc) {
       setMode('iframe');
       setLinkShield(true);
+      stopLumaLift('LumaLift Needs Video', 'waiting');
       currentIframe = createIframePlayer(params.iframeSrc);
       playerContainer.appendChild(currentIframe);
       bindIframeControls();
@@ -1712,6 +1914,7 @@
 
     setMode('idle');
     setLinkShield(false);
+    stopLumaLift();
     showError(t('popupPlayerErrorInvalidSource'));
   }
 

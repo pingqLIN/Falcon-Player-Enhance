@@ -243,6 +243,12 @@
             background: rgba(76, 201, 159, 0.12);
         }
 
+        .status-pill.waiting {
+            color: var(--warning);
+            border-color: rgba(255, 194, 71, 0.35);
+            background: rgba(255, 194, 71, 0.12);
+        }
+
         .time-readout {
             font-variant-numeric: tabular-nums;
             font-size: 13px;
@@ -295,6 +301,22 @@
 
         .player-container video {
             object-fit: contain;
+        }
+
+        .lumalift-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0;
+            transition: opacity 0.16s ease;
+        }
+
+        .lumalift-canvas.active {
+            opacity: 1;
         }
 
         .stage-overlay {
@@ -1139,6 +1161,7 @@
                     <div class="stage-status">
                         <span class="status-pill active" id="playback-state">Ready</span>
                         <span class="status-pill" id="shield-state">Link Shield Off</span>
+                        <span class="status-pill" id="lumalift-state">LumaLift Standby</span>
                     </div>
                     <div class="time-readout" id="time-readout">00:00 / 00:00</div>
                 </div>

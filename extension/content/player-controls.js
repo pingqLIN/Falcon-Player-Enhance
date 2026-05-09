@@ -67,6 +67,7 @@
     let activeVideo = null;
     let speedControlUI = null;
     let toastTimeout = null;
+    let lumaLiftCaptureCanvas = null;
     
     let pendingDigit = null;
     let digitTimeout = null;
@@ -478,6 +479,55 @@
         };
     }
 
+    function captureLumaLiftFrame(video) {
+        if (!video) {
+            return { found: false, reason: 'no_video' };
+        }
+        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+            return {
+                found: true,
+                ready: false,
+                reason: 'video_not_ready',
+                currentTime: Number.isFinite(video.currentTime) ? video.currentTime : null
+            };
+        }
+
+        const maxWidth = 640;
+        const scale = Math.min(1, maxWidth / video.videoWidth);
+        const width = Math.max(1, Math.round(video.videoWidth * scale));
+        const height = Math.max(1, Math.round(video.videoHeight * scale));
+        lumaLiftCaptureCanvas = lumaLiftCaptureCanvas || document.createElement('canvas');
+        lumaLiftCaptureCanvas.width = width;
+        lumaLiftCaptureCanvas.height = height;
+
+        const context = lumaLiftCaptureCanvas.getContext('2d');
+        if (!context) {
+            return { found: true, ready: false, reason: 'canvas_unavailable' };
+        }
+
+        try {
+            context.clearRect(0, 0, width, height);
+            context.drawImage(video, 0, 0, width, height);
+            return {
+                found: true,
+                ready: true,
+                width,
+                height,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                currentTime: Number.isFinite(video.currentTime) ? video.currentTime : null,
+                dataUrl: lumaLiftCaptureCanvas.toDataURL('image/jpeg', 0.62)
+            };
+        } catch (error) {
+            return {
+                found: true,
+                ready: false,
+                reason: 'capture_blocked',
+                message: error?.message || String(error)
+            };
+        }
+    }
+
     function formatTime(seconds) {
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
@@ -855,6 +905,20 @@
     }
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'captureLumaLiftFrame') {
+            const resolved = resolveMessageTargetVideo(message);
+            if (resolved.missing) {
+                return false;
+            }
+
+            const currentVideo = resolved.video || getActiveVideo();
+            sendResponse({
+                handled: true,
+                ...captureLumaLiftFrame(currentVideo)
+            });
+            return true;
+        }
+
         if (message.action === 'getPlayerState') {
             const resolved = resolveMessageTargetVideo(message);
             if (resolved.missing) {
