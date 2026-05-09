@@ -1,6 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
 
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = String(text || '');
+        return div.innerHTML;
+    }
+
     const masterToggle = document.getElementById('master-toggle');
     const targetLockBadge = document.getElementById('target-lock-badge');
     const overlaysRemoved = document.getElementById('overlays-removed');
