@@ -31,9 +31,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_browser_args(extension_dir: Path) -> list[str]:
-    return smoke.build_extension_args(extension_dir) + [
-        "--host-resolver-rules=MAP labs.google 127.0.0.1"
-    ]
+    return smoke.build_extension_args(extension_dir)
+
+
+def route_local_html(context, host: str, filename: str) -> None:
+    html = (REPO_ROOT / "tests" / filename).read_text(encoding="utf-8")
+
+    def fulfill(route) -> None:
+        route.fulfill(status=200, content_type="text/html", body=html)
+
+    context.route(f"https://{host}/**", fulfill)
 
 
 def collect_helper_state(extension_page, target_url: str) -> dict[str, object]:
@@ -130,12 +137,13 @@ def main() -> int:
                 headless=args.headless,
                 args=build_browser_args(extension_dir),
             )
+            route_local_html(context, "labs.google", "test-labs-flow-cta-regression.html")
             try:
                 extension_id = smoke.wait_for_extension_id(context, args.timeout_ms)
                 registered_scripts = smoke.wait_for_extension_ready(context, args.timeout_ms)
 
                 page = context.new_page()
-                target_url = f"{server.base_url}/test-labs-flow-cta-regression.html".replace("127.0.0.1", "labs.google")
+                target_url = "https://labs.google/test-labs-flow-cta-regression.html"
                 page.goto(target_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 page.wait_for_timeout(args.wait_ms)
 

@@ -53,11 +53,20 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_browser_args(extension_dir: Path) -> list[str]:
-    host_rules = "MAP falcon-whitelist.test 127.0.0.1, MAP sora.chatgpt.com 127.0.0.1"
+    host_rules = "MAP falcon-whitelist.test 127.0.0.1"
     return [
         *smoke.build_extension_args(extension_dir),
         f"--host-resolver-rules={host_rules}",
     ]
+
+
+def route_local_html(context, host: str, filename: str) -> None:
+    html = (REPO_ROOT / "tests" / filename).read_text(encoding="utf-8")
+
+    def fulfill(route) -> None:
+        route.fulfill(status=200, content_type="text/html", body=html)
+
+    context.route(f"https://{host}/**", fulfill)
 
 
 def collect_helper_state(extension_page, target_url: str, whitelist: list[str], whitelist_enhance_only: bool, wait_ms: int) -> dict[str, object]:
@@ -160,6 +169,7 @@ def main() -> int:
                 headless=args.headless,
                 args=build_browser_args(extension_dir),
             )
+            route_local_html(context, "sora.chatgpt.com", "test-site-state-helper.html")
 
             try:
                 extension_id = smoke.wait_for_extension_id(context, args.timeout_ms)
@@ -177,7 +187,7 @@ def main() -> int:
                 whitelist_mode = collect_helper_state(extension_page, target_url, ["falcon-whitelist.test"], True, args.wait_ms)
                 strict_mode = collect_helper_state(extension_page, target_url, ["falcon-whitelist.test"], False, args.wait_ms)
                 excluded_page = context.new_page()
-                excluded_url = f"{server.base_url.replace('127.0.0.1', 'sora.chatgpt.com')}/test-site-state-helper.html"
+                excluded_url = "https://sora.chatgpt.com/test-site-state-helper.html"
                 excluded_page.goto(excluded_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 excluded_page.wait_for_timeout(1200)
                 excluded_mode = collect_helper_state(extension_page, excluded_url, [], True, args.wait_ms)
