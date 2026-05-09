@@ -1,7 +1,8 @@
 (function() {
   'use strict';
 
-  const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
+  const chromeApi = globalThis.chrome || {};
+  const t = (key, substitutions) => chromeApi.i18n?.getMessage?.(key, substitutions) || key;
   const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
   const POPUP_RUNTIME_STATE_PREFIX = 'popupPlayerState:';
   const SHARPEN_FILTER_IDS = [
@@ -15,6 +16,7 @@
   const playerContainer = document.getElementById('player-container');
   const mediaShell = document.getElementById('media-shell');
   const stageFrame = document.getElementById('stage-frame');
+  const stageCard = stageFrame?.closest?.('.stage-card') || null;
   const interactionShield = document.getElementById('interaction-shield');
   const modeChip = document.getElementById('mode-chip');
   const playbackState = document.getElementById('playback-state');
@@ -45,6 +47,10 @@
   const brightnessValue = document.getElementById('brightness-value');
   const contrastSlider = document.getElementById('contrast-slider');
   const contrastValue = document.getElementById('contrast-value');
+  const blackPointSlider = document.getElementById('black-point-slider');
+  const blackPointValue = document.getElementById('black-point-value');
+  const whitePointSlider = document.getElementById('white-point-slider');
+  const whitePointValue = document.getElementById('white-point-value');
   const saturationSlider = document.getElementById('saturation-slider');
   const saturationValue = document.getElementById('saturation-value');
   const sharpnessSlider = document.getElementById('sharpness-slider');
@@ -57,10 +63,18 @@
   const temperatureSlider = document.getElementById('temperature-slider');
   const temperatureValue = document.getElementById('temperature-value');
   const temperatureMatrix = document.getElementById('popup-player-temp-matrix');
+  const levelTransferFunctions = [
+    document.getElementById('popup-player-levels-r'),
+    document.getElementById('popup-player-levels-g'),
+    document.getElementById('popup-player-levels-b')
+  ].filter(Boolean);
+  const samplePreview = document.getElementById('sample-preview');
   const btnTheme = document.getElementById('btn-theme');
   const DEFAULT_VISUAL_STATE = {
     brightness: 100,
     contrast: 100,
+    blackPoint: 0,
+    whitePoint: 100,
     saturation: 100,
     sharpness: 0,
     hue: 0,
@@ -88,6 +102,11 @@
   let remoteRestoreApplied = false;
   let remoteFallbackTriggered = false;
   let popupClosing = false;
+  let stageAspectRatio = 16 / 9;
+  let iframeShortcutLikelyPlaying = false;
+  let iframeShortcutTimelineRatio = 0;
+  let iframeShortcutVolume = 1;
+  let iframeShortcutSpeed = 1;
 
   const visualState = { ...DEFAULT_VISUAL_STATE };
 
@@ -95,6 +114,53 @@
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return fallback;
     return Math.max(min, Math.min(max, numeric));
+  }
+
+  function setStagePlaybackActive(active) {
+    stageFrame?.classList.toggle('is-playing', active === true);
+  }
+
+  function fitStageFrameToAvailableSpace() {
+    if (!stageFrame || !stageCard || !Number.isFinite(stageAspectRatio) || stageAspectRatio <= 0) return;
+
+    const cardStyle = getComputedStyle(stageCard);
+    const paddingX = parseFloat(cardStyle.paddingLeft || '0') + parseFloat(cardStyle.paddingRight || '0');
+    const paddingY = parseFloat(cardStyle.paddingTop || '0') + parseFloat(cardStyle.paddingBottom || '0');
+    const gap = parseFloat(cardStyle.rowGap || cardStyle.gap || '0') || 0;
+    const meta = stageCard.querySelector('.stage-meta');
+    const availableWidth = Math.max(0, stageCard.clientWidth - paddingX);
+    const availableHeight = Math.max(0, stageCard.clientHeight - paddingY - (meta?.offsetHeight || 0) - gap);
+
+    if (availableWidth < 240 || availableHeight < 180) {
+      stageFrame.style.width = '';
+      stageFrame.style.height = '';
+      stageFrame.classList.remove('is-aspect-fitted');
+      return;
+    }
+
+    let targetWidth = availableWidth;
+    let targetHeight = targetWidth / stageAspectRatio;
+    if (targetHeight > availableHeight) {
+      targetHeight = availableHeight;
+      targetWidth = targetHeight * stageAspectRatio;
+    }
+
+    stageFrame.style.width = `${Math.round(targetWidth)}px`;
+    stageFrame.style.height = `${Math.round(targetHeight)}px`;
+    stageFrame.classList.add('is-aspect-fitted');
+  }
+
+  function setStageAspect(width, height) {
+    const nextWidth = Number(width);
+    const nextHeight = Number(height);
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight) || nextWidth <= 0 || nextHeight <= 0) return;
+    stageAspectRatio = nextWidth / nextHeight;
+    fitStageFrameToAvailableSpace();
+  }
+
+  function isEditableKeyTarget(target) {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
   }
 
   function hashString(value) {
@@ -130,6 +196,8 @@
     return {
       brightness: clampNumber(ui.brightness, 50, 150, DEFAULT_VISUAL_STATE.brightness),
       contrast: clampNumber(ui.contrast, 50, 150, DEFAULT_VISUAL_STATE.contrast),
+      blackPoint: clampNumber(ui.blackPoint, 0, 25, DEFAULT_VISUAL_STATE.blackPoint),
+      whitePoint: clampNumber(ui.whitePoint, 75, 100, DEFAULT_VISUAL_STATE.whitePoint),
       saturation: clampNumber(ui.saturation, 0, 200, DEFAULT_VISUAL_STATE.saturation),
       sharpness: clampNumber(ui.sharpness, 0, 100, DEFAULT_VISUAL_STATE.sharpness),
       hue: clampNumber(ui.hue, -180, 180, DEFAULT_VISUAL_STATE.hue),
@@ -185,7 +253,7 @@
             playbackRate: 1
           },
           ui: {
-            temperature: 0
+            ...DEFAULT_VISUAL_STATE
           }
         };
     state.ui = normalizePopupVisualState({
@@ -262,6 +330,12 @@
     }
     if (saturationSlider) {
       saturationSlider.value = String(visualState.saturation);
+    }
+    if (blackPointSlider) {
+      blackPointSlider.value = String(visualState.blackPoint);
+    }
+    if (whitePointSlider) {
+      whitePointSlider.value = String(visualState.whitePoint);
     }
     if (sharpnessSlider) {
       sharpnessSlider.value = String(visualState.sharpness);
@@ -379,8 +453,12 @@
   function getCurrentChromeWindowId() {
     return new Promise((resolve) => {
       try {
-        chrome.windows.getCurrent({}, (win) => {
-          if (chrome.runtime.lastError) {
+        if (!chromeApi.windows?.getCurrent) {
+          resolve(null);
+          return;
+        }
+        chromeApi.windows.getCurrent({}, (win) => {
+          if (chromeApi.runtime?.lastError) {
             resolve(null);
             return;
           }
@@ -395,7 +473,8 @@
   async function syncPinStateToBackground() {
     if (!chromeWindowId) return false;
     try {
-      await chrome.runtime.sendMessage({
+      if (!chromeApi.runtime?.sendMessage) return false;
+      await chromeApi.runtime.sendMessage({
         action: 'setPopupPlayerPin',
         pinned: isPinned,
         chromeWindowId,
@@ -454,7 +533,8 @@
 
   async function persistAutoFitWindow() {
     try {
-      await chrome.storage.local.set({ [POPUP_AUTO_FIT_KEY]: autoFitWindow });
+      if (!chromeApi.storage?.local?.set) return;
+      await chromeApi.storage.local.set({ [POPUP_AUTO_FIT_KEY]: autoFitWindow });
     } catch (_) {
       // no-op
     }
@@ -462,7 +542,11 @@
 
   async function loadPopupPlayerSettings() {
     try {
-      const result = await chrome.storage.local.get([POPUP_AUTO_FIT_KEY]);
+      if (!chromeApi.storage?.local?.get) {
+        applyAutoFitWindow(true);
+        return;
+      }
+      const result = await chromeApi.storage.local.get([POPUP_AUTO_FIT_KEY]);
       applyAutoFitWindow(result[POPUP_AUTO_FIT_KEY] !== false);
     } catch (_) {
       applyAutoFitWindow(true);
@@ -474,21 +558,28 @@
     const isVideo = mode === 'video';
     const isIframe = mode === 'iframe';
     const isRemote = mode === 'remote';
+    const hasTransportControls = isVideo || isIframe || isRemote;
     modeChip.textContent = isVideo ? 'Video' : isIframe ? 'Embed' : isRemote ? 'Remote' : 'Unknown';
     transportNote.textContent = isVideo
       ? 'Direct video controls'
       : isRemote
         ? 'Remote control original page video'
-        : 'External embed transport limited';
-    timelineNote.textContent = isVideo || isRemote ? 'Scrub active media' : 'Timeline unavailable for embeds';
+        : isIframe
+          ? 'Shortcut bridge for embedded players'
+          : 'External embed transport limited';
+    timelineNote.textContent = isVideo || isRemote
+      ? 'Scrub active media'
+      : isIframe
+        ? '快捷鍵定位'
+        : 'Timeline unavailable for embeds';
     iframeHint.style.display = isIframe ? 'block' : 'none';
 
     [btnBackward, btnPlayToggle, btnForward, btnMuteToggle, btnLoopToggle, btnFullscreen].forEach((control) => {
-      control.disabled = !(isVideo || isRemote);
+      control.disabled = !hasTransportControls;
     });
-    timelineSlider.disabled = !(isVideo || isRemote);
-    volumeSlider.disabled = !(isVideo || isRemote);
-    speedSelect.disabled = !(isVideo || isRemote);
+    timelineSlider.disabled = !hasTransportControls;
+    volumeSlider.disabled = !hasTransportControls;
+    speedSelect.disabled = !hasTransportControls;
     btnFitToggle.disabled = isRemote;
     btnPip.disabled = !isVideo;
     [brightnessSlider, contrastSlider, saturationSlider, sharpnessSlider, hueSlider, temperatureSlider, btnResetImage].forEach((control) => {
@@ -525,7 +616,8 @@
       return null;
     }
     try {
-      return await chrome.tabs.sendMessage(sourceTabId, {
+      if (!chromeApi.tabs?.sendMessage) return null;
+      return await chromeApi.tabs.sendMessage(sourceTabId, {
         ...message,
         playerId: currentParams?.playerId || message.playerId || undefined
       });
@@ -540,6 +632,7 @@
     if (!remotePlayerState) {
       playbackState.textContent = 'Remote Offline';
       playbackState.classList.remove('active');
+      setStagePlaybackActive(false);
       timeCurrent.textContent = '--:--';
       timeDuration.textContent = '--:--';
       timeReadout.textContent = '--:-- / --:--';
@@ -557,6 +650,7 @@
     timeReadout.textContent = `${current} / ${duration}`;
     playbackState.textContent = remotePlayerState.paused ? 'Remote Paused' : 'Remote Playing';
     playbackState.classList.toggle('active', !remotePlayerState.paused);
+    setStagePlaybackActive(!remotePlayerState.paused);
     setControlButtonState(btnPlayToggle, !remotePlayerState.paused, remotePlayerState.paused ? 'Play' : 'Pause', 'Remote');
     setControlButtonState(
       btnMuteToggle,
@@ -664,6 +758,132 @@
     applyRemoteState(response);
   }
 
+  function buildShortcutKey(command, value = null) {
+    if (command === 'seekToRatio') {
+      const nextRatio = clampNumber(value, 0, 1, iframeShortcutTimelineRatio);
+      if (nextRatio <= 0.03) return [{ key: 'Home', code: 'Home', keyCode: 36 }];
+      if (nextRatio >= 0.97) return [{ key: 'End', code: 'End', keyCode: 35 }];
+      const direction = nextRatio >= iframeShortcutTimelineRatio ? 'ArrowRight' : 'ArrowLeft';
+      const keyCode = direction === 'ArrowRight' ? 39 : 37;
+      const repeatCount = Math.max(1, Math.min(8, Math.round(Math.abs(nextRatio - iframeShortcutTimelineRatio) * 12)));
+      return Array.from({ length: repeatCount }, () => ({ key: direction, code: direction, keyCode }));
+    }
+
+    if (command === 'setVolume') {
+      const nextVolume = clampNumber(value, 0, 1, iframeShortcutVolume);
+      const direction = nextVolume >= iframeShortcutVolume ? 'ArrowUp' : 'ArrowDown';
+      const keyCode = direction === 'ArrowUp' ? 38 : 40;
+      const repeatCount = Math.max(1, Math.min(8, Math.round(Math.abs(nextVolume - iframeShortcutVolume) * 10)));
+      return Array.from({ length: repeatCount }, () => ({ key: direction, code: direction, keyCode }));
+    }
+
+    if (command === 'setSpeed') {
+      const nextSpeed = clampNumber(value, 0.25, 4, iframeShortcutSpeed);
+      return nextSpeed >= iframeShortcutSpeed
+        ? [{ key: '>', code: 'Period', keyCode: 190, shiftKey: true }]
+        : [{ key: '<', code: 'Comma', keyCode: 188, shiftKey: true }];
+    }
+
+    const shortcutMap = {
+      togglePlay: { key: ' ', code: 'Space', keyCode: 32 },
+      seekBack: { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 },
+      seekBackLong: { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 },
+      seekForward: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 },
+      seekForwardLong: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 },
+      toggleMute: { key: 'm', code: 'KeyM', keyCode: 77 },
+      toggleLoop: { key: 'l', code: 'KeyL', keyCode: 76 },
+      toggleFullscreen: { key: 'f', code: 'KeyF', keyCode: 70 }
+    };
+    return shortcutMap[command] ? [shortcutMap[command]] : [];
+  }
+
+  function dispatchShortcutKey(target, keyConfig) {
+    if (!target || !keyConfig) return;
+    ['keydown', 'keyup'].forEach((type) => {
+      const event = new KeyboardEvent(type, {
+        key: keyConfig.key,
+        code: keyConfig.code,
+        keyCode: keyConfig.keyCode,
+        which: keyConfig.keyCode,
+        shiftKey: keyConfig.shiftKey === true,
+        bubbles: false,
+        cancelable: true,
+        composed: false
+      });
+      target.dispatchEvent(event);
+    });
+  }
+
+  function updateIframeShortcutUI(command = '') {
+    if (command === 'togglePlay') {
+      iframeShortcutLikelyPlaying = !iframeShortcutLikelyPlaying;
+    }
+    if (command === 'seekBack' || command === 'seekBackLong') {
+      iframeShortcutTimelineRatio = Math.max(0, iframeShortcutTimelineRatio - 0.05);
+    }
+    if (command === 'seekForward' || command === 'seekForwardLong') {
+      iframeShortcutTimelineRatio = Math.min(1, iframeShortcutTimelineRatio + 0.05);
+    }
+
+    const ratioText = `${Math.round(iframeShortcutTimelineRatio * 100)}%`;
+    playbackState.textContent = iframeShortcutLikelyPlaying ? 'Shortcut Playing' : 'Shortcut Ready';
+    playbackState.classList.toggle('active', iframeShortcutLikelyPlaying);
+    setStagePlaybackActive(iframeShortcutLikelyPlaying);
+    timeCurrent.textContent = ratioText;
+    timeDuration.textContent = '--:--';
+    timeReadout.textContent = `Shortcut ${ratioText}`;
+    timelineSlider.value = String(Math.round(iframeShortcutTimelineRatio * 1000));
+    volumeValue.textContent = `${Math.round(iframeShortcutVolume * 100)}%`;
+    setControlButtonState(btnPlayToggle, iframeShortcutLikelyPlaying, iframeShortcutLikelyPlaying ? 'Pause' : 'Play', 'Shortcut');
+    setControlButtonState(btnMuteToggle, false, 'Mute', 'Shortcut');
+    setControlButtonState(btnLoopToggle, false, 'Loop', 'Shortcut');
+  }
+
+  function dispatchIframeShortcut(command, value = null) {
+    if (!currentIframe) return false;
+    const keySequence = buildShortcutKey(command, value);
+    if (keySequence.length === 0) return false;
+
+    keySequence.forEach((keyConfig) => {
+      dispatchShortcutKey(currentIframe, keyConfig);
+    });
+
+    try {
+      currentIframe.contentWindow?.postMessage?.({
+        type: 'FALCON_PLAYER_SHORTCUT',
+        command,
+        value
+      }, '*');
+    } catch (_) {
+      // no-op
+    }
+
+    if (command === 'seekToRatio') {
+      iframeShortcutTimelineRatio = clampNumber(value, 0, 1, iframeShortcutTimelineRatio);
+    }
+    if (command === 'setVolume') {
+      iframeShortcutVolume = clampNumber(value, 0, 1, iframeShortcutVolume);
+    }
+    if (command === 'setSpeed') {
+      iframeShortcutSpeed = clampNumber(value, 0.25, 4, iframeShortcutSpeed);
+    }
+    updateIframeShortcutUI(command);
+    return true;
+  }
+
+  async function sendMappedIframeControl(command, value = null) {
+    const response = await sendRemotePlayerMessage({
+      action: 'playerControl',
+      command,
+      value
+    });
+    if (response?.handled || response?.found) {
+      applyRemoteState(response);
+      return;
+    }
+    dispatchIframeShortcut(command, value);
+  }
+
   function getSharpnessFilterId(sharpness) {
     if (sharpness < 15) return '';
     if (sharpness < 40) return SHARPEN_FILTER_IDS[1];
@@ -672,6 +892,18 @@
   }
 
   function applyVisualAdjustments() {
+    if (levelTransferFunctions.length > 0) {
+      const blackPoint = clampNumber(visualState.blackPoint, 0, 25, DEFAULT_VISUAL_STATE.blackPoint) / 100;
+      const whitePoint = clampNumber(visualState.whitePoint, 75, 100, DEFAULT_VISUAL_STATE.whitePoint) / 100;
+      const usableRange = Math.max(0.05, whitePoint - blackPoint);
+      const slope = (1 / usableRange).toFixed(4);
+      const intercept = (-blackPoint / usableRange).toFixed(4);
+      levelTransferFunctions.forEach((func) => {
+        func.setAttribute('slope', slope);
+        func.setAttribute('intercept', intercept);
+      });
+    }
+
     // Apply color temperature via SVG feColorMatrix (warm/cool white balance)
     if (temperatureMatrix) {
       const t = visualState.temperature / 50; // -1 (cool) to +1 (warm)
@@ -684,6 +916,7 @@
     }
 
     const filters = [
+      `url(#popup-player-levels)`,
       `url(#popup-player-temp)`,
       `brightness(${visualState.brightness}%)`,
       `contrast(${visualState.contrast}%)`,
@@ -695,9 +928,18 @@
       filters.unshift(`url(#${sharpenFilterId})`);
     }
     mediaShell.style.filter = filters.join(' ');
+    if (samplePreview) {
+      samplePreview.style.filter = filters.join(' ');
+    }
 
     brightnessValue.textContent = `${visualState.brightness}%`;
     contrastValue.textContent = `${visualState.contrast}%`;
+    if (blackPointValue) {
+      blackPointValue.textContent = `${visualState.blackPoint}%`;
+    }
+    if (whitePointValue) {
+      whitePointValue.textContent = `${visualState.whitePoint}%`;
+    }
     saturationValue.textContent = `${visualState.saturation}%`;
     sharpnessValue.textContent = `${visualState.sharpness}%`;
     if (hueValue) {
@@ -713,12 +955,16 @@
   function resetImageAdjustments() {
     visualState.brightness = 100;
     visualState.contrast = 100;
+    visualState.blackPoint = 0;
+    visualState.whitePoint = 100;
     visualState.saturation = 100;
     visualState.sharpness = 0;
     visualState.hue = 0;
     visualState.temperature = 0;
     brightnessSlider.value = '100';
     contrastSlider.value = '100';
+    if (blackPointSlider) blackPointSlider.value = '0';
+    if (whitePointSlider) whitePointSlider.value = '100';
     saturationSlider.value = '100';
     sharpnessSlider.value = '0';
     if (hueSlider) hueSlider.value = '0';
@@ -787,6 +1033,7 @@
       speedSelect.value = String(video.playbackRate);
       playbackState.textContent = video.paused ? 'Paused' : 'Playing';
       playbackState.classList.toggle('active', !video.paused);
+      setStagePlaybackActive(!video.paused);
     };
 
     const applyRestoredVideoState = () => {
@@ -809,6 +1056,7 @@
     };
 
     video.addEventListener('loadedmetadata', () => {
+      setStageAspect(video.videoWidth || 16, video.videoHeight || 9);
       applyRestoredVideoState();
       syncPlaybackUI();
       if (autoFitWindow) {
@@ -879,6 +1127,8 @@
     iframe.referrerPolicy = 'no-referrer-when-downgrade';
     iframe.style.width = '100%';
     iframe.style.height = '100%';
+    setStageAspect(16, 9);
+    setStagePlaybackActive(false);
     playbackState.textContent = 'Embed Ready';
     playbackState.classList.add('active');
     timeCurrent.textContent = '--:--';
@@ -1073,6 +1323,57 @@
     });
   }
 
+  function bindIframeControls() {
+    updateIframeShortcutUI();
+
+    btnBackward.addEventListener('click', () => {
+      sendMappedIframeControl('seekBackLong').catch(() => {});
+    });
+
+    btnPlayToggle.addEventListener('click', () => {
+      sendMappedIframeControl('togglePlay').catch(() => {});
+    });
+
+    btnForward.addEventListener('click', () => {
+      sendMappedIframeControl('seekForwardLong').catch(() => {});
+    });
+
+    btnMuteToggle.addEventListener('click', () => {
+      sendMappedIframeControl('toggleMute').catch(() => {});
+    });
+
+    btnLoopToggle.addEventListener('click', () => {
+      sendMappedIframeControl('toggleLoop').catch(() => {});
+    });
+
+    btnFullscreen.addEventListener('click', () => {
+      sendMappedIframeControl('toggleFullscreen').catch(() => {});
+    });
+
+    timelineSlider.addEventListener('input', () => {
+      timelineScrubbing = true;
+      const nextRatio = clampNumber(Number(timelineSlider.value) / 1000, 0, 1, iframeShortcutTimelineRatio);
+      timeCurrent.textContent = `${Math.round(nextRatio * 100)}%`;
+      timeReadout.textContent = `Shortcut ${Math.round(nextRatio * 100)}%`;
+    });
+
+    timelineSlider.addEventListener('change', () => {
+      timelineScrubbing = false;
+      const nextRatio = clampNumber(Number(timelineSlider.value) / 1000, 0, 1, iframeShortcutTimelineRatio);
+      sendMappedIframeControl('seekToRatio', nextRatio).catch(() => {});
+    });
+
+    volumeSlider.addEventListener('input', () => {
+      const nextVolume = clampNumber(Number(volumeSlider.value) / 100, 0, 1, iframeShortcutVolume);
+      volumeValue.textContent = `${Math.round(nextVolume * 100)}%`;
+      sendMappedIframeControl('setVolume', nextVolume).catch(() => {});
+    });
+
+    speedSelect.addEventListener('change', () => {
+      sendMappedIframeControl('setSpeed', Number(speedSelect.value || 1)).catch(() => {});
+    });
+  }
+
   function bindSharedControls() {
     btnClose.addEventListener('click', () => {
       cleanupAndClose();
@@ -1117,6 +1418,30 @@
       applyVisualAdjustments();
       schedulePopupRuntimeStatePersist();
     });
+
+    if (blackPointSlider) {
+      blackPointSlider.addEventListener('input', () => {
+        visualState.blackPoint = Number(blackPointSlider.value);
+        if (whitePointSlider && visualState.whitePoint <= visualState.blackPoint + 5) {
+          visualState.whitePoint = Math.min(100, visualState.blackPoint + 5);
+          whitePointSlider.value = String(visualState.whitePoint);
+        }
+        applyVisualAdjustments();
+        schedulePopupRuntimeStatePersist();
+      });
+    }
+
+    if (whitePointSlider) {
+      whitePointSlider.addEventListener('input', () => {
+        visualState.whitePoint = Number(whitePointSlider.value);
+        if (blackPointSlider && visualState.blackPoint >= visualState.whitePoint - 5) {
+          visualState.blackPoint = Math.max(0, visualState.whitePoint - 5);
+          blackPointSlider.value = String(visualState.blackPoint);
+        }
+        applyVisualAdjustments();
+        schedulePopupRuntimeStatePersist();
+      });
+    }
 
     saturationSlider.addEventListener('input', () => {
       visualState.saturation = Number(saturationSlider.value);
@@ -1201,6 +1526,8 @@
         return;
       }
 
+      if (isEditableKeyTarget(event.target)) return;
+
       if (currentMode === 'remote') {
         if (event.key === ' ' || event.code === 'Space') {
           event.preventDefault();
@@ -1225,6 +1552,34 @@
         if (event.key === 'f' || event.key === 'F') {
           event.preventDefault();
           sendRemoteControl('toggleFullscreen').catch(() => {});
+        }
+        return;
+      }
+
+      if (currentMode === 'iframe') {
+        if (event.key === ' ' || event.code === 'Space' || event.key === 'k' || event.key === 'K') {
+          event.preventDefault();
+          sendMappedIframeControl('togglePlay').catch(() => {});
+          return;
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'j' || event.key === 'J') {
+          event.preventDefault();
+          sendMappedIframeControl('seekBack').catch(() => {});
+          return;
+        }
+        if (event.key === 'ArrowRight' || event.key === 'l' || event.key === 'L') {
+          event.preventDefault();
+          sendMappedIframeControl('seekForward').catch(() => {});
+          return;
+        }
+        if (event.key === 'm' || event.key === 'M') {
+          event.preventDefault();
+          sendMappedIframeControl('toggleMute').catch(() => {});
+          return;
+        }
+        if (event.key === 'f' || event.key === 'F') {
+          event.preventDefault();
+          btnFullscreen.click();
         }
         return;
       }
@@ -1266,7 +1621,7 @@
       }
     });
 
-    chrome.storage.onChanged.addListener((changes, areaName) => {
+    chromeApi.storage?.onChanged?.addListener?.((changes, areaName) => {
       if (areaName !== 'local' || !changes[POPUP_AUTO_FIT_KEY]) return;
       applyAutoFitWindow(changes[POPUP_AUTO_FIT_KEY].newValue !== false);
     });
@@ -1325,6 +1680,7 @@
 
     resetImageAdjustments();
     applyRestoredVisualState();
+    setStageAspect(16, 9);
 
     if ((params.remoteControlPreferred || (!params.videoSrc && !params.iframeSrc)) && params.sourceTabId > 0) {
       setMode('remote');
@@ -1349,6 +1705,7 @@
       setLinkShield(true);
       currentIframe = createIframePlayer(params.iframeSrc);
       playerContainer.appendChild(currentIframe);
+      bindIframeControls();
       updateShieldUI();
       return;
     }
@@ -1378,6 +1735,7 @@
     }
   });
   window.addEventListener('resize', () => {
+    fitStageFrameToAvailableSpace();
     schedulePinnedWindowBoundsSync();
   });
 

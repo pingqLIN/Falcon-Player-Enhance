@@ -19,9 +19,9 @@
             --danger: oklch(0.67 0.19 22);
             --success: oklch(0.76 0.11 155);
             --shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
-            --radius-xl: 28px;
-            --radius-lg: 18px;
-            --radius-md: 12px;
+            --radius-xl: 14px;
+            --radius-lg: 10px;
+            --radius-md: 8px;
             --stage-filter: none;
         }
 
@@ -67,7 +67,7 @@
             gap: 16px;
             padding: 14px 18px;
             border: 1px solid var(--line);
-            border-radius: 20px;
+            border-radius: 8px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
             box-shadow: var(--shadow);
         }
@@ -82,7 +82,7 @@
         .brand-mark {
             width: 44px;
             height: 44px;
-            border-radius: 14px;
+            border-radius: 8px;
             display: grid;
             place-items: center;
             background: linear-gradient(145deg, rgba(240, 186, 86, 0.28), rgba(240, 186, 86, 0.08));
@@ -117,7 +117,7 @@
 
         .mode-chip {
             padding: 5px 9px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-muted);
@@ -149,7 +149,7 @@
         .btn {
             appearance: none;
             border: 1px solid transparent;
-            border-radius: 999px;
+            border-radius: 10px;
             padding: 10px 14px;
             color: var(--text);
             background: rgba(255, 255, 255, 0.06);
@@ -230,7 +230,7 @@
 
         .status-pill {
             padding: 6px 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.06);
             font-size: 12px;
@@ -251,14 +251,20 @@
 
         .stage-frame {
             position: relative;
-            flex: 1;
+            flex: 1 1 auto;
             min-height: 0;
+            width: 100%;
+            align-self: center;
             overflow: hidden;
-            border-radius: calc(var(--radius-xl) - 8px);
+            border-radius: var(--radius-md);
             background:
                 radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.05), transparent 28%),
                 linear-gradient(180deg, rgba(10, 10, 15, 0.7), rgba(0, 0, 0, 0.96));
             border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stage-frame.is-aspect-fitted {
+            flex: 0 0 auto;
         }
 
         .media-shell {
@@ -302,12 +308,19 @@
             align-items: flex-end;
             pointer-events: none;
             z-index: 3;
+            transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+        }
+
+        .stage-frame.is-playing .stage-overlay {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
         }
 
         .overlay-card {
             max-width: min(420px, 65%);
             padding: 14px 16px;
-            border-radius: 18px;
+            border-radius: 10px;
             background: linear-gradient(145deg, rgba(8, 11, 20, 0.84), rgba(12, 17, 26, 0.62));
             border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(18px);
@@ -353,7 +366,7 @@
         .shield-copy {
             max-width: 360px;
             padding: 18px 20px;
-            border-radius: 20px;
+            border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(9, 13, 22, 0.74);
             box-shadow: var(--shadow);
@@ -389,7 +402,7 @@
             flex-direction: column;
             gap: 12px;
             padding: 14px;
-            border-radius: 20px;
+            border-radius: 10px;
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
@@ -428,7 +441,7 @@
         .control-btn {
             appearance: none;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
+            border-radius: 8px;
             min-height: 52px;
             padding: 10px 12px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
@@ -552,7 +565,7 @@
         .select-input {
             appearance: none;
             width: 100%;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.06);
             color: var(--text);
@@ -562,7 +575,7 @@
 
         .hint-box {
             padding: 12px 14px;
-            border-radius: 16px;
+            border-radius: 8px;
             font-size: 12px;
             line-height: 1.55;
             color: var(--text-muted);
@@ -742,7 +755,7 @@
             padding: 12px 14px;
             cursor: pointer;
             user-select: none;
-            border-radius: 20px;
+            border-radius: 10px;
             transition: background 0.15s;
         }
 
@@ -752,7 +765,7 @@
         }
 
         details.rail-section[open] > summary {
-            border-radius: 20px 20px 0 0;
+            border-radius: 10px 10px 0 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.07);
             padding-bottom: 11px;
         }
@@ -762,7 +775,7 @@
         }
 
         details.rail-section[open] > summary:hover {
-            border-radius: 20px 20px 0 0;
+            border-radius: 10px 10px 0 0;
         }
 
         .summary-left {
@@ -812,7 +825,7 @@
             align-items: center;
             padding: 9px 4px;
             min-height: 48px;
-            border-radius: 12px;
+            border-radius: 6px;
         }
 
         .transport-compact .control-btn strong {
@@ -854,7 +867,7 @@
         .speed-fit-row .select-input {
             flex: 1;
             padding: 8px 10px;
-            border-radius: 12px;
+            border-radius: 8px;
             font-size: 11px;
         }
 
@@ -897,6 +910,107 @@
             margin: -2px 0 2px;
             opacity: 0.55;
             letter-spacing: 0.04em;
+        }
+
+        .sample-card {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 11px;
+            border-radius: 8px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+                rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .sample-card-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .sample-card-header strong {
+            color: var(--text);
+            font-size: 11px;
+        }
+
+        .sample-preview {
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            gap: 8px;
+            min-height: 94px;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #0a0d12;
+            isolation: isolate;
+        }
+
+        .sample-portrait {
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% 31%, oklch(0.74 0.08 55) 0 14%, transparent 15%),
+                radial-gradient(ellipse at 50% 74%, oklch(0.68 0.08 54) 0 26%, transparent 27%),
+                linear-gradient(140deg, oklch(0.34 0.08 270), oklch(0.18 0.04 255));
+        }
+
+        .sample-portrait::before {
+            content: "";
+            position: absolute;
+            left: 28%;
+            top: 24%;
+            width: 44%;
+            height: 54%;
+            border-radius: 50% 50% 44% 44%;
+            background:
+                radial-gradient(circle at 36% 38%, rgba(255, 255, 255, 0.16), transparent 7%),
+                radial-gradient(circle at 63% 38%, rgba(255, 255, 255, 0.16), transparent 7%),
+                linear-gradient(180deg, oklch(0.78 0.08 58), oklch(0.62 0.09 48));
+            box-shadow:
+                0 -10px 0 8px oklch(0.24 0.04 45),
+                0 18px 24px rgba(0, 0, 0, 0.22);
+        }
+
+        .sample-nature {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+            gap: 1px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .sample-chip {
+            min-width: 0;
+        }
+
+        .sample-chip.grass {
+            background:
+                linear-gradient(150deg, oklch(0.66 0.16 140), oklch(0.35 0.11 145)),
+                repeating-linear-gradient(90deg, transparent 0 5px, rgba(255,255,255,0.12) 5px 7px);
+        }
+
+        .sample-chip.flower {
+            background:
+                radial-gradient(circle at 48% 48%, oklch(0.94 0.09 96) 0 10%, transparent 11%),
+                radial-gradient(circle at 36% 35%, oklch(0.66 0.2 18) 0 18%, transparent 19%),
+                radial-gradient(circle at 64% 35%, oklch(0.72 0.18 340) 0 18%, transparent 19%),
+                radial-gradient(circle at 42% 68%, oklch(0.70 0.18 28) 0 18%, transparent 19%),
+                radial-gradient(circle at 66% 66%, oklch(0.58 0.17 330) 0 18%, transparent 19%),
+                oklch(0.28 0.05 145);
+        }
+
+        .sample-chip.sky {
+            background: linear-gradient(180deg, oklch(0.74 0.08 235), oklch(0.44 0.09 245));
+        }
+
+        .sample-chip.neutral {
+            background: linear-gradient(90deg, oklch(0.12 0 0), oklch(0.48 0 0), oklch(0.92 0 0));
         }
 
         /* ═══════════════════════════════════════════════════════
@@ -983,6 +1097,13 @@
             <filter id="popup-player-sharpen-3">
                 <feConvolveMatrix order="3" kernelMatrix="-1 -1 -1 -1 12 -1 -1 -1 -1" divisor="4"/>
             </filter>
+            <filter id="popup-player-levels" color-interpolation-filters="sRGB">
+                <feComponentTransfer>
+                    <feFuncR id="popup-player-levels-r" type="linear" slope="1" intercept="0"/>
+                    <feFuncG id="popup-player-levels-g" type="linear" slope="1" intercept="0"/>
+                    <feFuncB id="popup-player-levels-b" type="linear" slope="1" intercept="0"/>
+                </feComponentTransfer>
+            </filter>
             <!-- Color temperature: values updated dynamically by JS -->
             <filter id="popup-player-temp" color-interpolation-filters="sRGB">
                 <feColorMatrix id="popup-player-temp-matrix" type="matrix"
@@ -1033,7 +1154,7 @@
                         </span>
                     </button>
                     <div class="stage-overlay">
-                        <div class="overlay-card">
+                        <div class="overlay-card" id="stage-overlay-card">
                             <strong>Playback Deck</strong>
                             <span>All transport, playback, and visual tuning controls live in the side rail, so the stage stays clean.</span>
                         </div>
@@ -1107,7 +1228,7 @@
                 </details>
 
                 <!-- ② 畫面調整 ─────────────────────────────── -->
-                <details class="rail-section" open>
+                <details class="rail-section">
                     <summary class="section-header">
                         <div class="summary-left">
                             <span class="section-title">畫面調整</span>
@@ -1131,6 +1252,20 @@
                                     <span class="slider-value" id="contrast-value">100%</span>
                                 </label>
                                 <input type="range" id="contrast-slider" min="50" max="200" value="100">
+                            </div>
+                            <div class="slider-stack">
+                                <label class="slider-label" for="black-point-slider">
+                                    <strong>黑點 Black</strong>
+                                    <span class="slider-value" id="black-point-value">0%</span>
+                                </label>
+                                <input type="range" id="black-point-slider" min="0" max="25" value="0" step="1">
+                            </div>
+                            <div class="slider-stack">
+                                <label class="slider-label" for="white-point-slider">
+                                    <strong>白點 White</strong>
+                                    <span class="slider-value" id="white-point-value">100%</span>
+                                </label>
+                                <input type="range" id="white-point-slider" min="75" max="100" value="100" step="1">
                             </div>
                             <div class="slider-stack">
                                 <label class="slider-label" for="sharpness-slider">
@@ -1164,6 +1299,21 @@
                                 </label>
                                 <div class="slider-axis-labels"><span>冷 Cool</span><span>暖 Warm</span></div>
                                 <input type="range" id="temperature-slider" min="-50" max="50" value="0" step="1">
+                            </div>
+                        </div>
+                        <div class="sample-card" aria-label="Skin and nature color sample">
+                            <div class="sample-card-header">
+                                <strong>Skin Sample</strong>
+                                <span>膚色 · 花草 · 中性灰</span>
+                            </div>
+                            <div class="sample-preview" id="sample-preview" aria-hidden="true">
+                                <div class="sample-portrait"></div>
+                                <div class="sample-nature">
+                                    <div class="sample-chip grass"></div>
+                                    <div class="sample-chip flower"></div>
+                                    <div class="sample-chip sky"></div>
+                                    <div class="sample-chip neutral"></div>
+                                </div>
                             </div>
                         </div>
                         <button class="btn" id="btn-reset-image" type="button">Reset Image</button>
