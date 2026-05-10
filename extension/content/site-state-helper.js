@@ -278,7 +278,8 @@
         if (isMediaAutomationExcludedHost(hostname)) return false;
         if (!shouldRunCleanup(hostname)) return false;
         const safety = normalizeInteractionSafety(state.interactionSafety);
-        return !(safety.interactionSensitivePage && !safety.hasProminentMedia);
+        if (!safety.hasProminentMedia) return false;
+        return true;
     }
 
     function subscribe(listener) {

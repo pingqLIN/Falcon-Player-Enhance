@@ -42,6 +42,9 @@ const AI_CANDIDATE_PROMOTION_MAX_RECORDS = 200;
 const AI_CANDIDATE_ROLLBACK_MAX_RECORDS = 200;
 const TEACHING_CONFIRMATION_THRESHOLD = 3;
 const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
+const NEGATIVE_IMPACT_MEMO_STORAGE_KEY = 'negativeImpactMemo';
+const NEGATIVE_IMPACT_MEMO_MAX_ENTRIES = 500;
+const NEGATIVE_IMPACT_MEMO_DUPLICATE_WINDOW_MS = 3 * 60 * 1000;
 
 const directPopupOverlayTabs = {};
 const playerPopupGuardTabs = {};
@@ -2163,6 +2166,137 @@ function getHostname(value) {
 
 function getNow() {
   return Date.now();
+}
+
+function isTrackableMemoUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
+function normalizeNegativeImpactMemoEntry(input = {}) {
+  const url = String(input.url || '').trim();
+  if (!isTrackableMemoUrl(url)) {
+    return null;
+  }
+
+  const idSource = String(input.id || '').trim();
+  const id = idSource || (typeof crypto?.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `memo-${getNow()}-${Math.random().toString(16).slice(2, 10)}`);
+
+  const normalizedTitle = String(input.title || '').trim().slice(0, 300);
+  const reason = String(input.reason || 'extension_rendering_issue').trim() || 'extension_rendering_issue';
+  const tabId = Number(input.tabId || 0);
+  const windowId = Number(input.windowId || 0);
+  const level = Number(input.blockingLevel ?? blockingLevel);
+
+  return {
+    id,
+    ts: Number.isFinite(Number(input.ts || 0)) ? Number(input.ts) : getNow(),
+    title: normalizedTitle,
+    url,
+    hostname: getHostname(url),
+    reason,
+    tabId: Number.isFinite(tabId) ? tabId : 0,
+    windowId: Number.isFinite(windowId) ? windowId : 0,
+    favIconUrl: String(input.favIconUrl || '').trim(),
+    blockingLevel: Number.isFinite(level) ? Math.max(0, Math.min(3, Math.round(level))) : blockingLevel,
+    extensionEnabled: input.extensionEnabled === true
+  };
+}
+
+function normalizeNegativeImpactMemoEntries(entries) {
+  const normalized = Array.isArray(entries) ? entries : [];
+  return normalized
+    .map((entry) => normalizeNegativeImpactMemoEntry(entry))
+    .filter(Boolean);
+}
+
+function hasRecentNegativeImpactMemo(existing = [], candidate) {
+  if (!candidate || !candidate.url) return false;
+  const now = candidate.ts || getNow();
+  return existing.some((entry) => (
+    entry.url === candidate.url &&
+    entry.reason === candidate.reason &&
+    now - Number(entry.ts || 0) <= NEGATIVE_IMPACT_MEMO_DUPLICATE_WINDOW_MS
+  ));
+}
+
+async function getNegativeImpactMemo() {
+  const result = await chrome.storage.local.get([NEGATIVE_IMPACT_MEMO_STORAGE_KEY]);
+  return normalizeNegativeImpactMemoEntries(result[NEGATIVE_IMPACT_MEMO_STORAGE_KEY] || []);
+}
+
+async function recordNegativeImpactMemo(tab) {
+  const url = String(tab?.url || '').trim();
+  const prepared = normalizeNegativeImpactMemoEntry({
+    ts: getNow(),
+    url,
+    title: String(tab?.title || ''),
+    tabId: Number(tab?.id || 0),
+    windowId: Number(tab?.windowId || 0),
+    favIconUrl: String(tab?.favIconUrl || ''),
+    reason: 'extension_rendering_issue',
+    blockingLevel,
+    extensionEnabled: resolveEnabledByBlockingLevel(blockingLevel)
+  });
+
+  if (!prepared) {
+    return {
+      success: false,
+      error: 'invalid_tab_url',
+      memo: null
+    };
+  }
+
+  const existing = await getNegativeImpactMemo();
+  if (hasRecentNegativeImpactMemo(existing, prepared)) {
+    return {
+      success: false,
+      error: 'duplicated_within_window',
+      memo: prepared,
+      total: existing.length
+    };
+  }
+
+  const next = existing.filter((entry) => (
+    !(entry.url === prepared.url && entry.reason === prepared.reason && entry.tabId === prepared.tabId)
+  ));
+  next.unshift(prepared);
+  if (next.length > NEGATIVE_IMPACT_MEMO_MAX_ENTRIES) {
+    next.length = NEGATIVE_IMPACT_MEMO_MAX_ENTRIES;
+  }
+
+  await chrome.storage.local.set({ [NEGATIVE_IMPACT_MEMO_STORAGE_KEY]: next });
+  return {
+    success: true,
+    memo: prepared,
+    total: next.length
+  };
+}
+
+function recordNegativeImpactMemoForActionClick(tab) {
+  return recordNegativeImpactMemo(tab)
+    .then((result) => {
+      if (result.success) {
+        console.log(`🧾 已紀錄除錯頁面: ${result.memo?.url}`);
+      } else {
+        console.log(`🧾 已略過除錯頁面紀錄: ${result.error || 'unknown'}`);
+      }
+      return result;
+    })
+    .catch((error) => {
+      console.warn('⚠️ 除錯頁面紀錄失敗:', String(error?.message || error));
+      return {
+        success: false,
+        error: String(error?.message || error),
+        memo: null
+      };
+    });
 }
 
 async function configureProviderSecretStorage() {
@@ -5539,6 +5673,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'getNegativeImpactMemo') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      const entries = await getNegativeImpactMemo();
+      const rawMaxEntries = Number(request.maxEntries || 0);
+      const maxEntries =
+        Number.isFinite(rawMaxEntries) && rawMaxEntries > 0
+          ? Math.min(2000, Math.max(1, Math.floor(rawMaxEntries)))
+          : 0;
+      sendResponse({
+        success: true,
+        entries: maxEntries > 0 ? entries.slice(0, maxEntries) : entries,
+        total: entries.length
+      });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (request.action === 'clearNegativeImpactMemo') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      await chrome.storage.local.set({ [NEGATIVE_IMPACT_MEMO_STORAGE_KEY]: [] });
+      sendResponse({ success: true, total: 0 });
+    })().catch((error) => {
+      sendResponse({ success: false, error: String(error?.message || error) });
+    });
+    return true;
+  }
+
   if (request.action === 'injectElementPicker') {
     (async () => {
       const tabId = request.tabId || sender.tab?.id;
@@ -6496,7 +6667,12 @@ chrome.action?.onClicked?.addListener((tab) => {
   if (!Number.isFinite(targetTabId) || targetTabId <= 0) {
     return;
   }
-  openDefaultControlSidePanel(targetTabId).catch(() => {});
+
+  recordNegativeImpactMemoForActionClick(tab).catch(() => {});
+
+  if (!chrome.sidePanel?.setPanelBehavior) {
+    openDefaultControlSidePanel(targetTabId).catch(() => {});
+  }
 });
 
 chrome.windows.onRemoved.addListener((removedWindowId) => {

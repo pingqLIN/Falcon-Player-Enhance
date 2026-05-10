@@ -1,0 +1,33 @@
+{
+  "name": "local-test-page-smoke",
+  "browser": "chromium",
+  "headless": true,
+  "timeoutMs": 15000,
+  "retries": 1,
+  "retryDelayMs": 500,
+  "steps": [
+    {
+      "name": "Open local Falcon test page",
+      "action": "goto",
+      "url": "tests/test-page.html",
+      "waitUntil": "domcontentloaded"
+    },
+    {
+      "name": "Confirm test page content",
+      "action": "expectText",
+      "selector": "h2",
+      "contains": "HTML5 Video"
+    },
+    {
+      "name": "Confirm a video player exists",
+      "action": "expectVisible",
+      "selector": "video"
+    },
+    {
+      "name": "Capture final page state",
+      "action": "screenshot",
+      "path": "output/playwright/local-test-page-smoke.png",
+      "fullPage": true
+    }
+  ]
+}

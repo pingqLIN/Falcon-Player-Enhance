@@ -1,0 +1,44 @@
+{
+  "targets": [
+    {
+      "name": "Example Domain",
+      "url": "https://example.com/",
+      "tags": ["baseline", "static"]
+    },
+    {
+      "name": "Wikipedia Home",
+      "url": "https://www.wikipedia.org/",
+      "tags": ["search", "form"]
+    },
+    {
+      "name": "MDN Web Docs",
+      "url": "https://developer.mozilla.org/en-US/",
+      "tags": ["docs", "navigation"]
+    },
+    {
+      "name": "W3C Home",
+      "url": "https://www.w3.org/",
+      "tags": ["docs", "navigation"]
+    },
+    {
+      "name": "IANA Home",
+      "url": "https://www.iana.org/",
+      "tags": ["docs", "links"]
+    },
+    {
+      "name": "Python Home",
+      "url": "https://www.python.org/",
+      "tags": ["docs", "navigation", "search"]
+    },
+    {
+      "name": "Hacker News",
+      "url": "https://news.ycombinator.com/",
+      "tags": ["news", "links"]
+    },
+    {
+      "name": "GitHub Home",
+      "url": "https://github.com/",
+      "tags": ["developer", "navigation", "form"]
+    }
+  ]
+}

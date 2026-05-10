@@ -134,11 +134,11 @@ def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, obj
     checks = {
         "helperPresentInitially": bool(initial_state.get("helperPresent")),
         "initialCleanupEnabled": initial_state.get("shouldRunCleanup") is True and initial_domains == [],
-        "initialMediaAutomationEnabled": initial_state.get("shouldRunMediaAutomation") is True,
+        "initialMediaAutomationDisabledWithoutMedia": initial_state.get("shouldRunMediaAutomation") is False,
         "whitelistEnhanceOnlyDisablesCleanup": whitelist_mode.get("shouldRunCleanup") is False and "falcon-whitelist.test" in whitelist_domains,
         "whitelistEnhanceOnlyDisablesMediaAutomation": whitelist_mode.get("shouldRunMediaAutomation") is False and "falcon-whitelist.test" in whitelist_domains,
         "strictModeReEnablesCleanup": strict_mode.get("shouldRunCleanup") is True and "falcon-whitelist.test" in strict_domains,
-        "strictModeReEnablesMediaAutomation": strict_mode.get("shouldRunMediaAutomation") is True and "falcon-whitelist.test" in strict_domains,
+        "strictModeKeepsMediaAutomationDisabledWithoutMedia": strict_mode.get("shouldRunMediaAutomation") is False and "falcon-whitelist.test" in strict_domains,
         "excludedHostDisablesMediaAutomation": excluded_mode.get("mediaAutomationExcluded") is True and excluded_mode.get("shouldRunMediaAutomation") is False and "sora.chatgpt.com" in excluded_domains,
     }
 
