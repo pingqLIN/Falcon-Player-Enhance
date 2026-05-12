@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -53,6 +54,34 @@ def collect_side_panel_contract(context) -> dict[str, object]:
     )
 
 
+def is_side_panel_contract_ready(contract: dict[str, object]) -> bool:
+    return (
+        contract.get("sidePanelAvailable") is True
+        and contract.get("getPanelBehaviorAvailable") is True
+        and contract.get("openPanelOnActionClick") is True
+        and contract.get("defaultPathPinned") is True
+        and int(contract.get("registeredScriptCount") or 0) > 0
+    )
+
+
+def wait_for_side_panel_contract(context, timeout_ms: int) -> dict[str, object]:
+    deadline = time.time() + (timeout_ms / 1000)
+    last_contract: dict[str, object] = {}
+    stable_ready_count = 0
+
+    while time.time() < deadline:
+        last_contract = collect_side_panel_contract(context)
+        if is_side_panel_contract_ready(last_contract):
+            stable_ready_count += 1
+            if stable_ready_count >= 2:
+                return last_contract
+        else:
+            stable_ready_count = 0
+        time.sleep(0.2)
+
+    return last_contract
+
+
 def build_report(contract: dict[str, object]) -> dict[str, object]:
     checks = {
         "sidePanelAvailable": contract.get("sidePanelAvailable") is True,
@@ -84,7 +113,7 @@ def main() -> int:
             try:
                 extension_id = smoke.wait_for_extension_id(context, args.timeout_ms)
                 smoke.wait_for_extension_ready(context, args.timeout_ms)
-                contract = collect_side_panel_contract(context)
+                contract = wait_for_side_panel_contract(context, args.timeout_ms)
                 report = build_report(contract)
                 print(json.dumps({
                     "ok": report["ok"],

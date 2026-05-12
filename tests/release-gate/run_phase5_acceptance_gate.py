@@ -53,6 +53,7 @@ PY_COMPILE_FILES = [
     "tests/site-state/run_player_controls_site_state_regression.py",
     "tests/site-state/run_site_state_helper_regression.py",
     "tests/site-registry/run_site_registry_contract_regression.py",
+    "tests/side-panel/run_side_panel_behavior_regression.py",
     "tests/release-gate/run_phase5_acceptance_gate.py",
 ]
 
@@ -339,6 +340,17 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "steps": [
                 build_retryable_browser_step("tests/interaction-safety/run_interaction_safety_regression.py", headless),
                 build_retryable_browser_step("tests/interaction-safety/run_labs_flow_cta_regression.py", headless),
+            ],
+        },
+        {
+            "id": "G-10",
+            "label": "Side Panel Behavior",
+            "steps": [
+                build_retryable_browser_step(
+                    "tests/side-panel/run_side_panel_behavior_regression.py",
+                    headless,
+                    retries=1,
+                ),
             ],
         },
     ]

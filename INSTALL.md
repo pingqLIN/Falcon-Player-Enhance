@@ -14,7 +14,7 @@
 
 3. **載入擴充功能**
    - 點擊左上角的「載入未封裝項目」按鈕
-   - 選擇此專案下的資料夾: `ad-blocker-player-enhancer/extension`
+   - 選擇此專案下的資料夾: `Falcon-Player-Enhance/extension`
    - 點擊「選擇資料夾」
 
 4. **確認安裝成功**
