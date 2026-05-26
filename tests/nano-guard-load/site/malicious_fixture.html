@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; img-src 'self' data:; frame-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Nano Guard Load Fixture</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      color: #161616;
+      background: #f6f7f9;
+    }
+
+    main {
+      width: min(1100px, calc(100vw - 32px));
+      margin: 24px auto;
+    }
+
+    #fixture {
+      position: relative;
+      min-height: 680px;
+      border: 1px solid #d7dce2;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .player {
+      position: relative;
+      width: 840px;
+      max-width: calc(100% - 40px);
+      aspect-ratio: 16 / 9;
+      margin: 28px auto;
+      background: #111;
+    }
+
+    .overlay-bait {
+      position: absolute;
+      inset: 6%;
+      z-index: 9000;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: rgba(20, 20, 20, 0.82);
+      text-decoration: none;
+    }
+
+    .noise-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      padding: 16px;
+    }
+
+    .noise-node {
+      min-height: 24px;
+      border: 1px solid #e2e5ea;
+      font-size: 12px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Nano Guard Load Fixture</h1>
+    <p>This page is synthetic, local-only, and inert. It simulates hostile DOM shape without loading remote resources.</p>
+    <section id="fixture" aria-label="synthetic hostile page fixture"></section>
+    <pre id="last-result" aria-live="polite"></pre>
+  </main>
+  <script src="./malicious_fixture.js"></script>
+</body>
+</html>

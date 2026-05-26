@@ -11,6 +11,7 @@ tests/e2e-ai-replay/reports/
 tests/ai-eval/reports/
 tests/live-browser/reports/
 tests/nano-guard/reports/
+tests/nano-guard-load/reports/
 output/playwright/
 tests/bookmarks_*.html
 tests/bookmarks_*.html.bak

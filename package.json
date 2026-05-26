@@ -25,6 +25,7 @@
     "test:site-state:bridge": "python tests/site-state/run_site_state_bridge_regression.py",
     "test:site-state:helper": "python tests/site-state/run_site_state_helper_regression.py",
     "test:site-registry:contract": "python tests/site-registry/run_site_registry_contract_regression.py",
+    "test:nano-guard:load": "python tests/nano-guard-load/run_nano_guard_load_test.py --mock-model --density-levels 1,2 --repeats 1 --headless",
     "test:phase5:gate": "python tests/release-gate/run_phase5_acceptance_gate.py",
     "test:lmstudio": "node tests/ai-eval/run-lmstudio-evaluation.js --mock",
     "test:lmstudio:live": "node tests/ai-eval/run-lmstudio-evaluation.js --endpoint http://127.0.0.1:1234/v1/chat/completions",
