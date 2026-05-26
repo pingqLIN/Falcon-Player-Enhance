@@ -355,7 +355,7 @@ const ENHANCED_SITE_CONTENT_SCRIPT_DEFINITIONS = [
 const AI_POLICY_VERSION = 2;
 const AI_POLICY_GATE_VERSION = 1;
 const AI_PROVIDER_VERSION = 2;
-const AI_PROVIDER_TYPES = ['openai', 'gemini', 'lmstudio', 'gateway'];
+const AI_PROVIDER_TYPES = ['openai', 'gemini', 'lmstudio', 'gateway', 'chrome_builtin'];
 const AI_MAX_TELEMETRY = 1500;
 const AI_DECAY_PER_MINUTE = 0.96;
 const AI_HOST_FALLBACK_DURATION_MS = 8 * 60 * 1000;
@@ -373,6 +373,10 @@ const GEMINI_DEFAULT_TIMEOUT_MS = 20000;
 const GATEWAY_DEFAULT_ENDPOINT = '';
 const GATEWAY_DEFAULT_MODEL = 'gpt-5.4-mini';
 const GATEWAY_DEFAULT_TIMEOUT_MS = 8000;
+const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
+const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 12000;
+const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0;
+const CHROME_BUILTIN_DEFAULT_TOP_K = 3;
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
 const LM_STUDIO_DEFAULT_MIN_RISK_SCORE = 8;
 const LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS = 8;
@@ -1789,11 +1793,6 @@ async function openPinnedControlSidePanel(tabId) {
   try {
     await chrome.sidePanel.open({ tabId: resolvedTabId });
   } catch (error) {
-    // Roll back to disabled when open fails (e.g. missing user gesture)
-    await chrome.sidePanel.setOptions({
-      tabId: resolvedTabId,
-      enabled: false
-    });
     throw error;
   }
 
@@ -2376,6 +2375,16 @@ function getProviderDefaults(provider = 'lmstudio') {
     };
   }
 
+  if (provider === 'chrome_builtin') {
+    return {
+      provider: 'chrome_builtin',
+      endpoint: '',
+      model: CHROME_BUILTIN_DEFAULT_MODEL,
+      apiKey: '',
+      timeoutMs: CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+    };
+  }
+
   return {
     provider: 'lmstudio',
     endpoint: LM_STUDIO_DEFAULT_ENDPOINT,
@@ -2399,6 +2408,8 @@ function buildDefaultAiProviderSettings() {
     cooldownMs: LM_STUDIO_DEFAULT_COOLDOWN_MS,
     minRiskScore: LM_STUDIO_DEFAULT_MIN_RISK_SCORE,
     maxRecentEvents: LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS,
+    temperature: CHROME_BUILTIN_DEFAULT_TEMPERATURE,
+    topK: CHROME_BUILTIN_DEFAULT_TOP_K,
     enableDynamicRuleCandidates: true
   };
 }
@@ -2442,6 +2453,8 @@ function normalizeAiProviderSettings(input = {}) {
     cooldownMs: clamp(Number(input.cooldownMs || defaults.cooldownMs), 2000, 5 * 60 * 1000),
     minRiskScore: clamp(Number(input.minRiskScore || defaults.minRiskScore), 0, 50),
     maxRecentEvents: clamp(Number(input.maxRecentEvents || defaults.maxRecentEvents), 2, 20),
+    temperature: clamp(Number(input.temperature ?? defaults.temperature), 0, 2),
+    topK: clamp(Number(input.topK ?? defaults.topK), 1, 128),
     enableDynamicRuleCandidates:
       input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true
   };
@@ -2450,7 +2463,7 @@ function normalizeAiProviderSettings(input = {}) {
 function getPersistableAiProviderSettings(input = {}) {
   const settings = normalizeAiProviderSettings(input);
 
-  if (settings.provider === 'lmstudio') {
+  if (settings.provider === 'lmstudio' || settings.provider === 'chrome_builtin') {
     return settings;
   }
 
@@ -2462,7 +2475,7 @@ function getPersistableAiProviderSettings(input = {}) {
 
 function resolveAiProviderSettings(input = {}, secret = '') {
   const settings = normalizeAiProviderSettings(input);
-  if (settings.provider === 'lmstudio') {
+  if (settings.provider === 'lmstudio' || settings.provider === 'chrome_builtin') {
     return settings;
   }
 
@@ -3890,6 +3903,14 @@ function buildGeminiGenerateContentBody(hostname, context, policy, recentEvents,
   };
 }
 
+function buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings) {
+  return [
+    buildOpenAiInstructions(),
+    '',
+    buildOpenAiInput(hostname, context, policy, recentEvents, settings)
+  ].join('\n');
+}
+
 function extractJsonObjectFromText(text) {
   const source = String(text || '').trim();
   if (!source) return null;
@@ -3934,6 +3955,87 @@ function extractGeminiOutputText(payload) {
     .map((item) => String(item?.text || ''))
     .join('\n')
     .trim();
+}
+
+async function resolveChromeLanguageModel() {
+  const api = globalThis.LanguageModel || globalThis.ai?.languageModel;
+  if (!api?.create) {
+    throw new Error('chrome_builtin_prompt_api_unavailable');
+  }
+  return api;
+}
+
+async function buildChromeBuiltinSessionOptions(api, settings = {}) {
+  const options = {};
+
+  if (typeof api.params === 'function') {
+    const params = await api.params();
+    const temperature = clamp(
+      Number(settings.temperature ?? CHROME_BUILTIN_DEFAULT_TEMPERATURE),
+      0,
+      Number(params?.maxTemperature || 2)
+    );
+    const topK = Math.round(
+      clamp(
+        Number(settings.topK ?? params?.defaultTopK ?? CHROME_BUILTIN_DEFAULT_TOP_K),
+        1,
+        Number(params?.maxTopK || 128)
+      )
+    );
+
+    options.temperature = temperature;
+    options.topK = topK;
+  }
+
+  return {
+    ...options,
+    expectedInputs: [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }]
+  };
+}
+
+function toChromeBuiltinSamplingOnlyOptions(options = {}) {
+  return Object.fromEntries(
+    Object.entries(options).filter(([key]) => key === 'temperature' || key === 'topK')
+  );
+}
+
+async function resolveChromeBuiltinSessionConfig(api, settings = {}) {
+  const preferredOptions = await buildChromeBuiltinSessionOptions(api, settings);
+  const optionRoutes = [
+    { route: 'language-and-sampling', options: preferredOptions },
+    { route: 'sampling-only', options: toChromeBuiltinSamplingOnlyOptions(preferredOptions) },
+    { route: 'default', options: {} }
+  ];
+  const attempts = [];
+
+  for (const candidate of optionRoutes) {
+    try {
+      const availability =
+        typeof api.availability === 'function'
+          ? await api.availability(candidate.options)
+          : 'available';
+      attempts.push({
+        route: candidate.route,
+        availability: String(availability || '')
+      });
+
+      if (String(availability || '').toLowerCase() !== 'unavailable') {
+        return {
+          ...candidate,
+          availability,
+          attempts
+        };
+      }
+    } catch (error) {
+      attempts.push({
+        route: candidate.route,
+        error: String(error?.message || error)
+      });
+    }
+  }
+
+  throw new Error(`chrome_builtin_unavailable:${JSON.stringify(attempts)}`);
 }
 
 function buildTeachFeatureSummary(features = {}) {
@@ -4679,6 +4781,64 @@ async function runGatewayHealthCheck(settings = aiState.providerSettings) {
   }
 }
 
+async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) {
+  const normalized = normalizeAiProviderSettings(settings || {});
+  try {
+    const api = await resolveChromeLanguageModel();
+    const startedAt = getNow();
+    const sessionConfig = await resolveChromeBuiltinSessionConfig(api, normalized);
+    const availability = sessionConfig.availability;
+    const params = typeof api.params === 'function' ? await api.params() : null;
+    const isAvailable = String(availability || '').toLowerCase() === 'available';
+
+    if (!isAvailable) {
+      throw new Error(`chrome_builtin_not_ready_${availability}`);
+    }
+
+    aiState.providerState = normalizeAiProviderState({
+      ...aiState.providerState,
+      lastHealthCheckAt: getNow(),
+      lastHealthOk: true,
+      lastLatencyMs: getNow() - startedAt,
+      lastError: '',
+      lastModelCount: 1,
+      lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
+      lastProvider: 'chrome_builtin',
+      lastService: `chrome_prompt_api:${String(availability || 'available')}`
+    });
+    scheduleAiPersist();
+
+    return {
+      success: true,
+      provider: 'chrome_builtin',
+      endpoint: '',
+      service: 'chrome_prompt_api',
+      resolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
+      modelCount: 1,
+      availability,
+      route: sessionConfig.route,
+      attempts: sessionConfig.attempts,
+      params
+    };
+  } catch (error) {
+    aiState.providerState = normalizeAiProviderState({
+      ...aiState.providerState,
+      lastHealthCheckAt: getNow(),
+      lastHealthOk: false,
+      lastError: String(error?.message || error),
+      lastProvider: 'chrome_builtin',
+      lastService: 'chrome_prompt_api'
+    });
+    scheduleAiPersist();
+    return {
+      success: false,
+      provider: 'chrome_builtin',
+      endpoint: '',
+      error: String(error?.message || error)
+    };
+  }
+}
+
 async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
   const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
   if (normalized.provider === 'openai') {
@@ -4689,6 +4849,9 @@ async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
   }
   if (normalized.provider === 'gateway') {
     return runGatewayHealthCheck(normalized);
+  }
+  if (normalized.provider === 'chrome_builtin') {
+    return runChromeBuiltinHealthCheck(normalized);
   }
   return runLmStudioHealthCheck(normalized);
 }
@@ -4999,6 +5162,79 @@ async function requestGeminiAdvisory(hostname, context, policy) {
   return advisory;
 }
 
+async function requestChromeBuiltinAdvisory(hostname, context, policy) {
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const api = await resolveChromeLanguageModel();
+  const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
+  const startedAt = getNow();
+  const timeout = createRequestTimeout(settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS);
+  let session = null;
+
+  try {
+    const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
+    session = await api.create({
+      ...sessionConfig.options,
+      signal: timeout.signal
+    });
+    const rawText = await session.prompt(buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings));
+    const parsed = extractJsonObjectFromText(rawText);
+    const advisory = normalizeOpenAiAdvisory(
+      hostname,
+      {
+        output_text: parsed ? JSON.stringify(parsed) : String(rawText || '')
+      },
+      policy,
+      {
+        ...settings,
+        model: CHROME_BUILTIN_DEFAULT_MODEL
+      }
+    );
+
+    if (!advisory) {
+      throw new Error('chrome_builtin_invalid_policy');
+    }
+
+    advisory.provider = 'chrome_builtin';
+    advisory.model = CHROME_BUILTIN_DEFAULT_MODEL;
+
+    const normalizedHost = getHostname(hostname) || 'unknown-host';
+    aiState.providerState = normalizeAiProviderState({
+      ...aiState.providerState,
+      lastHealthCheckAt: getNow(),
+      lastHealthOk: true,
+      lastLatencyMs: getNow() - startedAt,
+      lastError: '',
+      lastResolvedModel: advisory.model,
+      lastProvider: 'chrome_builtin',
+      lastService: `chrome_prompt_api:${sessionConfig.route}`,
+      perHostLastRun: {
+        ...(aiState.providerState?.perHostLastRun || {}),
+        [normalizedHost]: getNow()
+      }
+    });
+    aiState.providerAdvisories[normalizedHost] = advisory;
+    if (settings.enableDynamicRuleCandidates === true) {
+      const candidateSet = buildRuleCandidateSet(normalizedHost, advisory);
+      if (candidateSet) {
+        aiState.generatedRuleCandidates[normalizedHost] = candidateSet;
+        aiState.providerState = normalizeAiProviderState({
+          ...aiState.providerState,
+          lastRulePreviewAt: getNow()
+        });
+      }
+    }
+    scheduleAiPersist();
+    return advisory;
+  } finally {
+    timeout.cleanup();
+    try {
+      session?.destroy?.();
+    } catch (_) {
+      // no-op
+    }
+  }
+}
+
 async function requestAiProviderAdvisory(hostname, context, policy) {
   const settings = getPersistableAiProviderSettings(aiState.providerSettings || {});
   if (settings.provider === 'openai') {
@@ -5009,6 +5245,9 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
   }
   if (settings.provider === 'gateway') {
     return requestGatewayAdvisory(hostname, context, policy);
+  }
+  if (settings.provider === 'chrome_builtin') {
+    return requestChromeBuiltinAdvisory(hostname, context, policy);
   }
   return requestLmStudioAdvisory(hostname, context, policy);
 }
@@ -5083,6 +5322,31 @@ async function requestAiElementClassification(hostname, features = {}) {
         ...normalizeElementClassification(extractJsonObjectFromText(extractGeminiOutputText(payload)), localResult),
         provider: 'gemini'
       };
+    }
+
+    if (settings.provider === 'chrome_builtin') {
+      const api = await resolveChromeLanguageModel();
+      const timeout = createRequestTimeout(settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS);
+      let session = null;
+      try {
+        const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
+        session = await api.create({
+          ...sessionConfig.options,
+          signal: timeout.signal
+        });
+        const rawText = await session.prompt(prompt);
+        return {
+          ...normalizeElementClassification(extractJsonObjectFromText(rawText), localResult),
+          provider: 'chrome_builtin'
+        };
+      } finally {
+        timeout.cleanup();
+        try {
+          session?.destroy?.();
+        } catch (_) {
+          // no-op
+        }
+      }
     }
 
     if (settings.provider === 'lmstudio') {
@@ -5854,7 +6118,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const currentSettings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
       const nextSettings = normalizeAiProviderSettings(request.settings || {});
       aiState.providerSecret =
-        nextSettings.provider === 'lmstudio'
+        nextSettings.provider === 'lmstudio' || nextSettings.provider === 'chrome_builtin'
           ? ''
           : String(
               nextSettings.apiKey ||
@@ -6669,10 +6933,7 @@ chrome.action?.onClicked?.addListener((tab) => {
   }
 
   recordNegativeImpactMemoForActionClick(tab).catch(() => {});
-
-  if (!chrome.sidePanel?.setPanelBehavior) {
-    openDefaultControlSidePanel(targetTabId).catch(() => {});
-  }
+  openDefaultControlSidePanel(targetTabId).catch(() => {});
 });
 
 chrome.windows.onRemoved.addListener((removedWindowId) => {

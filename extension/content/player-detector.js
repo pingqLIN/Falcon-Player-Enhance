@@ -31,6 +31,28 @@
         return false;
     }
 
+    let extensionContextValid = true;
+
+    function isExtensionContextValid() {
+        if (!extensionContextValid) return false;
+        try {
+            return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function invalidateExtensionContext() {
+        extensionContextValid = false;
+    }
+
+    function isExtensionContextError(error) {
+        const message = String(error?.message || error || '').toLowerCase();
+        return message.includes('extension context invalidated') ||
+            message.includes('context invalidated') ||
+            message.includes('receiving end does not exist');
+    }
+
     function hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -910,12 +932,18 @@
 
             // 通知 background script
             try {
-                chrome.runtime.sendMessage({
-                    action: 'updatePlayerCount',
-                    count: playerCount,
-                    players: getPlayersInfo()
-                });
-            } catch (e) {}
+                if (isExtensionContextValid()) {
+                    chrome.runtime.sendMessage({
+                        action: 'updatePlayerCount',
+                        count: playerCount,
+                        players: getPlayersInfo()
+                    });
+                }
+            } catch (e) {
+                if (isExtensionContextError(e)) {
+                    invalidateExtensionContext();
+                }
+            }
 
             // 觸發自訂事件,供 player-enhancer.js 使用
             document.dispatchEvent(new CustomEvent('shieldPlayersDetected', {
@@ -1010,7 +1038,9 @@
             return 0;
         }
         const newCount = detectAllPlayers();
-        applyBlockedPlayers();
+        if (isExtensionContextValid()) {
+            applyBlockedPlayers();
+        }
         return newCount;
     }
 
@@ -1129,31 +1159,41 @@
     init();
 
     // 監聽來自 popup/background 的訊息
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === 'getPlayerCount') {
-            sendResponse({ count: playerCount, players: getPlayersInfo() });
-            return true;
+    if (isExtensionContextValid()) {
+        try {
+            chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+                if (request.action === 'getPlayerCount') {
+                    sendResponse({ count: playerCount, players: getPlayersInfo() });
+                    return true;
+                }
+                if (request.action === 'getPlayersInfo') {
+                    sendResponse({ players: getPlayersInfo() });
+                    return true;
+                }
+                if (request.action === 'forceDetect') {
+                    const newCount = detectAllPlayers();
+                    sendResponse({ count: playerCount, newDetected: newCount });
+                    return true;
+                }
+                if (request.action === 'blockPlayer') {
+                    blockPlayerByIndex(request.index, request.playerId);
+                    sendResponse({ success: true });
+                    return true;
+                }
+                if (request.action === 'restorePlayer') {
+                    restorePlayerByIndex(request.index, request.playerId);
+                    sendResponse({ success: true });
+                    return true;
+                }
+            });
+        } catch (e) {
+            if (isExtensionContextError(e)) {
+                invalidateExtensionContext();
+            } else {
+                throw e;
+            }
         }
-        if (request.action === 'getPlayersInfo') {
-            sendResponse({ players: getPlayersInfo() });
-            return true;
-        }
-        if (request.action === 'forceDetect') {
-            const newCount = detectAllPlayers();
-            sendResponse({ count: playerCount, newDetected: newCount });
-            return true;
-        }
-        if (request.action === 'blockPlayer') {
-            blockPlayerByIndex(request.index, request.playerId);
-            sendResponse({ success: true });
-            return true;
-        }
-        if (request.action === 'restorePlayer') {
-            restorePlayerByIndex(request.index, request.playerId);
-            sendResponse({ success: true });
-            return true;
-        }
-    });
+    }
 
     function getPlayerById(playerId) {
         for (const [element, data] of detectedPlayers) {
@@ -1188,9 +1228,15 @@
      * 初始化時檢查已封鎖的播放器
      */
     async function applyBlockedPlayers() {
+        if (!isExtensionContextValid()) return;
+
         try {
             const hostname = window.location.hostname.replace(/^www\./, '');
             const result = await chrome.storage.local.get(['blockedPlayers']);
+            if (!isExtensionContextValid()) {
+                invalidateExtensionContext();
+                return;
+            }
             const allBlocked = result.blockedPlayers || {};
             const blockedList = allBlocked[hostname] || [];
             
@@ -1204,6 +1250,10 @@
                 }
             });
         } catch (e) {
+            if (isExtensionContextError(e) || !isExtensionContextValid()) {
+                invalidateExtensionContext();
+                return;
+            }
             console.error('[Detector] Failed to apply blocked players:', e);
         }
     }
