@@ -230,5 +230,6 @@
   "popupPlayerAlertUnpinBeforeClose": { "message": "此視窗已釘選，請先點上方 PIN 解除釘選後再關閉" },
   "popupFlowClickSub": { "message": "點選播放器" },
   "popupFlowDetectSub": { "message": "偵測與清除" },
-  "popupFlowPlaySub": { "message": "安全播放" }
+  "popupFlowPlaySub": { "message": "安全播放" },
+  "dashboardAiRestoreDefaults": { "message": "恢復預設" }
 }

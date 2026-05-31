@@ -374,9 +374,10 @@ const GATEWAY_DEFAULT_ENDPOINT = '';
 const GATEWAY_DEFAULT_MODEL = 'gpt-5.4-mini';
 const GATEWAY_DEFAULT_TIMEOUT_MS = 8000;
 const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
-const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 12000;
-const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0;
-const CHROME_BUILTIN_DEFAULT_TOP_K = 3;
+const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 8000;
+const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 1000;
+const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0.2;
+const CHROME_BUILTIN_DEFAULT_TOP_K = 8;
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
 const LM_STUDIO_DEFAULT_MIN_RISK_SCORE = 8;
 const LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS = 8;
@@ -435,6 +436,22 @@ const AI_POLICY_GATE_ACTION_BUDGET = {
   maxReversibleActionsPerWindow: 3,
   cooldownMs: 30000
 };
+const AI_ELEMENT_CACHE_MAX_ENTRIES = 500;
+const AI_ELEMENT_CACHE_MAX_ENTRIES_PER_HOST = 80;
+const AI_ELEMENT_CACHE_DEFAULT_TTL_MS = 5 * 60 * 1000;
+const AI_ELEMENT_CACHE_HIGH_CONFIDENCE_TTL_MS = 10 * 60 * 1000;
+const AI_ELEMENT_CACHE_TEXT_LIMIT = 80;
+const AI_ELEMENT_CACHE_TOKEN_LIMIT = 8;
+const AI_ELEMENT_CLASSIFICATION_RESPONSE_CONSTRAINT = {
+  type: 'object',
+  properties: {
+    category: { type: 'string', enum: ['ad', 'suspicious', 'benign', 'tracker'] },
+    confidence: { type: 'number', minimum: 0, maximum: 1 },
+    reason: { type: 'string' },
+    suggestedAction: { type: 'string', enum: ['observe_only', 'hide_element', 'guard_navigation'] }
+  },
+  required: ['category', 'confidence', 'reason', 'suggestedAction']
+};
 
 const AI_EVENT_WEIGHTS = {
   runtime_bootstrap: 0.2,
@@ -478,6 +495,7 @@ let aiState = {
   providerState: null,
   providerAdvisories: {},
   generatedRuleCandidates: {},
+  elementClassificationCache: {},
   candidateReviewLog: [],
   candidatePromotionLog: [],
   candidateRollbackLog: [],
@@ -557,6 +575,7 @@ async function initStorage(reason = 'update') {
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
+    'aiElementClassificationCache',
     'aiCandidateReviewLog',
     'aiKnowledgeStore',
     'theme'
@@ -680,6 +699,10 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.aiGeneratedRuleCandidates !== 'object' || result.aiGeneratedRuleCandidates === null) {
     patch.aiGeneratedRuleCandidates = {};
+  }
+
+  if (typeof result.aiElementClassificationCache !== 'object' || result.aiElementClassificationCache === null) {
+    patch.aiElementClassificationCache = {};
   }
 
   if (!Array.isArray(result.aiCandidateReviewLog)) {
@@ -1863,6 +1886,7 @@ async function loadAiState() {
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
+    'aiElementClassificationCache',
     'aiCandidateReviewLog',
     'aiCandidatePromotionLog',
     'aiCandidateRollbackLog',
@@ -1897,6 +1921,11 @@ async function loadAiState() {
       ? result.aiProviderAdvisories
       : {};
   aiState.generatedRuleCandidates = normalizeGeneratedRuleCandidates(result.aiGeneratedRuleCandidates || {});
+  aiState.elementClassificationCache =
+    result.aiElementClassificationCache && typeof result.aiElementClassificationCache === 'object'
+      ? result.aiElementClassificationCache
+      : {};
+  pruneElementClassificationCache();
   aiState.candidateReviewLog = normalizeCandidateReviewLog(result.aiCandidateReviewLog || []);
   aiState.candidatePromotionLog = normalizeCandidatePromotionLog(result.aiCandidatePromotionLog || []);
   aiState.candidateRollbackLog = normalizeCandidateRollbackLog(result.aiCandidateRollbackLog || []);
@@ -1919,6 +1948,7 @@ function scheduleAiPersist() {
 }
 
 async function persistAiState() {
+  pruneElementClassificationCache();
   await chrome.storage.local.set({
     aiMonitorEnabled: aiState.enabled,
     aiProfiles: aiState.profiles,
@@ -1930,6 +1960,7 @@ async function persistAiState() {
     aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
     aiProviderAdvisories: aiState.providerAdvisories || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+    aiElementClassificationCache: aiState.elementClassificationCache || {},
     aiCandidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
     aiCandidatePromotionLog: normalizeCandidatePromotionLog(aiState.candidatePromotionLog || []),
     aiCandidateRollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []),
@@ -2381,7 +2412,8 @@ function getProviderDefaults(provider = 'lmstudio') {
       endpoint: '',
       model: CHROME_BUILTIN_DEFAULT_MODEL,
       apiKey: '',
-      timeoutMs: CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+      timeoutMs: CHROME_BUILTIN_DEFAULT_TIMEOUT_MS,
+      cooldownMs: CHROME_BUILTIN_DEFAULT_COOLDOWN_MS
     };
   }
 
@@ -2390,7 +2422,8 @@ function getProviderDefaults(provider = 'lmstudio') {
     endpoint: LM_STUDIO_DEFAULT_ENDPOINT,
     model: LM_STUDIO_DEFAULT_MODEL,
     apiKey: 'lm-studio',
-    timeoutMs: LM_STUDIO_DEFAULT_TIMEOUT_MS
+    timeoutMs: LM_STUDIO_DEFAULT_TIMEOUT_MS,
+    cooldownMs: LM_STUDIO_DEFAULT_COOLDOWN_MS
   };
 }
 
@@ -2405,7 +2438,7 @@ function buildDefaultAiProviderSettings() {
     model: defaults.model,
     apiKey: defaults.apiKey,
     timeoutMs: defaults.timeoutMs,
-    cooldownMs: LM_STUDIO_DEFAULT_COOLDOWN_MS,
+    cooldownMs: defaults.cooldownMs || LM_STUDIO_DEFAULT_COOLDOWN_MS,
     minRiskScore: LM_STUDIO_DEFAULT_MIN_RISK_SCORE,
     maxRecentEvents: LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS,
     temperature: CHROME_BUILTIN_DEFAULT_TEMPERATURE,
@@ -2450,7 +2483,7 @@ function normalizeAiProviderSettings(input = {}) {
     model,
     apiKey: apiKey || providerDefaults.apiKey,
     timeoutMs: clamp(Number(input.timeoutMs || providerDefaults.timeoutMs), 1000, 60000),
-    cooldownMs: clamp(Number(input.cooldownMs || defaults.cooldownMs), 2000, 5 * 60 * 1000),
+    cooldownMs: clamp(Number(input.cooldownMs || providerDefaults.cooldownMs || defaults.cooldownMs), 500, 5 * 60 * 1000),
     minRiskScore: clamp(Number(input.minRiskScore || defaults.minRiskScore), 0, 50),
     maxRecentEvents: clamp(Number(input.maxRecentEvents || defaults.maxRecentEvents), 2, 20),
     temperature: clamp(Number(input.temperature ?? defaults.temperature), 0, 2),
@@ -2504,6 +2537,40 @@ function normalizeAiProviderState(input = {}) {
     perHostLastRun:
       input.perHostLastRun && typeof input.perHostLastRun === 'object' ? input.perHostLastRun : {}
   };
+}
+
+function classifyAiProviderError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  if (message.includes('invalid_json')) return 'invalid_json';
+  if (message.includes('quota')) return 'quota_exceeded';
+  if (message.includes('429') || message.includes('rate limit')) return 'quota_exceeded';
+  if (message.includes('timeout') || message.includes('abort')) return 'timeout';
+  if (message.includes('downloadable')) return 'downloadable';
+  if (message.includes('downloading')) return 'downloading';
+  if (
+    message.includes('prompt_api_unavailable') ||
+    message.includes('language_model') ||
+    message.includes('notallowed') ||
+    message.includes('not allowed') ||
+    message.includes('worker')
+  ) {
+    return 'unsupported_context';
+  }
+  if (message.includes('unavailable')) return 'unavailable';
+  if (message.includes('invalid') && message.includes('json')) return 'invalid_json';
+  return 'error';
+}
+
+function isResponseConstraintUnsupportedError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return (
+    message.includes('responseconstraint') ||
+    message.includes('response constraint') ||
+    message.includes('schema') ||
+    message.includes('unsupported option') ||
+    message.includes('unknown option') ||
+    message.includes('not supported')
+  );
 }
 
 function normalizeGeneratedRuleCandidates(input = {}) {
@@ -3965,6 +4032,15 @@ async function resolveChromeLanguageModel() {
   return api;
 }
 
+function getChromeBuiltinCapabilitySnapshot() {
+  return {
+    hasLanguageModel: Boolean(globalThis.LanguageModel),
+    hasAiLanguageModel: Boolean(globalThis.ai?.languageModel),
+    workerLikeContext: typeof WorkerGlobalScope !== 'undefined' && globalThis instanceof WorkerGlobalScope,
+    hasWindow: typeof globalThis.window !== 'undefined'
+  };
+}
+
 async function buildChromeBuiltinSessionOptions(api, settings = {}) {
   const options = {};
 
@@ -4036,6 +4112,21 @@ async function resolveChromeBuiltinSessionConfig(api, settings = {}) {
   }
 
   throw new Error(`chrome_builtin_unavailable:${JSON.stringify(attempts)}`);
+}
+
+function promptChromeBuiltinSession(session, prompt, options = {}, timeoutMs = CHROME_BUILTIN_DEFAULT_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('request_timeout'));
+    }, Math.max(1, Number(timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS)));
+
+    Promise.resolve()
+      .then(() => session.prompt(prompt, options))
+      .then(resolve, reject)
+      .finally(() => {
+        clearTimeout(timer);
+      });
+  });
 }
 
 function buildTeachFeatureSummary(features = {}) {
@@ -4142,48 +4233,297 @@ function classifyElementLocally(hostname, features = {}) {
   };
 }
 
+function normalizeBucket(value, allowed = []) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return allowed.includes(normalized) ? normalized : 'unknown';
+}
+
+function getElementPositionBucket(features = {}) {
+  return normalizeBucket(features.computedStyle?.position, ['static', 'relative', 'absolute', 'fixed', 'sticky']);
+}
+
+function getElementZIndexBucket(features = {}) {
+  const numeric = Number(features.computedStyle?.zIndex || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'none';
+  if (numeric >= 10000) return 'extreme';
+  if (numeric >= 1000) return 'high';
+  return 'low';
+}
+
+function getElementSizeBucket(features = {}) {
+  const width = Number(features.rect?.width || 0);
+  const height = Number(features.rect?.height || 0);
+  if (width >= 900 && height >= 500) return 'viewport_overlay';
+  if (width >= 728 && height >= 60) return 'banner';
+  if (width >= 250 && height >= 90) return 'medium_rect';
+  if (width > 0 || height > 0) return 'small';
+  return 'unknown';
+}
+
+function getElementTextLengthBucket(text = '') {
+  const length = String(text || '').replace(/\s+/g, ' ').trim().length;
+  if (length === 0) return 'empty';
+  if (length <= 24) return 'short';
+  if (length <= 80) return 'medium';
+  return 'long';
+}
+
+function fnv1aHash(value) {
+  let hash = 0x811c9dc5;
+  const input = String(value || '');
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function isRandomLikeToken(token) {
+  const value = String(token || '').trim();
+  if (!value) return true;
+  if (/^[a-f0-9]{12,}$/i.test(value)) return true;
+  if (/^[a-z0-9_-]{18,}$/i.test(value) && /[0-9]/.test(value) && /[a-z]/i.test(value)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeElementTokens(value) {
+  const tokens = String(value || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9_-]/g, ''))
+    .filter((token) => token.length >= 2 && token.length <= 48)
+    .filter((token) => !isRandomLikeToken(token))
+    .slice(0, AI_ELEMENT_CACHE_TOKEN_LIMIT);
+  return tokens.sort().join('.');
+}
+
+function summarizeElementUrl(value) {
+  const host = getHostname(value);
+  if (host) return host;
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.startsWith('#')) return 'fragment';
+  if (text.startsWith('/')) return 'relative';
+  return 'opaque';
+}
+
+function buildElementEvidenceSummary(hostname, features = {}, localResult = null) {
+  const hrefHost = summarizeElementUrl(features.href);
+  const srcHost = summarizeElementUrl(features.src);
+  const pageHost = getHostname(hostname);
+  const text = String(features.text || '').replace(/\s+/g, ' ').trim();
+  const className = String(features.className || '').trim();
+  const id = String(features.id || '').trim();
+  const matchedSeedIds = Array.isArray(localResult?.matchedSeedIds) ? localResult.matchedSeedIds : [];
+  const selector = String(features.selector || '').replace(/\s+/g, ' ').trim();
+  const tagName = String(features.tagName || selector.split(/[.#:[\s>+~]/)[0] || '').toLowerCase();
+  const hasMediaSource = Boolean(srcHost);
+
+  return {
+    tagName,
+    matchedSeedCount: matchedSeedIds.length,
+    externalHref: Boolean(hrefHost && pageHost && hrefHost !== pageHost && hrefHost !== 'relative' && hrefHost !== 'fragment'),
+    hrefHost,
+    srcHost,
+    hasText: text.length > 0,
+    textLengthBucket: getElementTextLengthBucket(text),
+    hasMediaSource,
+    classTokenSummary: normalizeElementTokens(className),
+    idTokenSummary: isRandomLikeToken(id) ? '' : normalizeElementTokens(id),
+    positionBucket: getElementPositionBucket(features),
+    zIndexBucket: getElementZIndexBucket(features),
+    sizeBucket: getElementSizeBucket(features)
+  };
+}
+
+function getAiProviderSettingsSignature(settings = {}) {
+  const normalized = normalizeAiProviderSettings(settings || {});
+  return fnv1aHash(JSON.stringify({
+    version: normalized.version,
+    provider: normalized.provider,
+    mode: normalized.mode,
+    model: normalized.model,
+    temperature: normalized.temperature,
+    topK: normalized.topK
+  }));
+}
+
+function buildElementClassificationCacheMeta(settings = {}) {
+  return {
+    policyVersion: AI_POLICY_VERSION,
+    providerSettingsVersion: getAiProviderSettingsSignature(settings)
+  };
+}
+
+function buildElementClassificationCacheKey(hostname, features = {}, settings = {}, localResult = null, meta = null) {
+  const evidence = buildElementEvidenceSummary(hostname, features, localResult);
+  const cacheMeta = meta || buildElementClassificationCacheMeta(settings);
+  const keyPayload = {
+    host: getHostname(hostname) || 'unknown-host',
+    policyVersion: cacheMeta.policyVersion,
+    providerSettingsVersion: cacheMeta.providerSettingsVersion,
+    tagName: evidence.tagName,
+    matchedSeedCount: evidence.matchedSeedCount,
+    externalHref: evidence.externalHref,
+    hrefHost: evidence.hrefHost,
+    srcHost: evidence.srcHost,
+    hasMediaSource: evidence.hasMediaSource,
+    textLengthBucket: evidence.textLengthBucket,
+    classTokenSummary: evidence.classTokenSummary,
+    idTokenSummary: evidence.idTokenSummary,
+    positionBucket: evidence.positionBucket,
+    zIndexBucket: evidence.zIndexBucket,
+    sizeBucket: evidence.sizeBucket
+  };
+  return `${keyPayload.host}:${fnv1aHash(JSON.stringify(keyPayload))}`;
+}
+
+function buildElementClassificationCacheDescriptor(hostname, features = {}, settings = {}, localResult = null) {
+  const meta = buildElementClassificationCacheMeta(settings);
+  const evidence = buildElementEvidenceSummary(hostname, features, localResult);
+  const key = buildElementClassificationCacheKey(hostname, features, settings, localResult, meta);
+  return {
+    key,
+    meta,
+    evidence,
+    evidenceSignature: JSON.stringify({
+      host: getHostname(hostname) || 'unknown-host',
+      policyVersion: meta.policyVersion,
+      providerSettingsVersion: meta.providerSettingsVersion,
+      evidence
+    })
+  };
+}
+
+function getElementCacheTtlMs(classification = {}) {
+  const confidence = Number(classification.confidence || 0);
+  if (confidence >= 0.85) return AI_ELEMENT_CACHE_HIGH_CONFIDENCE_TTL_MS;
+  return AI_ELEMENT_CACHE_DEFAULT_TTL_MS;
+}
+
+function getCachedElementClassification(cacheKey, evidenceSignature = '') {
+  const entry = aiState.elementClassificationCache?.[cacheKey];
+  if (!entry) return null;
+  const nowTs = getNow();
+  if (Number(entry.expiresAt || 0) <= nowTs) {
+    delete aiState.elementClassificationCache[cacheKey];
+    return null;
+  }
+  if (entry.evidenceSignature && evidenceSignature && entry.evidenceSignature !== evidenceSignature) {
+    return null;
+  }
+  entry.lastAccessed = nowTs;
+  return {
+    ...(entry.classification || {}),
+    cacheHit: true
+  };
+}
+
+function pruneElementClassificationCache() {
+  const cache = aiState.elementClassificationCache || {};
+  const nowTs = getNow();
+  Object.entries(cache).forEach(([key, entry]) => {
+    if (Number(entry?.expiresAt || 0) <= nowTs) {
+      delete cache[key];
+    }
+  });
+
+  const entries = Object.entries(cache).sort((a, b) => Number(a[1]?.lastAccessed || 0) - Number(b[1]?.lastAccessed || 0));
+  while (entries.length > AI_ELEMENT_CACHE_MAX_ENTRIES) {
+    const [key] = entries.shift();
+    delete cache[key];
+  }
+
+  const perHost = {};
+  Object.entries(cache).forEach(([key, entry]) => {
+    const host = String(entry?.hostname || 'unknown-host');
+    perHost[host] = perHost[host] || [];
+    perHost[host].push([key, entry]);
+  });
+  Object.values(perHost).forEach((hostEntries) => {
+    hostEntries.sort((a, b) => Number(a[1]?.lastAccessed || 0) - Number(b[1]?.lastAccessed || 0));
+    while (hostEntries.length > AI_ELEMENT_CACHE_MAX_ENTRIES_PER_HOST) {
+      const [key] = hostEntries.shift();
+      delete cache[key];
+    }
+  });
+}
+
+function rememberElementClassification(cacheKey, hostname, classification = {}, meta = {}, evidenceSignature = '') {
+  if (!cacheKey || !classification || typeof classification !== 'object') return;
+  const nowTs = getNow();
+  const ttlMs = getElementCacheTtlMs(classification);
+  const cacheMeta = {
+    policyVersion: Number(meta.policyVersion || AI_POLICY_VERSION),
+    providerSettingsVersion: String(meta.providerSettingsVersion || '')
+  };
+  aiState.elementClassificationCache = aiState.elementClassificationCache || {};
+  aiState.elementClassificationCache[cacheKey] = {
+    hostname: getHostname(hostname) || 'unknown-host',
+    classification: {
+      category: classification.category,
+      confidence: classification.confidence,
+      reason: classification.reason,
+      suggestedAction: classification.suggestedAction,
+      provider: classification.provider || '',
+      policyVersion: cacheMeta.policyVersion,
+      providerSettingsVersion: cacheMeta.providerSettingsVersion,
+      ttlMs
+    },
+    policyVersion: cacheMeta.policyVersion,
+    providerSettingsVersion: cacheMeta.providerSettingsVersion,
+    ttlMs,
+    evidenceSignature,
+    createdAt: nowTs,
+    lastAccessed: nowTs,
+    expiresAt: nowTs + ttlMs
+  };
+  pruneElementClassificationCache();
+  scheduleAiPersist();
+}
+
 function buildElementClassificationPrompt(hostname, features = {}, localResult = null) {
+  const evidence = buildElementEvidenceSummary(hostname, features, localResult);
   return [
     'Classify whether the clicked page element is an ad, suspicious element, benign content, or tracker.',
     'Return JSON only with keys: category, confidence, reason, suggestedAction.',
     'Allowed category values: ad, suspicious, benign, tracker.',
-    'Allowed suggestedAction values: observe_only, hide_element, guard_navigation, block_request.',
+    'Allowed suggestedAction values: observe_only, hide_element, guard_navigation.',
+    'Do not recommend request blocking. Network blocking is handled only by deterministic rules.',
+    'If guard_navigation is suggested, it means show a visible warning/confirmation flow; never silently block a click.',
     `Hostname: ${hostname}`,
-    `Selector: ${String(features.selector || '')}`,
-    `Text: ${String(features.text || '').slice(0, 280)}`,
-    `Href: ${String(features.href || '')}`,
-    `Src: ${String(features.src || '')}`,
-    `ClassName: ${String(features.className || '')}`,
-    `Id: ${String(features.id || '')}`,
-    `Position: ${String(features.computedStyle?.position || '')}`,
-    `ZIndex: ${String(features.computedStyle?.zIndex || '')}`,
-    `Rect: ${Number(features.rect?.width || 0)}x${Number(features.rect?.height || 0)}`,
-    localResult
-      ? `Local heuristic prior: ${JSON.stringify({ category: localResult.category, confidence: localResult.confidence, reason: localResult.reason })}`
-      : ''
+    `Local evidence: ${JSON.stringify(evidence)}`
   ].filter(Boolean).join('\n');
 }
 
 function normalizeElementClassification(raw = {}, fallback = null) {
   const allowedCategories = ['ad', 'suspicious', 'benign', 'tracker'];
-  const allowedActions = ['observe_only', 'hide_element', 'guard_navigation', 'block_request'];
+  const allowedActions = ['observe_only', 'hide_element', 'guard_navigation'];
   const category = allowedCategories.includes(String(raw.category || '').trim().toLowerCase())
     ? String(raw.category || '').trim().toLowerCase()
     : fallback?.category || 'suspicious';
+  const suggestedAction = String(raw.suggestedAction || '').trim();
   return {
     category,
-    confidence: clamp(Number(raw.confidence || fallback?.confidence || 0.5), 0, 1),
+    confidence: clamp(Number(raw.confidence ?? fallback?.confidence ?? 0.5), 0, 1),
     reason: String(raw.reason || fallback?.reason || ''),
-    suggestedAction: allowedActions.includes(String(raw.suggestedAction || '').trim())
-      ? String(raw.suggestedAction || '').trim()
-      : category === 'ad'
-      ? 'hide_element'
-      : category === 'tracker'
-      ? 'block_request'
-      : category === 'benign'
-      ? 'observe_only'
-      : 'guard_navigation'
+    suggestedAction: allowedActions.includes(suggestedAction)
+      ? suggestedAction
+      : allowedActions.includes(String(fallback?.suggestedAction || '').trim())
+      ? String(fallback.suggestedAction).trim()
+      : 'observe_only'
   };
+}
+
+function parseProviderElementClassification(provider, rawText, fallback = null) {
+  const parsed = extractJsonObjectFromText(rawText);
+  if (!parsed) {
+    throw new Error(`${provider}_element_invalid_json`);
+  }
+  return normalizeElementClassification(parsed, fallback);
 }
 
 function normalizeProviderAdvisory(hostname, raw, meta = {}) {
@@ -4789,10 +5129,57 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
     const sessionConfig = await resolveChromeBuiltinSessionConfig(api, normalized);
     const availability = sessionConfig.availability;
     const params = typeof api.params === 'function' ? await api.params() : null;
-    const isAvailable = String(availability || '').toLowerCase() === 'available';
+    const capabilityStatus = String(availability || 'available').toLowerCase();
+    const isAvailable = capabilityStatus === 'available';
 
     if (!isAvailable) {
-      throw new Error(`chrome_builtin_not_ready_${availability}`);
+      const error = `chrome_builtin_not_ready_${capabilityStatus}`;
+      aiState.providerState = normalizeAiProviderState({
+        ...aiState.providerState,
+        lastHealthCheckAt: getNow(),
+        lastHealthOk: false,
+        lastLatencyMs: getNow() - startedAt,
+        lastError: error,
+        lastModelCount: 0,
+        lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
+        lastProvider: 'chrome_builtin',
+        lastService: `chrome_prompt_api:${capabilityStatus}`
+      });
+      scheduleAiPersist();
+
+      return {
+        success: false,
+        provider: 'chrome_builtin',
+        endpoint: '',
+        service: 'chrome_prompt_api',
+        resolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
+        modelCount: 0,
+        availability,
+        capabilityStatus,
+        error,
+        errorType: classifyAiProviderError(error),
+        route: sessionConfig.route,
+        attempts: sessionConfig.attempts,
+        params,
+        capability: getChromeBuiltinCapabilitySnapshot()
+      };
+    }
+
+    const probeTimeout = createRequestTimeout(Math.min(Number(normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 3000));
+    let probeSession = null;
+    try {
+      probeSession = await api.create({
+        ...sessionConfig.options,
+        signal: probeTimeout.signal
+      });
+      await promptChromeBuiltinSession(probeSession, 'Return exactly OK.', {}, 3000);
+    } finally {
+      probeTimeout.cleanup();
+      try {
+        probeSession?.destroy?.();
+      } catch (_) {
+        // no-op
+      }
     }
 
     aiState.providerState = normalizeAiProviderState({
@@ -4804,7 +5191,7 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
       lastModelCount: 1,
       lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
       lastProvider: 'chrome_builtin',
-      lastService: `chrome_prompt_api:${String(availability || 'available')}`
+      lastService: `chrome_prompt_api:${String(availability || 'available')}:probed`
     });
     scheduleAiPersist();
 
@@ -4816,25 +5203,32 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
       resolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
       modelCount: 1,
       availability,
+      capabilityStatus,
       route: sessionConfig.route,
       attempts: sessionConfig.attempts,
-      params
+      params,
+      probe: 'create_prompt_destroy',
+      capability: getChromeBuiltinCapabilitySnapshot()
     };
   } catch (error) {
+    const errorType = classifyAiProviderError(error);
     aiState.providerState = normalizeAiProviderState({
       ...aiState.providerState,
       lastHealthCheckAt: getNow(),
       lastHealthOk: false,
       lastError: String(error?.message || error),
       lastProvider: 'chrome_builtin',
-      lastService: 'chrome_prompt_api'
+      lastService: `chrome_prompt_api:${classifyAiProviderError(error)}`
     });
     scheduleAiPersist();
     return {
       success: false,
       provider: 'chrome_builtin',
       endpoint: '',
-      error: String(error?.message || error)
+      error: String(error?.message || error),
+      errorType,
+      capabilityStatus: errorType,
+      capability: getChromeBuiltinCapabilitySnapshot()
     };
   }
 }
@@ -5172,6 +5566,9 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
 
   try {
     const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
+    if (String(sessionConfig.availability || '').toLowerCase() !== 'available') {
+      throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
+    }
     session = await api.create({
       ...sessionConfig.options,
       signal: timeout.signal
@@ -5259,6 +5656,13 @@ async function requestAiElementClassification(hostname, features = {}) {
     return localResult;
   }
 
+  const cacheDescriptor = buildElementClassificationCacheDescriptor(hostname, features, settings, localResult);
+  const { key: cacheKey, meta: cacheMeta, evidenceSignature } = cacheDescriptor;
+  const cached = getCachedElementClassification(cacheKey, evidenceSignature);
+  if (cached) {
+    return cached;
+  }
+
   const prompt = buildElementClassificationPrompt(hostname, features, localResult);
   try {
     if (settings.provider === 'openai' && settings.apiKey) {
@@ -5285,10 +5689,12 @@ async function requestAiElementClassification(hostname, features = {}) {
       }
       if (!response?.ok) throw new Error(`openai_element_http_${response?.status || 0}`);
       const payload = await response.json();
-      return {
-        ...normalizeElementClassification(extractJsonObjectFromText(extractOpenAiOutputText(payload)), localResult),
+      const classification = {
+        ...parseProviderElementClassification('openai', extractOpenAiOutputText(payload), localResult),
         provider: 'openai'
       };
+      rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
+      return classification;
     }
 
     if (settings.provider === 'gemini' && settings.apiKey) {
@@ -5318,10 +5724,12 @@ async function requestAiElementClassification(hostname, features = {}) {
       }
       if (!response?.ok) throw new Error(`gemini_element_http_${response?.status || 0}`);
       const payload = await response.json();
-      return {
-        ...normalizeElementClassification(extractJsonObjectFromText(extractGeminiOutputText(payload)), localResult),
+      const classification = {
+        ...parseProviderElementClassification('gemini', extractGeminiOutputText(payload), localResult),
         provider: 'gemini'
       };
+      rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
+      return classification;
     }
 
     if (settings.provider === 'chrome_builtin') {
@@ -5330,15 +5738,35 @@ async function requestAiElementClassification(hostname, features = {}) {
       let session = null;
       try {
         const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
+        if (String(sessionConfig.availability || '').toLowerCase() !== 'available') {
+          throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
+        }
         session = await api.create({
           ...sessionConfig.options,
           signal: timeout.signal
         });
-        const rawText = await session.prompt(prompt);
-        return {
-          ...normalizeElementClassification(extractJsonObjectFromText(rawText), localResult),
+        let rawText = '';
+        try {
+          rawText = await promptChromeBuiltinSession(session, prompt, {
+            responseConstraint: AI_ELEMENT_CLASSIFICATION_RESPONSE_CONSTRAINT
+          }, settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS);
+        } catch (error) {
+          if (!isResponseConstraintUnsupportedError(error)) {
+            throw error;
+          }
+          rawText = await promptChromeBuiltinSession(
+            session,
+            prompt,
+            {},
+            settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+          );
+        }
+        const classification = {
+          ...parseProviderElementClassification('chrome_builtin', rawText, localResult),
           provider: 'chrome_builtin'
         };
+        rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
+        return classification;
       } finally {
         timeout.cleanup();
         try {
@@ -5383,16 +5811,31 @@ async function requestAiElementClassification(hostname, features = {}) {
         payload?.output_text ||
         payload?.response ||
         '';
-      return {
-        ...normalizeElementClassification(extractJsonObjectFromText(rawText), localResult),
+      const classification = {
+        ...parseProviderElementClassification('lmstudio', rawText, localResult),
         provider: 'lmstudio'
       };
+      rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
+      return classification;
     }
   } catch (error) {
-    return {
+    const errorType = classifyAiProviderError(error);
+    const classification = {
       ...localResult,
+      provider: 'local-heuristic',
+      aiFallback: true,
+      fallbackProvider: settings.provider,
+      fallbackErrorType: errorType,
       reason: `${localResult.reason}; ai_fallback=${String(error?.message || error)}`
     };
+    aiState.providerState = normalizeAiProviderState({
+      ...aiState.providerState,
+      lastError: String(error?.message || error),
+      lastProvider: settings.provider,
+      lastService: errorType
+    });
+    scheduleAiPersist();
+    return classification;
   }
 
   return localResult;
@@ -6125,6 +6568,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               (nextSettings.provider === currentSettings.provider ? aiState.providerSecret : '')
             ).trim();
       aiState.providerSettings = getPersistableAiProviderSettings(nextSettings);
+      aiState.elementClassificationCache = {};
       scheduleAiPersist();
       sendResponse({
         success: true,
@@ -6159,6 +6603,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     aiState.hostFallbacks = {};
     aiState.providerAdvisories = {};
     aiState.generatedRuleCandidates = {};
+    aiState.elementClassificationCache = {};
     aiState.candidateReviewLog = [];
     aiState.candidatePromotionLog = [];
     aiState.candidateRollbackLog = [];

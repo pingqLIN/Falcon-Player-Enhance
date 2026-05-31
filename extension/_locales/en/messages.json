@@ -230,5 +230,6 @@
   "popupPlayerAlertUnpinBeforeClose": { "message": "This window is pinned. Unpin from the PIN button before closing." },
   "popupFlowClickSub": { "message": "Click the player" },
   "popupFlowDetectSub": { "message": "Detect & clean" },
-  "popupFlowPlaySub": { "message": "Safe playback" }
+  "popupFlowPlaySub": { "message": "Safe playback" },
+  "dashboardAiRestoreDefaults": { "message": "Restore defaults" }
 }

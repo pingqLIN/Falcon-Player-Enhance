@@ -18,7 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
         gemini: 20000,
         lmstudio: 4000,
         gateway: 8000,
-        chrome_builtin: 12000
+        chrome_builtin: 8000
+    };
+    const AI_PROVIDER_COOLDOWNS = {
+        openai: 25000,
+        gemini: 25000,
+        lmstudio: 25000,
+        gateway: 25000,
+        chrome_builtin: 1000
     };
 
     // ========== Theme ==========
@@ -44,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lmstudioStatus = document.getElementById('lmstudio-status');
     const btnSaveLmstudio = document.getElementById('btn-save-lmstudio');
     const btnCheckLmstudio = document.getElementById('btn-check-lmstudio');
+    const btnResetAiProviderDefaults = document.getElementById('btn-reset-ai-provider-defaults');
     const lmstudioCandidateSummary = document.getElementById('lmstudio-candidate-summary');
     const lmstudioCandidateList = document.getElementById('lmstudio-candidate-list');
     const btnExportLmstudioCandidates = document.getElementById('btn-export-lmstudio-candidates');
@@ -268,11 +276,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return AI_PROVIDER_TIMEOUTS[provider] || AI_PROVIDER_TIMEOUTS.openai;
     }
 
+    function getProviderDefaultCooldown(provider) {
+        return AI_PROVIDER_COOLDOWNS[provider] || AI_PROVIDER_COOLDOWNS.openai;
+    }
+
     function getProviderDefaultModel(provider) {
         if (provider === 'openai') return 'gpt-5.4-mini';
         if (provider === 'gemini') return 'gemini-2.5-flash';
         if (provider === 'chrome_builtin') return 'Gemini Nano';
         return '';
+    }
+
+    function getProviderDefaultTemperature(provider) {
+        return provider === 'chrome_builtin' ? 0.2 : 0;
+    }
+
+    function getProviderDefaultTopK(provider) {
+        return provider === 'chrome_builtin' ? 8 : 3;
     }
 
     function setSelectedProviderCard(provider) {
@@ -346,6 +366,18 @@ document.addEventListener('DOMContentLoaded', () => {
         aiStatusSub.textContent = error
             ? `${model} · ${error}`
             : `${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
+    }
+
+    function formatAiHealthFailure(providerLabel, response = {}) {
+        const error = response?.error || `${providerLabel} health check failed.`;
+        const errorType = response?.errorType ? ` type=${response.errorType}` : '';
+        const availability = response?.availability ? ` availability=${response.availability}` : '';
+        const capabilityStatus = response?.capabilityStatus ? ` capabilityStatus=${response.capabilityStatus}` : '';
+        const route = response?.route ? ` route=${response.route}` : '';
+        const capability = response?.capability && typeof response.capability === 'object'
+            ? ` capability=${JSON.stringify(response.capability)}`
+            : '';
+        return `${error}${errorType}${availability}${capabilityStatus}${route}${capability}`;
     }
 
     function syncProviderDefaults(nextProvider) {
@@ -588,9 +620,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (lmstudioMode) lmstudioMode.value = settings?.mode || 'hybrid';
         if (lmstudioTimeout) lmstudioTimeout.value = String(settings?.timeoutMs || getProviderDefaultTimeout(provider));
-        if (lmstudioCooldown) lmstudioCooldown.value = String(settings?.cooldownMs || 25000);
-        if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(settings?.temperature ?? 0);
-        if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(settings?.topK ?? 3);
+        if (lmstudioCooldown) lmstudioCooldown.value = String(settings?.cooldownMs || getProviderDefaultCooldown(provider));
+        if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(settings?.temperature ?? getProviderDefaultTemperature(provider));
+        if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(settings?.topK ?? getProviderDefaultTopK(provider));
         if (lmstudioDynamicRules) lmstudioDynamicRules.checked = settings?.enableDynamicRuleCandidates !== false;
         setSelectedProviderCard(provider);
         setSelectedModeCard(lmstudioMode?.value || 'hybrid');
@@ -624,11 +656,30 @@ document.addEventListener('DOMContentLoaded', () => {
             apiKey: aiProviderToken?.value || '',
             mode: lmstudioMode?.value || 'hybrid',
             timeoutMs: Number(lmstudioTimeout?.value || getProviderDefaultTimeout(provider)),
-            cooldownMs: Number(lmstudioCooldown?.value || 25000),
-            temperature: Number(chromeBuiltinTemperature?.value || 0),
-            topK: Number(chromeBuiltinTopK?.value || 3),
+            cooldownMs: Number(lmstudioCooldown?.value || getProviderDefaultCooldown(provider)),
+            temperature: Number(chromeBuiltinTemperature?.value || getProviderDefaultTemperature(provider)),
+            topK: Number(chromeBuiltinTopK?.value || getProviderDefaultTopK(provider)),
             enableDynamicRuleCandidates: lmstudioDynamicRules?.checked !== false
         };
+    }
+
+    function restoreAiProviderDefaults() {
+        const provider = getSelectedProvider();
+        const providerLabel = getProviderLabel(provider);
+        if (lmstudioEndpoint) lmstudioEndpoint.value = getProviderDefaultEndpoint(provider);
+        if (lmstudioModel) lmstudioModel.value = getProviderDefaultModel(provider);
+        if (lmstudioTimeout) lmstudioTimeout.value = String(getProviderDefaultTimeout(provider));
+        if (lmstudioCooldown) lmstudioCooldown.value = String(getProviderDefaultCooldown(provider));
+        if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(getProviderDefaultTemperature(provider));
+        if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(getProviderDefaultTopK(provider));
+        if (lmstudioDynamicRules) lmstudioDynamicRules.checked = true;
+        renderAiStatusCard({
+            provider,
+            enabled: lmstudioEnabled?.checked === true,
+            mode: lmstudioMode?.value || 'hybrid',
+            model: getProviderDefaultModel(provider)
+        });
+        setLmStudioStatus(`${providerLabel} defaults restored. Save settings to apply.`);
     }
 
     async function loadAiProviderSettings() {
@@ -669,14 +720,16 @@ document.addEventListener('DOMContentLoaded', () => {
             settings
         });
         if (!response?.success) {
-            setLmStudioStatus(response?.error || `${providerLabel} health check failed.`, true);
+            setLmStudioStatus(formatAiHealthFailure(providerLabel, response), true);
+            await loadAiProviderSettings();
             return;
         }
         const modelCount = Number(response.modelCount || 0);
         const resolvedModel = response.resolvedModel ? ` active=${response.resolvedModel}` : '';
         const serviceInfo = response.service ? ` service=${response.service}` : '';
         const availability = response.availability ? ` availability=${response.availability}` : '';
-        setLmStudioStatus(`${providerLabel} ready. models=${modelCount}${resolvedModel}${serviceInfo}${availability}`);
+        const capabilityStatus = response.capabilityStatus ? ` capabilityStatus=${response.capabilityStatus}` : '';
+        setLmStudioStatus(`${providerLabel} ready. models=${modelCount}${resolvedModel}${serviceInfo}${availability}${capabilityStatus}`);
         await loadAiProviderSettings();
     }
 
@@ -753,6 +806,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (btnCheckLmstudio) {
         btnCheckLmstudio.addEventListener('click', runAiProviderHealthCheck);
+    }
+    if (btnResetAiProviderDefaults) {
+        btnResetAiProviderDefaults.addEventListener('click', restoreAiProviderDefaults);
     }
     if (btnExportLmstudioCandidates) {
         btnExportLmstudioCandidates.addEventListener('click', async () => {
