@@ -45,6 +45,13 @@ const AUTO_LEARNING_PROMOTION_THRESHOLD = 5;
 const NEGATIVE_IMPACT_MEMO_STORAGE_KEY = 'negativeImpactMemo';
 const NEGATIVE_IMPACT_MEMO_MAX_ENTRIES = 500;
 const NEGATIVE_IMPACT_MEMO_DUPLICATE_WINDOW_MS = 3 * 60 * 1000;
+const FALCON_ACTION_RECORDS_STORAGE_KEY = 'falconActionRecords';
+const FALCON_ACTION_RECORD_MAX_ENTRIES = 1000;
+const FALCON_ACTION_RECORD_MAX_PER_TAB = 100;
+const FALCON_ACTION_RECORD_TTL_MS = 30 * 60 * 1000;
+const FALSE_POSITIVE_OBSERVATIONS_STORAGE_KEY = 'falsePositiveObservations';
+const FALSE_POSITIVE_OBSERVATION_MAX_ENTRIES = 500;
+const FALSE_POSITIVE_OBSERVATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const directPopupOverlayTabs = {};
 const playerPopupGuardTabs = {};
@@ -2329,6 +2336,230 @@ function recordNegativeImpactMemoForActionClick(tab) {
     });
 }
 
+function createRuntimeRecordId(prefix = 'rec') {
+  if (typeof crypto?.randomUUID === 'function') {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${getNow()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizePlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function normalizeFalconActionRecord(input = {}, sender = null) {
+  const source = normalizePlainObject(input);
+  const pageUrl = String(source.pageUrl || source.url || sender?.tab?.url || '').trim();
+  const hostname = getHostname(source.hostname) || getHostname(pageUrl) || 'unknown-host';
+  const selector = String(source.selector || '').trim();
+  const action = String(source.action || '').trim();
+  const kind = String(source.kind || 'runtime_action').trim();
+  if (!selector || !action) return null;
+
+  const sourceCreatedAt = Number(source.createdAt);
+  const createdAt = Number.isFinite(sourceCreatedAt) && sourceCreatedAt > 0 ? sourceCreatedAt : getNow();
+  const sourceExpiresAt = Number(source.expiresAt);
+  const expiresAt = Number.isFinite(sourceExpiresAt) && sourceExpiresAt > createdAt
+    ? sourceExpiresAt
+    : createdAt + FALCON_ACTION_RECORD_TTL_MS;
+  const tabId = Number(source.tabId ?? sender?.tab?.id ?? 0);
+  const frameId = Number(source.frameId ?? sender?.frameId ?? 0);
+  const elementIndex = Number(source.elementIndex ?? -1);
+  const restoredAt = Number(source.restoredAt || 0);
+  const signature = normalizePlainObject(source.signature);
+  const signatureHash = String(source.signatureHash || signature.hash || '').trim();
+
+  return {
+    id: String(source.id || createRuntimeRecordId('act')).trim(),
+    tabId: Number.isFinite(tabId) ? tabId : 0,
+    frameId: Number.isFinite(frameId) ? frameId : 0,
+    hostname,
+    pageUrl,
+    selector,
+    elementIndex: Number.isFinite(elementIndex) ? elementIndex : -1,
+    kind,
+    source: String(source.source || 'unknown').trim(),
+    policyTier: String(source.policyTier || 'unknown').trim(),
+    action,
+    reason: String(source.reason || '').trim().slice(0, 240),
+    blockingLevel: Number.isFinite(Number(source.blockingLevel ?? blockingLevel))
+      ? Math.max(0, Math.min(3, Math.round(Number(source.blockingLevel ?? blockingLevel))))
+      : blockingLevel,
+    createdAt,
+    expiresAt,
+    restoredAt,
+    restore: normalizePlainObject(source.restore),
+    signature,
+    signatureHash
+  };
+}
+
+function normalizeFalconActionRecords(entries = [], nowTs = getNow()) {
+  const normalized = (Array.isArray(entries) ? entries : [])
+    .map((entry) => normalizeFalconActionRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => !entry.expiresAt || Number(entry.expiresAt) > nowTs)
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  return pruneFalconActionRecords(normalized);
+}
+
+function pruneFalconActionRecords(records = []) {
+  const perTabCounts = {};
+  const output = [];
+  for (const record of records) {
+    const tabKey = String(record.tabId || 0);
+    perTabCounts[tabKey] = Number(perTabCounts[tabKey] || 0) + 1;
+    if (perTabCounts[tabKey] > FALCON_ACTION_RECORD_MAX_PER_TAB) continue;
+    output.push(record);
+    if (output.length >= FALCON_ACTION_RECORD_MAX_ENTRIES) break;
+  }
+  return output;
+}
+
+function getFalconActionRecordDedupeKey(record) {
+  return [
+    record.tabId,
+    record.frameId,
+    record.hostname,
+    record.selector,
+    record.elementIndex,
+    record.source,
+    record.action
+  ].join('::');
+}
+
+async function getFalconActionRecords(filter = {}) {
+  const result = await chrome.storage.local.get([FALCON_ACTION_RECORDS_STORAGE_KEY]);
+  const records = normalizeFalconActionRecords(result[FALCON_ACTION_RECORDS_STORAGE_KEY] || []);
+  const normalizedFilter = normalizePlainObject(filter);
+  const tabId = Number(normalizedFilter.tabId || 0);
+  const hostname = getHostname(normalizedFilter.hostname);
+  const includeRestored = normalizedFilter.includeRestored === true;
+  return records.filter((record) => {
+    if (tabId > 0 && Number(record.tabId || 0) !== tabId) return false;
+    if (hostname && record.hostname !== hostname) return false;
+    if (!includeRestored && Number(record.restoredAt || 0) > 0) return false;
+    return true;
+  });
+}
+
+async function persistFalconActionRecords(records = []) {
+  const normalized = normalizeFalconActionRecords(records);
+  await chrome.storage.local.set({ [FALCON_ACTION_RECORDS_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+async function recordFalconAction(input = {}, sender = null) {
+  const record = normalizeFalconActionRecord(input, sender);
+  if (!record) return { success: false, error: 'invalid_falcon_action' };
+  const existing = await getFalconActionRecords({ includeRestored: true });
+  const dedupeKey = getFalconActionRecordDedupeKey(record);
+  const next = existing.filter((entry) => getFalconActionRecordDedupeKey(entry) !== dedupeKey);
+  next.unshift(record);
+  const records = await persistFalconActionRecords(next);
+  return { success: true, record, total: records.length };
+}
+
+async function markFalconActionRestored(actionId, input = {}) {
+  const normalizedId = String(actionId || '').trim();
+  if (!normalizedId) return { success: false, error: 'invalid_action_id' };
+  const existing = await getFalconActionRecords({ includeRestored: true });
+  const index = existing.findIndex((entry) => entry.id === normalizedId);
+  if (index < 0) return { success: false, error: 'action_not_found' };
+  const restoredAt = Number(input.restoredAt || getNow());
+  const record = {
+    ...existing[index],
+    restoredAt
+  };
+  existing[index] = record;
+  const records = await persistFalconActionRecords(existing);
+  return { success: true, record, total: records.length };
+}
+
+function normalizeFalsePositiveObservation(input = {}, sender = null) {
+  const source = normalizePlainObject(input);
+  const pageUrl = String(source.pageUrl || source.url || sender?.tab?.url || '').trim();
+  const hostname = getHostname(source.hostname) || getHostname(pageUrl) || 'unknown-host';
+  const selector = String(source.selector || '').trim();
+  const actionId = String(source.actionId || '').trim();
+  if (!selector && !actionId) return null;
+  const sourceCreatedAt = Number(source.createdAt);
+  const createdAt = Number.isFinite(sourceCreatedAt) && sourceCreatedAt > 0 ? sourceCreatedAt : getNow();
+  return {
+    id: String(source.id || createRuntimeRecordId('fp')).trim(),
+    actionId,
+    hostname,
+    pageUrl,
+    selector,
+    source: String(source.source || 'manual_rescue').trim(),
+    reason: String(source.reason || 'user_reported_false_positive').trim().slice(0, 240),
+    createdAt,
+    signatureHash: String(source.signatureHash || source.signature?.hash || '').trim(),
+    blockingLevel: Number.isFinite(Number(source.blockingLevel ?? blockingLevel))
+      ? Math.max(0, Math.min(3, Math.round(Number(source.blockingLevel ?? blockingLevel))))
+      : blockingLevel,
+    candidateRefs: Array.isArray(source.candidateRefs)
+      ? source.candidateRefs.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 16)
+      : [],
+    result: normalizePlainObject(source.result)
+  };
+}
+
+function normalizeFalsePositiveObservations(entries = [], nowTs = getNow()) {
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => normalizeFalsePositiveObservation(entry))
+    .filter(Boolean)
+    .filter((entry) => nowTs - Number(entry.createdAt || 0) <= FALSE_POSITIVE_OBSERVATION_MAX_AGE_MS)
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+    .slice(0, FALSE_POSITIVE_OBSERVATION_MAX_ENTRIES);
+}
+
+async function getFalsePositiveObservations(filter = {}) {
+  const result = await chrome.storage.local.get([FALSE_POSITIVE_OBSERVATIONS_STORAGE_KEY]);
+  const observations = normalizeFalsePositiveObservations(result[FALSE_POSITIVE_OBSERVATIONS_STORAGE_KEY] || []);
+  const normalizedFilter = normalizePlainObject(filter);
+  const hostname = getHostname(normalizedFilter.hostname);
+  const selector = String(normalizedFilter.selector || '').trim();
+  return observations.filter((entry) => {
+    if (hostname && entry.hostname !== hostname) return false;
+    if (selector && entry.selector !== selector) return false;
+    return true;
+  });
+}
+
+async function persistFalsePositiveObservations(observations = []) {
+  const normalized = normalizeFalsePositiveObservations(observations);
+  await chrome.storage.local.set({ [FALSE_POSITIVE_OBSERVATIONS_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+async function recordFalsePositiveObservation(input = {}, sender = null) {
+  const observation = normalizeFalsePositiveObservation(input, sender);
+  if (!observation) return { success: false, error: 'invalid_false_positive_observation' };
+  const existing = await getFalsePositiveObservations();
+  const next = existing.filter((entry) => !(
+    entry.actionId === observation.actionId &&
+    entry.hostname === observation.hostname &&
+    entry.selector === observation.selector &&
+    entry.reason === observation.reason
+  ));
+  next.unshift(observation);
+  const observations = await persistFalsePositiveObservations(next);
+  return { success: true, observation, total: observations.length };
+}
+
+async function findFalsePositiveObservationForCandidate(candidateSet) {
+  const normalizedHost = getHostname(candidateSet?.hostname);
+  if (!normalizedHost) return null;
+  const observations = await getFalsePositiveObservations({ hostname: normalizedHost });
+  const selectors = new Set(
+    (Array.isArray(candidateSet?.selectorRules) ? candidateSet.selectorRules : [])
+      .map((item) => String(item?.selector || '').trim())
+      .filter(Boolean)
+  );
+  return observations.find((entry) => selectors.has(entry.selector)) || null;
+}
+
 async function configureProviderSecretStorage() {
   if (!chrome.storage.session?.setAccessLevel) return;
 
@@ -2948,12 +3179,21 @@ function buildCandidateGovernanceSnapshot(maxItems = 20) {
   };
 }
 
-function recordCandidatePromotion(hostname, input = {}) {
+async function recordCandidatePromotion(hostname, input = {}) {
   const normalizedHost = getHostname(hostname);
   if (!normalizedHost) return { success: false, error: 'invalid_hostname' };
 
   const candidateSet = normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {})[normalizedHost];
   if (!candidateSet) return { success: false, error: 'candidate_not_found' };
+
+  const falsePositiveObservation = await findFalsePositiveObservationForCandidate(candidateSet);
+  if (falsePositiveObservation) {
+    return {
+      success: false,
+      error: 'candidate_has_false_positive_observation',
+      observation: falsePositiveObservation
+    };
+  }
 
   const decision = getLatestCandidateReviewDecision(normalizedHost, candidateSet.generatedAt);
   if (!decision || decision.decision !== 'accepted') {
@@ -6799,28 +7039,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'exportAiDataset') {
-    const governance = buildCandidateGovernanceSnapshot(50);
-    sendResponse({
-      success: true,
-      dataset: {
-        exportedAt: getNow(),
-        policyVersion: AI_POLICY_VERSION,
-        providerVersion: AI_PROVIDER_VERSION,
-        telemetry: aiState.telemetryLog,
-        profiles: aiState.profiles,
-        hostMetrics: aiState.hostMetrics,
-        hostFallbacks: aiState.hostFallbacks,
-        providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
-        providerState: normalizeAiProviderState(aiState.providerState || {}),
-        providerAdvisories: aiState.providerAdvisories || {},
-        generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
-        candidateReviewLog: governance.candidateReviewLog,
-        candidatePromotionLog: governance.candidatePromotionLog,
-        candidateRollbackLog: governance.candidateRollbackLog,
-        candidateGovernanceChains: governance.governanceChains,
-        knowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
-      }
-    });
+    (async () => {
+      const governance = buildCandidateGovernanceSnapshot(50);
+      const [falconActionRecords, falsePositiveObservations] = await Promise.all([
+        getFalconActionRecords({ includeRestored: true }),
+        getFalsePositiveObservations()
+      ]);
+      sendResponse({
+        success: true,
+        dataset: {
+          exportedAt: getNow(),
+          policyVersion: AI_POLICY_VERSION,
+          providerVersion: AI_PROVIDER_VERSION,
+          telemetry: aiState.telemetryLog,
+          profiles: aiState.profiles,
+          hostMetrics: aiState.hostMetrics,
+          hostFallbacks: aiState.hostFallbacks,
+          providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
+          providerState: normalizeAiProviderState(aiState.providerState || {}),
+          providerAdvisories: aiState.providerAdvisories || {},
+          generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
+          candidateReviewLog: governance.candidateReviewLog,
+          candidatePromotionLog: governance.candidatePromotionLog,
+          candidateRollbackLog: governance.candidateRollbackLog,
+          candidateGovernanceChains: governance.governanceChains,
+          knowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {}),
+          falconActionRecords,
+          falsePositiveObservations
+        }
+      });
+    })().catch((error) => sendResponse({ success: false, error: String(error?.message || error) }));
     return true;
   }
 
@@ -6869,7 +7117,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     (async () => {
-      const result = recordCandidatePromotion(request.hostname, {
+      const result = await recordCandidatePromotion(request.hostname, {
         reason: request.reason,
         actor: 'dashboard_manual_promotion',
         evidenceRefs: request.evidenceRefs
@@ -7070,6 +7318,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isWhitelisted(request.url).then((result) => {
       sendResponse({ whitelisted: result });
     });
+    return true;
+  }
+
+  if (request.action === 'recordFalconAction') {
+    recordFalconAction(request.record || request, sender)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ success: false, error: String(error?.message || error) }));
+    return true;
+  }
+
+  if (request.action === 'getFalconActionRecords') {
+    getFalconActionRecords({
+      tabId: request.tabId,
+      hostname: request.hostname,
+      includeRestored: request.includeRestored === true
+    })
+      .then((records) => sendResponse({ success: true, records }))
+      .catch((error) => sendResponse({ success: false, error: String(error?.message || error), records: [] }));
+    return true;
+  }
+
+  if (request.action === 'rescueFalconAction') {
+    (async () => {
+      const result = await markFalconActionRestored(request.actionId, request);
+      if (result.success && Number(result.record?.tabId || 0) > 0) {
+        try {
+          await chrome.tabs.sendMessage(Number(result.record.tabId), {
+            action: 'rescueFalconAction',
+            record: result.record
+          });
+        } catch (_) {
+          // The tab may have navigated. The restored action remains recorded.
+        }
+      }
+      sendResponse(result);
+    })().catch((error) => sendResponse({ success: false, error: String(error?.message || error) }));
+    return true;
+  }
+
+  if (request.action === 'reportFalsePositive') {
+    recordFalsePositiveObservation(request.observation || request, sender)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ success: false, error: String(error?.message || error) }));
+    return true;
+  }
+
+  if (request.action === 'getFalsePositiveObservations') {
+    getFalsePositiveObservations({
+      hostname: request.hostname,
+      selector: request.selector
+    })
+      .then((observations) => sendResponse({ success: true, observations }))
+      .catch((error) => sendResponse({ success: false, error: String(error?.message || error), observations: [] }));
     return true;
   }
 

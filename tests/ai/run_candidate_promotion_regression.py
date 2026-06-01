@@ -91,9 +91,9 @@ def runtime_message(page: Page, payload: dict[str, object]) -> dict[str, object]
     )
 
 
-def seed_candidate_storage(page: Page, generated_at: int) -> None:
+def seed_candidate_storage(page: Page, generated_at: int, with_false_positive: bool = False) -> None:
     page.evaluate(
-        """async ({ generatedAt }) => {
+        """async ({ generatedAt, withFalsePositive }) => {
             await chrome.storage.local.set({
                 aiGeneratedRuleCandidates: {
                     "javboys.com": {
@@ -110,6 +110,19 @@ def seed_candidate_storage(page: Page, generated_at: int) -> None:
                         ]
                     }
                 },
+                falsePositiveObservations: withFalsePositive ? [{
+                    id: "fp_javboys_overlay_test",
+                    actionId: "rec_javboys_overlay_test",
+                    hostname: "javboys.com",
+                    pageUrl: "https://javboys.com/watch/123",
+                    selector: ".overlay-test",
+                    source: "regression",
+                    reason: "rescued_click_target",
+                    createdAt: Date.now(),
+                    result: {
+                        userConfirmed: true
+                    }
+                }] : [],
                 aiCandidateReviewLog: [],
                 aiCandidatePromotionLog: [],
                 aiCandidateRollbackLog: [],
@@ -138,6 +151,7 @@ def seed_candidate_storage(page: Page, generated_at: int) -> None:
         }""",
         {
             "generatedAt": generated_at,
+            "withFalsePositive": with_false_positive,
         }
     )
 
@@ -170,7 +184,13 @@ def click_rollback(page: Page, evidence_note: str) -> None:
     page.wait_for_timeout(400)
 
 
-def build_report(initial_snapshot: dict[str, object], promoted_snapshot: dict[str, object], rolled_back_snapshot: dict[str, object], export_dataset: dict[str, object]) -> dict[str, object]:
+def build_report(
+    initial_snapshot: dict[str, object],
+    promoted_snapshot: dict[str, object],
+    rolled_back_snapshot: dict[str, object],
+    export_dataset: dict[str, object],
+    blocked_promotion_response: dict[str, object],
+) -> dict[str, object]:
     promoted_candidates = promoted_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     rolled_back_candidates = rolled_back_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     promotion_log = export_dataset.get("dataset", {}).get("candidatePromotionLog", [])
@@ -211,6 +231,7 @@ def build_report(initial_snapshot: dict[str, object], promoted_snapshot: dict[st
         "governanceChainHasPromotion": isinstance(exported_chain, dict) and isinstance(exported_chain.get("promotion"), dict) and bool(exported_chain.get("promotion", {}).get("promotionId")),
         "governanceChainHasRollback": isinstance(exported_chain, dict) and isinstance(exported_chain.get("rollback"), dict) and bool(exported_chain.get("rollback", {}).get("rollbackId")),
         "governanceChainRolledBack": isinstance(exported_chain, dict) and exported_chain.get("governanceState") == "rolled_back",
+        "falsePositiveGateBlocksPromotion": blocked_promotion_response.get("success") is False and blocked_promotion_response.get("error") == "candidate_has_false_positive_observation",
     }
 
     return {
@@ -222,6 +243,7 @@ def build_report(initial_snapshot: dict[str, object], promoted_snapshot: dict[st
             "rolledBack": rolled_back_snapshot,
         },
         "export": export_dataset,
+        "blockedPromotionResponse": blocked_promotion_response,
         "governanceChain": exported_chain,
     }
 
@@ -264,11 +286,26 @@ def main() -> int:
                 click_rollback(dashboard_page, "evidence:dashboard_manual_rollback")
                 rolled_back_snapshot = runtime_message(dashboard_page, {"action": "getAiInsights"}).get("snapshot", {})
                 export_dataset = runtime_message(dashboard_page, {"action": "exportAiDataset"})
+
+                seed_candidate_storage(dashboard_page, 1774983600000, with_false_positive=True)
+                runtime_message(dashboard_page, {
+                    "action": "reviewAiRuleCandidate",
+                    "hostname": "javboys.com",
+                    "decision": "accepted",
+                    "reason": "manual_review_accept_for_false_positive_gate",
+                })
+                blocked_promotion_response = runtime_message(dashboard_page, {
+                    "action": "promoteAiRuleCandidate",
+                    "hostname": "javboys.com",
+                    "reason": "evidence:false_positive_gate_should_block",
+                })
+
                 report = build_report(
                     initial_snapshot,
                     promoted_snapshot,
                     rolled_back_snapshot,
                     export_dataset,
+                    blocked_promotion_response,
                 )
                 print(json.dumps({
                     "ok": report["ok"],

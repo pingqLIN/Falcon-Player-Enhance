@@ -557,6 +557,17 @@ kbd {
     color: var(--destructive);
 }
 
+.false-positive-rescue-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.false-positive-rescue-actions .btn-secondary {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
 .group-footer {
     padding: 10px 0;
     margin-top: 6px;

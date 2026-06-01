@@ -175,6 +175,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    async function getActiveTab() {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const activeHttpTab = tabs.find((tab) => tab?.id && /^https?:\/\//i.test(tab.url || ''));
+        if (activeHttpTab) return activeHttpTab;
+
+        const currentWindowTabs = await chrome.tabs.query({ currentWindow: true });
+        return currentWindowTabs
+            .filter((tab) => tab?.id && /^https?:\/\//i.test(tab.url || ''))
+            .sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0))[0] || null;
+    }
+
     function formatPolicyGateAction(action) {
         return String(action || '')
             .replace(/_/g, ' ')
@@ -1018,6 +1029,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Hidden Elements Management ==========
     const hiddenElementsList = document.getElementById('hidden-elements-list');
+    const falsePositiveRescueList = document.getElementById('false-positive-rescue-list');
+    const falsePositiveRescueSummary = document.getElementById('false-positive-rescue-summary');
+    const btnRefreshFalsePositiveRescue = document.getElementById('btn-refresh-false-positive-rescue');
 
     async function loadHiddenElements() {
         if (!hiddenElementsList) return;
@@ -1105,6 +1119,116 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load on init
     loadHiddenElements();
 
+    function renderFalsePositiveRescueList(records = [], source = '') {
+        if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
+
+        if (!Array.isArray(records) || records.length === 0) {
+            const message = source === 'scan'
+                ? t('dashboardFalsePositiveRescueNoActions')
+                : t('dashboardFalsePositiveRescueEmpty');
+            falsePositiveRescueSummary.textContent = message;
+            falsePositiveRescueList.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+            return;
+        }
+
+        falsePositiveRescueSummary.textContent = t('dashboardFalsePositiveRescueCount', [String(records.length)]);
+        falsePositiveRescueList.innerHTML = '';
+
+        records.forEach((record) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'element-item';
+            const timeStr = record.timestamp ? formatDateTime(new Date(record.timestamp)) : '';
+            const actionLabel = String(record.action || 'blocked').replace(/_/g, ' ');
+            const sourceLabel = [record.source, record.reason].filter(Boolean).join(' · ');
+
+            itemDiv.innerHTML = `
+                <div class="element-info">
+                    <span class="element-selector" title="${escapeHtml(record.selector || '')}">${escapeHtml(record.selector || '(no selector)')}</span>
+                    <span class="element-meta">${escapeHtml(actionLabel)}${sourceLabel ? ` · ${escapeHtml(sourceLabel)}` : ''}${timeStr ? ` · ${escapeHtml(timeStr)}` : ''}</span>
+                </div>
+                <div class="false-positive-rescue-actions">
+                    <button class="btn-secondary btn-false-positive-rescue" data-action-id="${escapeHtml(record.id || '')}">${t('dashboardFalsePositiveRescueRestore')}</button>
+                    <button class="btn-secondary btn-false-positive-report" data-action-id="${escapeHtml(record.id || '')}">${t('dashboardFalsePositiveRescueReport')}</button>
+                </div>
+            `;
+            falsePositiveRescueList.appendChild(itemDiv);
+        });
+
+        falsePositiveRescueList.querySelectorAll('.btn-false-positive-rescue').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const response = await runtimeMessage({
+                    action: 'rescueFalconAction',
+                    actionId: button.dataset.actionId
+                });
+                if (!response?.success) {
+                    falsePositiveRescueSummary.textContent = response?.error || t('dashboardFalsePositiveRescueFailed');
+                    return;
+                }
+                await loadFalsePositiveRescueRecords('scan');
+            });
+        });
+
+        falsePositiveRescueList.querySelectorAll('.btn-false-positive-report').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const record = records.find((item) => item.id === button.dataset.actionId);
+                if (!record) return;
+                const response = await runtimeMessage({
+                    action: 'reportFalsePositive',
+                    observation: {
+                        actionId: record.id,
+                        hostname: record.hostname,
+                        pageUrl: record.pageUrl,
+                        selector: record.selector,
+                        source: 'dashboard_manual_rescue',
+                        reason: 'user_restored_click_target',
+                        signatureHash: record.signatureHash,
+                        result: {
+                            userConfirmed: true
+                        }
+                    }
+                });
+                falsePositiveRescueSummary.textContent = response?.success
+                    ? t('dashboardFalsePositiveRescueReported')
+                    : (response?.error || t('dashboardFalsePositiveRescueFailed'));
+            });
+        });
+    }
+
+    async function loadFalsePositiveRescueRecords(source = '') {
+        if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
+        const activeTab = await getActiveTab();
+        if (!activeTab?.id) {
+            renderFalsePositiveRescueList([], source);
+            return;
+        }
+
+        const response = await runtimeMessage({
+            action: 'getFalconActionRecords',
+            tabId: activeTab.id,
+            includeRestored: false
+        });
+        renderFalsePositiveRescueList(response?.records || [], source);
+    }
+
+    async function collectCurrentPageFalconActions() {
+        if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
+        falsePositiveRescueSummary.textContent = t('dashboardLoading');
+        const activeTab = await getActiveTab();
+        if (!activeTab?.id) {
+            renderFalsePositiveRescueList([], 'scan');
+            return;
+        }
+
+        await chrome.tabs.sendMessage(activeTab.id, { action: 'collectFalconActions' }).catch(() => null);
+        await loadFalsePositiveRescueRecords('scan');
+    }
+
+    if (btnRefreshFalsePositiveRescue) {
+        btnRefreshFalsePositiveRescue.addEventListener('click', collectCurrentPageFalconActions);
+    }
+
+    loadFalsePositiveRescueRecords();
+
     // Clear all button
     const btnClearAllElements = document.getElementById('btn-clear-all-elements');
     if (btnClearAllElements) {
@@ -1125,6 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (changes.whitelist || changes.blacklist) loadLists();
             if (changes.hiddenElements) loadHiddenElements();
+            if (changes.falconActionRecords || changes.falsePositiveObservations) loadFalsePositiveRescueRecords();
             if (changes.customSites) {
                 loadCustomSites();
                 loadStatusBar();

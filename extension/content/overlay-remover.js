@@ -299,6 +299,91 @@
 
     let removedCount = 0;
     let processedElements = new WeakSet();
+    const ACTION_ATTRIBUTE = 'data-shield-action-id';
+    const RESCUED_ATTRIBUTE = 'data-shield-rescued';
+
+    function createActionId() {
+        return `act_overlay_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function buildElementSelector(element) {
+        if (!element || !element.tagName) return '';
+        const tagName = element.tagName.toLowerCase();
+        if (element.id) return `${tagName}#${CSS.escape(element.id)}`;
+        const classList = Array.from(element.classList || [])
+            .filter((item) => item && !item.startsWith('shield-'))
+            .slice(0, 3);
+        if (classList.length > 0) {
+            return `${tagName}${classList.map((item) => `.${CSS.escape(item)}`).join('')}`;
+        }
+        return tagName;
+    }
+
+    function buildElementSignature(element) {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+            tagName: String(element.tagName || '').toLowerCase(),
+            classTokenSummary: String(element.className || '').replace(/\s+/g, ' ').trim().slice(0, 160),
+            idTokenSummary: String(element.id || '').trim().slice(0, 80),
+            positionBucket: style.position || 'static',
+            zIndexBucket: Number.parseInt(style.zIndex, 10) >= 1000 ? 'high' : 'low',
+            sizeBucket: rect.width >= 728 && rect.height >= 60 ? 'banner' : 'small',
+            nearPlayer: Boolean(element.closest('.shield-detected-player, .shield-detected-container, .player-enhanced-active, video'))
+        };
+    }
+
+    function recordOverlayAction(element, action, reason) {
+        if (!(element instanceof HTMLElement)) return '';
+        const existingId = element.getAttribute(ACTION_ATTRIBUTE);
+        const actionId = existingId || createActionId();
+        element.setAttribute(ACTION_ATTRIBUTE, actionId);
+        element.dataset.shieldRestoreDisplay = element.style.display || '';
+        element.dataset.shieldRestoreVisibility = element.style.visibility || '';
+        element.dataset.shieldRestorePointerEvents = element.style.pointerEvents || '';
+
+        try {
+            chrome.runtime.sendMessage({
+                action: 'recordFalconAction',
+                record: {
+                    id: actionId,
+                    selector: buildElementSelector(element),
+                    kind: 'overlay_inline_style',
+                    source: 'overlay-remover',
+                    policyTier: aiPolicy?.policyGate?.tier || 'T1',
+                    action,
+                    reason,
+                    pageUrl: window.location.href,
+                    hostname: window.location.hostname,
+                    restore: {
+                        display: element.dataset.shieldRestoreDisplay,
+                        visibility: element.dataset.shieldRestoreVisibility,
+                        pointerEvents: element.dataset.shieldRestorePointerEvents
+                    },
+                    signature: buildElementSignature(element)
+                }
+            });
+        } catch (_) {
+            // best-effort audit trail only
+        }
+
+        return actionId;
+    }
+
+    function rescueOverlayAction(record = {}) {
+        const actionId = String(record.id || '').trim();
+        if (!actionId) return false;
+        const target = document.querySelector(`[${ACTION_ATTRIBUTE}="${CSS.escape(actionId)}"]`);
+        if (!(target instanceof HTMLElement)) return false;
+        target.style.display = target.dataset.shieldRestoreDisplay || '';
+        target.style.visibility = target.dataset.shieldRestoreVisibility || '';
+        target.style.pointerEvents = target.dataset.shieldRestorePointerEvents || '';
+        target.removeAttribute(ACTION_ATTRIBUTE);
+        target.removeAttribute('data-shield-hidden');
+        target.removeAttribute('data-shield-removed');
+        target.setAttribute(RESCUED_ATTRIBUTE, actionId);
+        return true;
+    }
 
     function isSafeMediaHost() {
         const host = (window.location.hostname || '').toLowerCase();
@@ -671,6 +756,7 @@
                             if (isAgeVerificationOverlay(element)) return;
 
                             processedElements.add(element);
+                            recordOverlayAction(element, 'disable_pointer_events', 'transparent_click_overlay');
                             element.style.setProperty('pointer-events', 'none', 'important');
                             element.dataset.shieldHidden = 'pointer-events-none';
                             localRemoved++;
@@ -686,6 +772,7 @@
                         if (isAgeVerificationOverlay(element)) return;
                         
                         processedElements.add(element);
+                        recordOverlayAction(element, 'hide_element', 'ad_overlay_content');
                         element.style.setProperty('display', 'none', 'important');
                         element.dataset.shieldHidden = 'display-none';
                         localRemoved++;
@@ -715,6 +802,7 @@
                 if (isAgeVerificationOverlay(element)) return;
                 
                 processedElements.add(element);
+                recordOverlayAction(element, 'hide_element', 'suspicious_player_overlay');
                 element.style.setProperty('display', 'none', 'important');
                 element.dataset.shieldRemoved = 'true';
                 element.dataset.shieldHidden = 'display-none';
@@ -752,6 +840,7 @@
                     if (isAgeVerificationOverlay(element)) return;
                     
                     processedElements.add(element);
+                    recordOverlayAction(element, 'hide_element', 'global_inset_overlay');
                     element.style.setProperty('display', 'none', 'important');
                     element.dataset.shieldHidden = 'display-none';
                     localRemoved++;
@@ -782,6 +871,7 @@
                     if (isAgeVerificationOverlay(element)) return;
                     
                     processedElements.add(element);
+                    recordOverlayAction(element, 'hide_element', 'global_high_z_overlay');
                     element.style.setProperty('display', 'none', 'important');
                     element.dataset.shieldHidden = 'display-none';
                     localRemoved++;
@@ -904,6 +994,12 @@
                 processLoopTimer = null;
             }
             sendResponse({ success: true, disabled: true });
+            return true;
+        }
+
+        if (request.action === 'rescueFalconAction') {
+            const restored = rescueOverlayAction(request.record || {});
+            sendResponse({ success: restored, restored });
             return true;
         }
 

@@ -15,6 +15,9 @@
     let cosmeticFilterConfigLoadPromise = null;
     let styleElement = null;
     let customRules = [];
+    const RESCUED_ATTRIBUTE = 'data-shield-rescued';
+    const ACTION_ATTRIBUTE = 'data-shield-action-id';
+    const MAX_COLLECTED_ACTIONS = 100;
 
     function normalizeDomainList(domains = []) {
         return [...new Set(
@@ -98,26 +101,70 @@
         });
     }
 
-    function generateCSS() {
+    function appendRescueGuard(selector) {
+        const source = String(selector || '').trim();
+        if (!source || source.includes('::')) return source;
+        return source
+            .split(',')
+            .map((part) => {
+                const item = part.trim();
+                if (!item || item.includes(`[${RESCUED_ATTRIBUTE}]`)) return item;
+                return `${item}:not([${RESCUED_ATTRIBUTE}])`;
+            })
+            .join(', ');
+    }
+
+    function buildActiveSelectorEntries() {
         const hostname = window.location.hostname.toLowerCase();
-        let selectors = [...cosmeticFilterConfig.globalSelectors];
+        const entries = [];
+
+        cosmeticFilterConfig.globalSelectors.forEach((selector) => {
+            entries.push({
+                selector,
+                source: 'cosmetic-filter',
+                reason: 'site_registry_global_selector',
+                policyTier: 'T0'
+            });
+        });
 
         for (const group of cosmeticFilterConfig.siteSelectorGroups) {
             if (group.domains.some((domain) => isDomainOrSubdomain(hostname, domain))) {
-                selectors = selectors.concat(group.selectors);
+                group.selectors.forEach((selector) => {
+                    entries.push({
+                        selector,
+                        source: 'cosmetic-filter',
+                        reason: 'site_registry_host_selector',
+                        policyTier: 'T0'
+                    });
+                });
             }
         }
 
         for (const rule of customRules) {
             const ruleHostname = String(rule.hostname || '').trim().toLowerCase();
             if (!ruleHostname || isDomainOrSubdomain(hostname, ruleHostname)) {
-                selectors.push(rule.selector);
+                entries.push({
+                    selector: rule.selector,
+                    source: 'element-picker',
+                    reason: 'hidden_element_rule',
+                    policyTier: 'T1'
+                });
             }
         }
 
-        selectors = [...new Set(selectors)];
+        const seen = new Set();
+        return entries.filter((entry) => {
+            const selector = String(entry.selector || '').trim();
+            if (!selector || seen.has(selector)) return false;
+            seen.add(selector);
+            return true;
+        });
+    }
 
-        return selectors.map((sel) => {
+    function generateCSS() {
+        const selectors = buildActiveSelectorEntries().map((entry) => appendRescueGuard(entry.selector));
+
+        return [...new Set(selectors)].map((sel) => {
             return `${sel} { display: none !important; visibility: hidden !important; }`;
         }).join('\n');
     }
@@ -180,6 +227,102 @@
     requestPageStats();
     setTimeout(requestPageStats, 50);
 
+    function runtimeMessage(message) {
+        return new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage(message, (response) => {
+                    resolve(response || null);
+                });
+            } catch (_) {
+                resolve(null);
+            }
+        });
+    }
+
+    function getElementSignature(element) {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        let hrefHost = '';
+        try {
+            hrefHost = element.href ? new URL(element.href, window.location.href).hostname : '';
+        } catch (_) {
+            hrefHost = '';
+        }
+        return {
+            tagName: String(element.tagName || '').toLowerCase(),
+            classTokenSummary: String(element.className || '').replace(/\s+/g, ' ').trim().slice(0, 160),
+            idTokenSummary: String(element.id || '').trim().slice(0, 80),
+            positionBucket: style.position || 'static',
+            zIndexBucket: Number.parseInt(style.zIndex, 10) >= 1000 ? 'high' : 'low',
+            sizeBucket: rect.width >= 728 && rect.height >= 60 ? 'banner' : 'small',
+            hrefHost,
+            nearPlayer: Boolean(element.closest('.shield-detected-player, .shield-detected-container, .player-enhanced-active, video'))
+        };
+    }
+
+    async function collectFalconActions() {
+        await Promise.all([loadCustomRules(), loadCosmeticFilterConfig(false)]);
+        const entries = buildActiveSelectorEntries();
+        const records = [];
+
+        for (const entry of entries) {
+            if (records.length >= MAX_COLLECTED_ACTIONS) break;
+            let elements = [];
+            try {
+                elements = Array.from(document.querySelectorAll(entry.selector));
+            } catch (_) {
+                continue;
+            }
+
+            for (let index = 0; index < elements.length && records.length < MAX_COLLECTED_ACTIONS; index += 1) {
+                const element = elements[index];
+                if (!(element instanceof HTMLElement)) continue;
+                if (element.hasAttribute(RESCUED_ATTRIBUTE)) continue;
+                const record = {
+                    id: element.getAttribute(ACTION_ATTRIBUTE) || undefined,
+                    selector: entry.selector,
+                    elementIndex: index,
+                    kind: 'cosmetic_selector',
+                    source: entry.source,
+                    policyTier: entry.policyTier,
+                    action: 'hide_element',
+                    reason: entry.reason,
+                    pageUrl: window.location.href,
+                    hostname: window.location.hostname,
+                    signature: getElementSignature(element)
+                };
+                const response = await runtimeMessage({ action: 'recordFalconAction', record });
+                if (response?.success && response.record?.id) {
+                    element.setAttribute(ACTION_ATTRIBUTE, response.record.id);
+                    records.push(response.record);
+                }
+            }
+        }
+
+        return records;
+    }
+
+    function rescueFalconAction(record = {}) {
+        const actionId = String(record.id || '').trim();
+        const selector = String(record.selector || '').trim();
+        if (!actionId || !selector) return false;
+        let target = document.querySelector(`[${ACTION_ATTRIBUTE}="${CSS.escape(actionId)}"]`);
+        if (!target) {
+            try {
+                const candidates = Array.from(document.querySelectorAll(selector));
+                const elementIndex = Number(record.elementIndex ?? -1);
+                target = elementIndex >= 0 ? candidates[elementIndex] : candidates[0];
+            } catch (_) {
+                target = null;
+            }
+        }
+        if (!(target instanceof HTMLElement)) return false;
+        target.setAttribute(RESCUED_ATTRIBUTE, actionId);
+        target.removeAttribute(ACTION_ATTRIBUTE);
+        injectStyles();
+        return true;
+    }
+
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'refreshCosmeticRules') {
             scheduleRuleRefresh(true);
@@ -191,6 +334,27 @@
             requestPageStatsAsync(150).then((stats) => {
                 sendResponse(stats);
             });
+            return true;
+        }
+
+        if (request.action === 'collectFalconActions') {
+            collectFalconActions()
+                .then((records) => {
+                    sendResponse({ success: true, records });
+                })
+                .catch((error) => {
+                    sendResponse({ success: false, error: String(error?.message || error), records: [] });
+                });
+            return true;
+        }
+
+        if (request.action === 'rescueFalconAction') {
+            try {
+                const restored = rescueFalconAction(request.record || {});
+                sendResponse({ success: restored, restored });
+            } catch (error) {
+                sendResponse({ success: false, error: String(error?.message || error), restored: false });
+            }
             return true;
         }
 
