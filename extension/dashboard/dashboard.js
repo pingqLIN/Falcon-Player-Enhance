@@ -429,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mode: lmstudioMode?.value || 'off',
             model: lmstudioModel?.value || getProviderDefaultModel(nextProvider)
         });
+        loadAiProviderSettings(nextProvider);
     }
 
     function renderLmStudioCandidates(candidateList) {
@@ -693,9 +694,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setLmStudioStatus(`${providerLabel} defaults restored. Save settings to apply.`);
     }
 
-    async function loadAiProviderSettings() {
+    async function loadAiProviderSettings(providerOverride = '') {
         const requestRevision = providerSelectionRevision;
-        const response = await runtimeMessage({ action: 'getAiProviderSettings' });
+        const response = await runtimeMessage({
+            action: 'getAiProviderSettings',
+            provider: providerOverride || getSelectedProvider()
+        });
         if (!response?.success) {
             setLmStudioStatus('Unable to load AI provider settings.', true);
             return;
@@ -1242,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
                 loadPolicyGateOverview();
             }
-            if (changes.aiProviderSettings || changes.aiProviderState || changes.aiProviderAdvisories || changes.aiGeneratedRuleCandidates) {
+            if (changes.aiProviderSettings || changes.aiProviderProfiles || changes.aiProviderState || changes.aiProviderAdvisories || changes.aiGeneratedRuleCandidates) {
                 loadAiProviderSettings();
                 loadPolicyGateOverview();
                 loadStatusBar();

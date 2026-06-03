@@ -33,6 +33,7 @@ const CONTENT_SCRIPT_IDS = [
 const SITE_REGISTRY_RESOURCE_PATH = 'rules/site-registry.json';
 const AD_LIST_RESOURCE_PATH = 'rules/ad-list.json';
 const AI_PROVIDER_SECRET_STORAGE_KEY = 'aiProviderSecret';
+const AI_PROVIDER_PROFILES_STORAGE_KEY = 'aiProviderProfiles';
 const AI_KNOWLEDGE_VERSION = 1;
 const AI_KNOWLEDGE_MAX_OBSERVATIONS = 300;
 const AI_KNOWLEDGE_MAX_CANDIDATES = 160;
@@ -498,7 +499,8 @@ let aiState = {
   hostMetrics: {},
   hostFallbacks: {},
   providerSettings: null,
-  providerSecret: '',
+  providerProfiles: {},
+  providerSecrets: {},
   providerState: null,
   providerAdvisories: {},
   generatedRuleCandidates: {},
@@ -579,6 +581,7 @@ async function initStorage(reason = 'update') {
     'aiHostMetrics',
     'aiHostFallbacks',
     'aiProviderSettings',
+    AI_PROVIDER_PROFILES_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
@@ -693,6 +696,15 @@ async function initStorage(reason = 'update') {
     const persistableProviderSettings = getPersistableAiProviderSettings(result.aiProviderSettings);
     if (JSON.stringify(persistableProviderSettings) !== JSON.stringify(result.aiProviderSettings)) {
       patch.aiProviderSettings = persistableProviderSettings;
+    }
+  }
+
+  if (typeof result[AI_PROVIDER_PROFILES_STORAGE_KEY] !== 'object' || result[AI_PROVIDER_PROFILES_STORAGE_KEY] === null) {
+    patch[AI_PROVIDER_PROFILES_STORAGE_KEY] = normalizeAiProviderProfiles({}, result.aiProviderSettings || patch.aiProviderSettings);
+  } else {
+    const profiles = normalizeAiProviderProfiles(result[AI_PROVIDER_PROFILES_STORAGE_KEY], result.aiProviderSettings);
+    if (JSON.stringify(profiles) !== JSON.stringify(result[AI_PROVIDER_PROFILES_STORAGE_KEY])) {
+      patch[AI_PROVIDER_PROFILES_STORAGE_KEY] = profiles;
     }
   }
 
@@ -1890,6 +1902,7 @@ async function loadAiState() {
     'aiHostMetrics',
     'aiHostFallbacks',
     'aiProviderSettings',
+    AI_PROVIDER_PROFILES_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
     'aiGeneratedRuleCandidates',
@@ -1900,17 +1913,22 @@ async function loadAiState() {
     'aiKnowledgeStore'
   ]);
   const storedSettings = normalizeAiProviderSettings(result.aiProviderSettings || {});
+  const providerProfiles = normalizeAiProviderProfiles(result[AI_PROVIDER_PROFILES_STORAGE_KEY] || {}, storedSettings);
   const migratedSecret =
     storedSettings.provider !== 'lmstudio' && storedSettings.apiKey
       ? String(storedSettings.apiKey || '').trim()
       : '';
-  const sessionSecret = await loadProviderSecretFromSession();
-  const providerSecret = sessionSecret || migratedSecret;
+  const sessionSecrets = await loadProviderSecretsFromSession();
+  const providerSecrets = normalizeAiProviderSecrets({
+    ...sessionSecrets,
+    ...(migratedSecret ? { [storedSettings.provider]: migratedSecret } : {})
+  });
 
-  if (migratedSecret && !sessionSecret) {
-    await persistProviderSecretToSession(migratedSecret);
+  if (migratedSecret && !sessionSecrets[storedSettings.provider]) {
+    await persistProviderSecretsToSession(providerSecrets);
     await chrome.storage.local.set({
-      aiProviderSettings: getPersistableAiProviderSettings(storedSettings)
+      aiProviderSettings: getPersistableAiProviderSettings(storedSettings),
+      [AI_PROVIDER_PROFILES_STORAGE_KEY]: normalizeAiProviderProfiles(providerProfiles, storedSettings)
     });
   }
 
@@ -1921,7 +1939,8 @@ async function loadAiState() {
   aiState.hostMetrics = result.aiHostMetrics || {};
   aiState.hostFallbacks = result.aiHostFallbacks || {};
   aiState.providerSettings = getPersistableAiProviderSettings(storedSettings);
-  aiState.providerSecret = providerSecret;
+  aiState.providerProfiles = normalizeAiProviderProfiles(providerProfiles, aiState.providerSettings);
+  aiState.providerSecrets = providerSecrets;
   aiState.providerState = normalizeAiProviderState(result.aiProviderState || {});
   aiState.providerAdvisories =
     result.aiProviderAdvisories && typeof result.aiProviderAdvisories === 'object'
@@ -1964,6 +1983,7 @@ async function persistAiState() {
     aiHostMetrics: aiState.hostMetrics,
     aiHostFallbacks: aiState.hostFallbacks,
     aiProviderSettings: getPersistableAiProviderSettings(aiState.providerSettings || {}),
+    [AI_PROVIDER_PROFILES_STORAGE_KEY]: normalizeAiProviderProfiles(aiState.providerProfiles || {}, aiState.providerSettings || {}),
     aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
     aiProviderAdvisories: aiState.providerAdvisories || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
@@ -1973,7 +1993,7 @@ async function persistAiState() {
     aiCandidateRollbackLog: normalizeCandidateRollbackLog(aiState.candidateRollbackLog || []),
     aiKnowledgeStore: normalizeAiKnowledgeStore(aiState.knowledgeStore || {})
   });
-  await persistProviderSecretToSession(aiState.providerSecret);
+  await persistProviderSecretsToSession(aiState.providerSecrets || {});
 }
 
 async function isExtensionEnabled() {
@@ -2570,22 +2590,76 @@ async function configureProviderSecretStorage() {
   }
 }
 
-async function loadProviderSecretFromSession() {
-  if (!chrome.storage.session) return '';
-  const result = await chrome.storage.session.get([AI_PROVIDER_SECRET_STORAGE_KEY]);
-  return String(result[AI_PROVIDER_SECRET_STORAGE_KEY] || '').trim();
+function normalizeAiProviderSecrets(input = {}) {
+  if (!input || typeof input !== 'object') return {};
+  return AI_PROVIDER_TYPES.reduce((result, provider) => {
+    if (provider === 'lmstudio' || provider === 'chrome_builtin') return result;
+    const secret = String(input[provider] || '').trim();
+    if (secret) result[provider] = secret;
+    return result;
+  }, {});
 }
 
-async function persistProviderSecretToSession(secret) {
+async function loadProviderSecretsFromSession() {
+  if (!chrome.storage.session) return {};
+  const result = await chrome.storage.session.get([AI_PROVIDER_SECRET_STORAGE_KEY]);
+  const value = result[AI_PROVIDER_SECRET_STORAGE_KEY];
+  if (value && typeof value === 'object') {
+    return normalizeAiProviderSecrets(value);
+  }
+  const legacySecret = String(value || '').trim();
+  return legacySecret ? { openai: legacySecret } : {};
+}
+
+async function persistProviderSecretsToSession(secrets = {}) {
   if (!chrome.storage.session) return;
 
-  const normalized = String(secret || '').trim();
-  if (!normalized) {
+  const normalized = normalizeAiProviderSecrets(secrets);
+  if (Object.keys(normalized).length === 0) {
     await chrome.storage.session.remove([AI_PROVIDER_SECRET_STORAGE_KEY]);
     return;
   }
 
   await chrome.storage.session.set({ [AI_PROVIDER_SECRET_STORAGE_KEY]: normalized });
+}
+
+function normalizeAiProviderProfiles(input = {}, selectedSettings = null) {
+  const profiles = {};
+  if (input && typeof input === 'object') {
+    Object.entries(input).forEach(([provider, value]) => {
+      const normalizedProvider = AI_PROVIDER_TYPES.includes(String(provider || '').trim().toLowerCase())
+        ? String(provider || '').trim().toLowerCase()
+        : '';
+      if (!normalizedProvider || !value || typeof value !== 'object') return;
+      profiles[normalizedProvider] = getPersistableAiProviderSettings({
+        ...value,
+        provider: normalizedProvider
+      });
+    });
+  }
+
+  if (selectedSettings) {
+    const selected = getPersistableAiProviderSettings(selectedSettings);
+    profiles[selected.provider] = selected;
+  }
+
+  return profiles;
+}
+
+function getAiProviderProfile(provider = '') {
+  const normalizedProvider = AI_PROVIDER_TYPES.includes(String(provider || '').trim().toLowerCase())
+    ? String(provider || '').trim().toLowerCase()
+    : normalizeAiProviderSettings(aiState.providerSettings || {}).provider;
+  return getPersistableAiProviderSettings(
+    aiState.providerProfiles?.[normalizedProvider] || { provider: normalizedProvider }
+  );
+}
+
+function getAiProviderSecret(provider = '') {
+  const normalizedProvider = AI_PROVIDER_TYPES.includes(String(provider || '').trim().toLowerCase())
+    ? String(provider || '').trim().toLowerCase()
+    : normalizeAiProviderSettings(aiState.providerSettings || {}).provider;
+  return String(aiState.providerSecrets?.[normalizedProvider] || '').trim();
 }
 
 function createRequestTimeout(timeoutMs) {
@@ -5147,7 +5221,7 @@ function normalizeGeminiAdvisory(hostname, payload, policy, settings) {
 
 async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || getAiProviderSecret(settings?.provider));
     const baseUrl = resolveOpenAiBaseUrl(normalized.endpoint);
     if (!normalized.apiKey) {
       throw new Error('openai_api_key_required');
@@ -5223,7 +5297,7 @@ async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
 
 async function runGeminiHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || getAiProviderSecret(settings?.provider));
     const requestInfo = resolveGeminiModelRequest(normalized.endpoint, normalized.model);
     if (!normalized.apiKey) {
       throw new Error('gemini_api_key_required');
@@ -5294,7 +5368,7 @@ async function runGeminiHealthCheck(settings = aiState.providerSettings) {
 
 async function runGatewayHealthCheck(settings = aiState.providerSettings) {
   try {
-    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+    const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || getAiProviderSecret(settings?.provider));
     const baseUrl = resolveGatewayBaseUrl(normalized.endpoint);
     if (!baseUrl) {
       throw new Error('gateway_endpoint_required');
@@ -5474,7 +5548,7 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
 }
 
 async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
-  const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || aiState.providerSecret);
+  const normalized = resolveAiProviderSettings(settings || {}, settings?.apiKey || getAiProviderSecret(settings?.provider));
   if (normalized.provider === 'openai') {
     return runOpenAiHealthCheck(normalized);
   }
@@ -5491,7 +5565,7 @@ async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
 }
 
 function shouldQueryAiProvider(hostname, policy, events = []) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   if (settings.enabled !== true) return false;
   if (settings.mode === 'off') return false;
 
@@ -5510,7 +5584,7 @@ function shouldQueryAiProvider(hostname, policy, events = []) {
 }
 
 async function requestLmStudioAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
   const model = await resolveLmStudioModel(settings);
   if (!model) {
@@ -5592,7 +5666,7 @@ async function requestLmStudioAdvisory(hostname, context, policy) {
 }
 
 async function requestGatewayAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const baseUrl = resolveGatewayBaseUrl(settings.endpoint);
   if (!baseUrl) {
     throw new Error('gateway_endpoint_required');
@@ -5659,7 +5733,7 @@ async function requestGatewayAdvisory(hostname, context, policy) {
 }
 
 async function requestOpenAiAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   if (!settings.apiKey) {
     throw new Error('openai_api_key_required');
   }
@@ -5730,7 +5804,7 @@ async function requestOpenAiAdvisory(hostname, context, policy) {
 }
 
 async function requestGeminiAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   if (!settings.apiKey) {
     throw new Error('gemini_api_key_required');
   }
@@ -5797,7 +5871,7 @@ async function requestGeminiAdvisory(hostname, context, policy) {
 }
 
 async function requestChromeBuiltinAdvisory(hostname, context, policy) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const api = await resolveChromeLanguageModel();
   const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
   const startedAt = getNow();
@@ -5890,7 +5964,7 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
 }
 
 async function requestAiElementClassification(hostname, features = {}) {
-  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const localResult = classifyElementLocally(hostname, features);
   if (settings.enabled !== true || settings.mode === 'off') {
     return localResult;
@@ -6501,7 +6575,7 @@ function buildAiInsightsSnapshot() {
   const profiles = Object.values(aiState.profiles || {});
   profiles.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
   const nowTs = getNow();
-  const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
+  const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const providerState = normalizeAiProviderState(aiState.providerState || {});
   const governance = buildCandidateGovernanceSnapshot(20);
   const advisoryHosts = Object.values(aiState.providerAdvisories || {})
@@ -6784,9 +6858,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: false, error: 'forbidden_sender' });
       return true;
     }
+    const requestedProfile = getAiProviderProfile(request.provider);
     sendResponse({
       success: true,
-      settings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
+      settings: redactAiProviderSettings(requestedProfile, getAiProviderSecret(requestedProfile.provider)),
       state: normalizeAiProviderState(aiState.providerState || {})
     });
     return true;
@@ -6798,21 +6873,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     (async () => {
-      const currentSettings = resolveAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret);
       const nextSettings = normalizeAiProviderSettings(request.settings || {});
-      aiState.providerSecret =
-        nextSettings.provider === 'lmstudio' || nextSettings.provider === 'chrome_builtin'
-          ? ''
-          : String(
-              nextSettings.apiKey ||
-              (nextSettings.provider === currentSettings.provider ? aiState.providerSecret : '')
-            ).trim();
+      const nextSecret = nextSettings.provider === 'lmstudio' || nextSettings.provider === 'chrome_builtin'
+        ? ''
+        : String(nextSettings.apiKey || getAiProviderSecret(nextSettings.provider)).trim();
       aiState.providerSettings = getPersistableAiProviderSettings(nextSettings);
+      aiState.providerProfiles = normalizeAiProviderProfiles(aiState.providerProfiles || {}, aiState.providerSettings);
+      if (nextSecret) {
+        aiState.providerSecrets = normalizeAiProviderSecrets({
+          ...(aiState.providerSecrets || {}),
+          [nextSettings.provider]: nextSecret
+        });
+      } else if (nextSettings.provider === 'lmstudio' || nextSettings.provider === 'chrome_builtin') {
+        const nextSecrets = { ...(aiState.providerSecrets || {}) };
+        delete nextSecrets[nextSettings.provider];
+        aiState.providerSecrets = normalizeAiProviderSecrets(nextSecrets);
+      }
       aiState.elementClassificationCache = {};
       scheduleAiPersist();
       sendResponse({
         success: true,
-        settings: redactAiProviderSettings(aiState.providerSettings, aiState.providerSecret),
+        settings: redactAiProviderSettings(aiState.providerSettings, getAiProviderSecret(aiState.providerSettings?.provider)),
         state: normalizeAiProviderState(aiState.providerState || {})
       });
     })().catch((error) => {
@@ -7055,7 +7136,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           profiles: aiState.profiles,
           hostMetrics: aiState.hostMetrics,
           hostFallbacks: aiState.hostFallbacks,
-          providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, aiState.providerSecret),
+          providerSettings: redactAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider)),
           providerState: normalizeAiProviderState(aiState.providerState || {}),
           providerAdvisories: aiState.providerAdvisories || {},
           generatedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),

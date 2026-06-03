@@ -127,6 +127,10 @@ def button_state(page) -> dict[str, object]:
             return {
                 display: style.display,
                 visibility: style.visibility,
+                opacity: style.opacity,
+                outlineStyle: style.outlineStyle,
+                outlineColor: style.outlineColor,
+                preview: button.getAttribute('data-shield-rescue-preview') || '',
                 rescued: button.getAttribute('data-shield-rescued') || '',
                 actionId: button.getAttribute('data-shield-action-id') || '',
                 metrics: { ...(window.__falconRescueMetrics || {}) }
@@ -137,6 +141,7 @@ def button_state(page) -> dict[str, object]:
 
 def build_report(
     hidden_state: dict[str, object],
+    preview_state: dict[str, object],
     collected: dict[str, object],
     rescue_response: dict[str, object],
     report_response: dict[str, object],
@@ -148,9 +153,13 @@ def build_report(
     checks = {
         "targetInitiallyHidden": hidden_state.get("display") == "none" or hidden_state.get("visibility") == "hidden",
         "actionCollected": len(records) >= 1 and records[0].get("selector") == ".blocked-cta",
+        "previewMarkedTarget": preview_state.get("preview") == "1",
+        "previewUsesTemporaryStyling": preview_state.get("opacity") == "0.48"
+            and preview_state.get("outlineStyle") not in ("", "none"),
         "rescueSucceeded": rescue_response.get("popupRestoreClicked") is True,
         "targetMarkedRescued": bool(final_state.get("rescued")),
         "targetVisibleAfterRescue": final_state.get("display") != "none" and final_state.get("visibility") != "hidden",
+        "previewClearedAfterRescue": final_state.get("preview") == "" and final_state.get("opacity") == "1",
         "clickWorksAfterRescue": int(final_state.get("metrics", {}).get("checkoutClicks", 0)) == 1,
         "falsePositiveReported": report_response.get("popupReportClicked") is True,
         "observationPersisted": len(observations) >= 1 and observations[0].get("selector") == ".blocked-cta",
@@ -161,6 +170,7 @@ def build_report(
         "checks": checks,
         "samples": {
             "hiddenState": hidden_state,
+            "previewState": preview_state,
             "collected": collected,
             "rescueResponse": rescue_response,
             "reportResponse": report_response,
@@ -209,11 +219,14 @@ def main() -> int:
                     "tabId": int(inject_result["tabId"]),
                     "includeRestored": False,
                 })
+                popup_page.locator(".rescue-preview-btn").first.click()
+                page.wait_for_timeout(300)
+                preview_state = button_state(page)
                 popup_page.locator(".rescue-report-btn").first.click()
-                popup_page.wait_for_timeout(500)
+                page.wait_for_timeout(500)
                 report_response = {"popupReportClicked": True}
                 popup_page.locator(".rescue-restore-btn").first.click()
-                popup_page.wait_for_timeout(500)
+                page.wait_for_timeout(500)
                 rescue_response = {"popupRestoreClicked": True}
                 page.wait_for_timeout(500)
                 page.locator("#checkout-button").click()
@@ -226,6 +239,7 @@ def main() -> int:
 
                 report = build_report(
                     hidden_state,
+                    preview_state,
                     collected,
                     rescue_response,
                     report_response,

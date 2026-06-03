@@ -60,7 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const falsePositiveRescueSummary = document.getElementById('false-positive-rescue-summary');
     const falsePositiveRescueList = document.getElementById('false-positive-rescue-list');
     const btnScanFalsePositive = document.getElementById('btn-scan-false-positive');
+    const falsePositivePreviewToggle = document.getElementById('false-positive-preview-toggle');
     const statsEmptyState = document.getElementById('stats-empty-state');
+    const aiCandidatesCount = document.getElementById('ai-candidates-count');
+    const aiCandidatesSummary = document.getElementById('ai-candidates-summary');
+    const aiCandidatesList = document.getElementById('ai-candidates-list');
+    const btnAiSelectAllCandidates = document.getElementById('btn-ai-select-all-candidates');
+    const btnAiAcceptSelectedCandidates = document.getElementById('btn-ai-accept-selected-candidates');
 
     let currentDomain = '';
     let currentTabId = null;
@@ -86,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
     const POPUP_SCAN_INTERVAL_MS = 1000;
     const PINNED_SCAN_INTERVAL_MS = 4000;
+    let latestAiCandidates = [];
 
     async function init() {
         updatePinPopupButtonState();
@@ -194,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetIdx <= step) wire.classList.add(targetIdx < step ? 'completed' : 'active');
         });
 
-        if (statusText) flowStatus.textContent = statusText;
+        if (statusText && flowStatus) flowStatus.textContent = statusText;
     }
 
     function setFlowGuideCollapsed(collapsed) {
@@ -870,10 +877,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await chrome.storage.local.get(['stats']);
         const stats = result.stats || {};
 
-        overlaysRemoved.textContent = formatNumber(stats.overlaysRemoved || 0);
-        popupsBlocked.textContent = formatNumber(stats.popupsBlocked || 0);
-        fakeVideosRemoved.textContent = formatNumber(stats.fakeVideosRemoved || 0);
-        playersProtected.textContent = formatNumber(stats.playersProtected || 0);
+        if (overlaysRemoved) overlaysRemoved.textContent = formatNumber(stats.overlaysRemoved || 0);
+        if (popupsBlocked) popupsBlocked.textContent = formatNumber(stats.popupsBlocked || 0);
+        if (fakeVideosRemoved) fakeVideosRemoved.textContent = formatNumber(stats.fakeVideosRemoved || 0);
+        if (playersProtected) playersProtected.textContent = formatNumber(stats.playersProtected || 0);
 
         const totalBlocked = (stats.overlaysRemoved || 0) + (stats.popupsBlocked || 0) + (stats.fakeVideosRemoved || 0);
         if (totalBlocked > 0 && currentFlowStep >= 1) {
@@ -935,6 +942,112 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (aiProviderModel) {
             aiProviderModel.textContent = snapshot.provider?.state?.lastResolvedModel || '-';
+        }
+        renderAiCandidates(snapshot.provider?.generatedRuleCandidates || [], snapshot.provider || {});
+    }
+
+    function getProviderLabel(provider) {
+        if (provider === 'openai') return 'OpenAI direct';
+        if (provider === 'gemini') return 'Gemini 2.5 Flash';
+        if (provider === 'gateway') return 'Gateway service';
+        if (provider === 'chrome_builtin') return 'Chrome Built-in';
+        return 'LM Studio';
+    }
+
+    function formatCandidateState(candidate = {}) {
+        if (candidate.latestRollback) return 'rolled back';
+        if (candidate.latestPromotion?.active) return 'promoted';
+        if (candidate.latestDecision?.decision === 'accepted') return 'accepted';
+        if (candidate.latestDecision?.decision === 'rejected') return 'rejected';
+        return 'pending review';
+    }
+
+    function renderAiCandidates(candidates = [], providerSnapshot = {}) {
+        if (!aiCandidatesList || !aiCandidatesSummary || !aiCandidatesCount) return;
+        latestAiCandidates = Array.isArray(candidates) ? candidates : [];
+        aiCandidatesCount.textContent = String(latestAiCandidates.length);
+        aiCandidatesList.innerHTML = '';
+
+        if (latestAiCandidates.length === 0) {
+            aiCandidatesSummary.textContent = t('popupAiCandidatesEmpty');
+            aiCandidatesList.innerHTML = `<div class="rescue-empty">${escapeHtml(t('popupAiCandidatesEmpty'))}</div>`;
+            return;
+        }
+
+        const reviewSummary = providerSnapshot.candidateReviewSummary || {};
+        const promotionSummary = providerSnapshot.candidatePromotionSummary || {};
+        aiCandidatesSummary.textContent = t('popupAiCandidatesSummary', [
+            String(latestAiCandidates.length),
+            String(Number(reviewSummary.acceptedCount || 0)),
+            String(Number(reviewSummary.rejectedCount || 0)),
+            String(Number(promotionSummary.activePromotions || 0))
+        ]);
+
+        latestAiCandidates.forEach((candidate) => {
+            const hostname = String(candidate.hostname || '');
+            const state = formatCandidateState(candidate);
+            const canSelect = !candidate.latestPromotion?.active && candidate.latestDecision?.decision !== 'rejected';
+            const item = document.createElement('label');
+            item.className = `ai-candidate-item ai-candidate-${state.replace(/\s+/g, '-')}`;
+            item.innerHTML = `
+                <input type="checkbox" class="ai-candidate-checkbox" data-hostname="${escapeHtml(hostname)}" ${canSelect ? '' : 'disabled'}>
+                <span class="ai-candidate-body">
+                    <span class="ai-candidate-main">
+                        <strong>${escapeHtml(hostname || 'unknown-host')}</strong>
+                        <span class="ai-gate-action-chip">${escapeHtml(getProviderLabel(String(candidate.provider || 'lmstudio')))}</span>
+                    </span>
+                    <span class="ai-candidate-meta">
+                        <span>Selectors ${Number(candidate.selectorCount || 0)}</span>
+                        <span>Domains ${Number(candidate.domainCount || 0)}</span>
+                        <span>${escapeHtml(state)}</span>
+                    </span>
+                    <span class="ai-candidate-summary-text">${escapeHtml(candidate.summary || t('popupAiCandidatesNoSummary'))}</span>
+                </span>
+            `;
+            aiCandidatesList.appendChild(item);
+        });
+    }
+
+    function getSelectedAiCandidateHosts() {
+        if (!aiCandidatesList) return [];
+        return Array.from(aiCandidatesList.querySelectorAll('.ai-candidate-checkbox:checked'))
+            .map((input) => String(input.dataset.hostname || '').trim())
+            .filter(Boolean);
+    }
+
+    async function reviewCandidate(hostname, decision, reason) {
+        return runtimeMessage({
+            action: 'reviewAiRuleCandidate',
+            hostname,
+            decision,
+            reason
+        });
+    }
+
+    async function acceptSelectedAiCandidates() {
+        const hosts = getSelectedAiCandidateHosts();
+        if (hosts.length === 0 || !aiCandidatesSummary) return;
+        if (btnAiAcceptSelectedCandidates) btnAiAcceptSelectedCandidates.disabled = true;
+        aiCandidatesSummary.textContent = t('popupAiCandidatesAccepting', [String(hosts.length)]);
+        let successCount = 0;
+        const failures = [];
+        try {
+            for (const hostname of hosts) {
+                const response = await reviewCandidate(hostname, 'accepted', 'popup_bulk_accept');
+                if (response?.success) {
+                    successCount += 1;
+                } else {
+                    failures.push(`${hostname}: ${response?.error || 'failed'}`);
+                }
+            }
+            await loadAiMonitorState();
+            if (failures.length > 0) {
+                aiCandidatesSummary.textContent = t('popupAiCandidatesAcceptPartial', [String(successCount), String(failures.length)]);
+            } else {
+                aiCandidatesSummary.textContent = t('popupAiCandidatesAccepted', [String(successCount)]);
+            }
+        } finally {
+            if (btnAiAcceptSelectedCandidates) btnAiAcceptSelectedCandidates.disabled = false;
         }
     }
 
@@ -1116,11 +1229,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="rescue-selector" title="${escapeHtml(record.selector || '')}">${escapeHtml(record.selector || '(no selector)')}</div>
                 <div class="rescue-meta">${escapeHtml(formatActionRecordMeta(record))}</div>
                 <div class="rescue-item-actions">
+                    <button class="rescan-btn rescue-preview-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositivePreviewAction')}</button>
                     <button class="rescan-btn rescue-restore-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveRestoreOnce')}</button>
                     <button class="rescan-btn rescue-report-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveReport')}</button>
                 </div>
             `;
             falsePositiveRescueList.appendChild(item);
+        });
+
+        falsePositiveRescueList.querySelectorAll('.rescue-preview-btn').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const record = list.find((item) => item.id === button.dataset.actionId);
+                if (!record) return;
+                await previewFalconAction(record, true);
+            });
         });
 
         falsePositiveRescueList.querySelectorAll('.rescue-restore-btn').forEach((button) => {
@@ -1183,6 +1305,37 @@ document.addEventListener('DOMContentLoaded', () => {
         falsePositiveRescueSummary.textContent = t('popupFalsePositiveScanning');
         await tabMessage(currentTabId, { action: 'collectFalconActions' });
         await loadFalsePositiveRescueRecords('scan');
+        if (falsePositivePreviewToggle?.checked) {
+            const response = await runtimeMessage({
+                action: 'getFalconActionRecords',
+                tabId: currentTabId,
+                includeRestored: false
+            });
+            await previewFalconActions(response?.records || []);
+        }
+    }
+
+    async function previewFalconAction(record, persistent = false) {
+        if (!currentTabId) return null;
+        return tabMessage(currentTabId, {
+            action: 'previewFalconAction',
+            record,
+            enabled: true,
+            persistent,
+            durationMs: persistent ? 7000 : 3500
+        });
+    }
+
+    async function previewFalconActions(records = []) {
+        if (!currentTabId) return;
+        const list = Array.isArray(records) ? records.slice(0, 20) : [];
+        if (list.length === 0) {
+            await tabMessage(currentTabId, { action: 'clearFalconActionPreview' });
+            return;
+        }
+        for (const record of list) {
+            await previewFalconAction(record, false);
+        }
     }
 
     async function setBlockingLevel(level, options = {}) {
@@ -1653,6 +1806,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (falsePositivePreviewToggle) {
+        falsePositivePreviewToggle.addEventListener('change', async () => {
+            if (!currentTabId) return;
+            if (!falsePositivePreviewToggle.checked) {
+                await tabMessage(currentTabId, { action: 'clearFalconActionPreview' });
+                return;
+            }
+            const response = await runtimeMessage({
+                action: 'getFalconActionRecords',
+                tabId: currentTabId,
+                includeRestored: false
+            });
+            await previewFalconActions(response?.records || []);
+        });
+    }
+
+    if (btnAiSelectAllCandidates) {
+        btnAiSelectAllCandidates.addEventListener('click', () => {
+            if (!aiCandidatesList) return;
+            aiCandidatesList.querySelectorAll('.ai-candidate-checkbox:not(:disabled)').forEach((input) => {
+                input.checked = true;
+            });
+        });
+    }
+
+    if (btnAiAcceptSelectedCandidates) {
+        btnAiAcceptSelectedCandidates.addEventListener('click', async () => {
+            await acceptSelectedAiCandidates();
+        });
+    }
+
     if (blockingLevelSelect) {
         blockingLevelSelect.addEventListener('change', async () => {
             const targetLevel = normalizeBlockingLevel(blockingLevelSelect.value);
@@ -1675,6 +1859,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnResetAi) btnResetAi.disabled = disabled;
         if (btnDowngradeHost) btnDowngradeHost.disabled = disabled || !currentDomain;
         if (btnScanFalsePositive) btnScanFalsePositive.disabled = disabled || !currentTabId;
+        if (falsePositivePreviewToggle) falsePositivePreviewToggle.disabled = disabled || !currentTabId;
+        if (btnAiSelectAllCandidates) btnAiSelectAllCandidates.disabled = disabled;
+        if (btnAiAcceptSelectedCandidates) btnAiAcceptSelectedCandidates.disabled = disabled;
         if (isPinnedWindowMode) {
             setAiPanelExpanded(true);
         } else if (disabled || aiMonitorPanel?.hidden) {
@@ -1722,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (changes.stats) {
             loadStats();
         }
-        if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
+        if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks || changes.aiGeneratedRuleCandidates || changes.aiCandidateReviewLog || changes.aiCandidatePromotionLog || changes.aiCandidateRollbackLog) {
             loadAiMonitorState();
         }
         if (changes.falconActionRecords || changes.falsePositiveObservations) {

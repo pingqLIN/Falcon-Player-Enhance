@@ -33,47 +33,6 @@
         </header>
 
         <main>
-            <section class="flow-indicator flow-guide" id="flow-indicator">
-                <div class="flow-pipeline">
-                    <span class="flow-node flow-step-card" data-step="click">
-                        <span class="flow-step-num">1</span>
-                        <span class="flow-step-illust">
-                            <img src="../assets/guide/step-click.svg" alt="" class="flow-step-img" width="52" height="52">
-                        </span>
-                        <span class="flow-dot"></span>
-                        <span class="flow-label">CLICK</span>
-                        <span class="flow-sublabel" data-i18n="popupFlowClickSub">點選播放器</span>
-                    </span>
-                    <span class="flow-wire" data-segment="0-1">
-                        <span class="flow-wire-track"></span>
-                        <span class="flow-wire-pulse"></span>
-                    </span>
-                    <span class="flow-node flow-step-card" data-step="detect">
-                        <span class="flow-step-num">2</span>
-                        <span class="flow-step-illust">
-                            <img src="../assets/guide/step-detect.svg" alt="" class="flow-step-img" width="52" height="52">
-                        </span>
-                        <span class="flow-dot"></span>
-                        <span class="flow-label">DETECT</span>
-                        <span class="flow-sublabel" data-i18n="popupFlowDetectSub">偵測與清除</span>
-                    </span>
-                    <span class="flow-wire" data-segment="1-2">
-                        <span class="flow-wire-track"></span>
-                        <span class="flow-wire-pulse"></span>
-                    </span>
-                    <span class="flow-node flow-step-card" data-step="play">
-                        <span class="flow-step-num">3</span>
-                        <span class="flow-step-illust">
-                            <img src="../assets/guide/step-play.svg" alt="" class="flow-step-img" width="52" height="52">
-                        </span>
-                        <span class="flow-dot"></span>
-                        <span class="flow-label">PLAY!</span>
-                        <span class="flow-sublabel" data-i18n="popupFlowPlaySub">安全播放</span>
-                    </span>
-                </div>
-                <div class="flow-status" id="flow-status" data-i18n="popupFlowStatusClickLock">Click target player to lock</div>
-            </section>
-
             <section class="section-group control-hub">
                 <div class="control-hub-body">
                     <div class="target-status-row">
@@ -91,28 +50,6 @@
                         <button class="ctrl-btn ctrl-btn-sm" id="btn-ab-b" data-i18n-title="popupAbBTitle" title="Set B point">B</button>
                     </section>
                 </div>
-            </section>
-
-            <section class="section-group stats-grid-section">
-                <section class="stats-grid" aria-live="polite">
-                    <div class="stat-item">
-                        <span class="stat-value" id="overlays-removed">0</span>
-                        <span class="stat-label" data-i18n="popupStatsOverlays">Overlays</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="popups-blocked">0</span>
-                        <span class="stat-label" data-i18n="popupStatsPopups">Popups</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="fake-videos-removed">0</span>
-                        <span class="stat-label" data-i18n="popupStatsFakeVideos">Fake videos</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="players-protected">0</span>
-                        <span class="stat-label" data-i18n="popupStatsProtected">Protected</span>
-                    </div>
-                </section>
-                <div class="stats-empty-state" id="stats-empty-state" data-i18n="popupStatsEmptyFirstUse">Visit a video site to start protecting your player.</div>
             </section>
 
             <section class="section-group level-panel">
@@ -152,7 +89,13 @@
             <section class="section-group rescue-panel" id="false-positive-rescue-panel">
                 <div class="section-header">
                     <h2 class="section-title"><span data-i18n="popupFalsePositiveRescueTitle">False positive rescue</span></h2>
-                    <button class="rescan-btn rescue-scan-btn" id="btn-scan-false-positive" data-i18n="popupFalsePositiveScanPage" data-i18n-title="popupFalsePositiveScanPageTitle" title="Scan current page">Scan page</button>
+                    <div class="section-header-actions">
+                        <label class="rescue-preview-toggle" data-i18n-title="popupFalsePositivePreviewTitle" title="Preview restored elements temporarily">
+                            <input type="checkbox" id="false-positive-preview-toggle" aria-label="Preview restored elements">
+                            <span data-i18n="popupFalsePositivePreviewToggle">Preview</span>
+                        </label>
+                        <button class="rescan-btn rescue-scan-btn" id="btn-scan-false-positive" data-i18n="popupFalsePositiveScanPage" data-i18n-title="popupFalsePositiveScanPageTitle" title="Scan current page">Scan page</button>
+                    </div>
                 </div>
                 <div class="rescue-summary" id="false-positive-rescue-summary" data-i18n="popupFalsePositiveRescueEmpty">Scan the current page to find reversible blocking actions.</div>
                 <div class="rescue-list" id="false-positive-rescue-list">
@@ -206,6 +149,20 @@
                             <div class="ai-gate-evidence-list" id="ai-gate-evidence-list">
                                 <span class="ai-gate-action-chip" data-i18n="popupAiEvidenceClean">This site looks clean so far.</span>
                             </div>
+                        </div>
+                    </div>
+                    <div class="ai-candidates-card">
+                        <div class="ai-candidates-header">
+                            <span data-i18n="popupAiCandidatesHeader">Generated candidates</span>
+                            <span class="ai-candidates-count" id="ai-candidates-count">0</span>
+                        </div>
+                        <div class="ai-candidates-summary" id="ai-candidates-summary" data-i18n="popupAiCandidatesEmpty">No generated candidates yet.</div>
+                        <div class="ai-candidates-actions">
+                            <button class="rescan-btn ai-action-btn" id="btn-ai-select-all-candidates" data-i18n="popupAiCandidatesSelectAll">Select all</button>
+                            <button class="rescan-btn ai-action-btn" id="btn-ai-accept-selected-candidates" data-i18n="popupAiCandidatesAcceptSelected">Accept selected</button>
+                        </div>
+                        <div class="ai-candidates-list" id="ai-candidates-list">
+                            <div class="rescue-empty" data-i18n="popupAiCandidatesEmpty">No generated candidates yet.</div>
                         </div>
                     </div>
                     <div class="ai-actions">

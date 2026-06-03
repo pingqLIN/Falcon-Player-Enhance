@@ -382,6 +382,62 @@
         target.removeAttribute('data-shield-hidden');
         target.removeAttribute('data-shield-removed');
         target.setAttribute(RESCUED_ATTRIBUTE, actionId);
+        clearFalconActionPreview();
+        return true;
+    }
+
+    let previewCleanupTimer = null;
+
+    function clearFalconActionPreview() {
+        document.querySelectorAll('[data-shield-rescue-preview="1"]').forEach((element) => {
+            if (!(element instanceof HTMLElement)) return;
+            element.style.outline = element.dataset.shieldPreviewOutline || '';
+            element.style.outlineOffset = element.dataset.shieldPreviewOutlineOffset || '';
+            element.style.opacity = element.dataset.shieldPreviewOpacity || '';
+            element.style.boxShadow = element.dataset.shieldPreviewBoxShadow || '';
+            element.style.transition = element.dataset.shieldPreviewTransition || '';
+            element.removeAttribute('data-shield-rescue-preview');
+            delete element.dataset.shieldPreviewOutline;
+            delete element.dataset.shieldPreviewOutlineOffset;
+            delete element.dataset.shieldPreviewOpacity;
+            delete element.dataset.shieldPreviewBoxShadow;
+            delete element.dataset.shieldPreviewTransition;
+        });
+        if (previewCleanupTimer) {
+            clearTimeout(previewCleanupTimer);
+            previewCleanupTimer = null;
+        }
+    }
+
+    function previewFalconAction(record = {}, options = {}) {
+        const actionId = String(record.id || '').trim();
+        const selector = String(record.selector || '').trim();
+        let target = actionId ? document.querySelector(`[${ACTION_ATTRIBUTE}="${CSS.escape(actionId)}"]`) : null;
+        if (!target && selector) {
+            try {
+                target = document.querySelector(selector);
+            } catch (_) {
+                target = null;
+            }
+        }
+        if (!(target instanceof HTMLElement)) return false;
+        if (target.getAttribute('data-shield-rescue-preview') !== '1') {
+            target.dataset.shieldPreviewOutline = target.style.outline || '';
+            target.dataset.shieldPreviewOutlineOffset = target.style.outlineOffset || '';
+            target.dataset.shieldPreviewOpacity = target.style.opacity || '';
+            target.dataset.shieldPreviewBoxShadow = target.style.boxShadow || '';
+            target.dataset.shieldPreviewTransition = target.style.transition || '';
+        }
+        target.setAttribute('data-shield-rescue-preview', '1');
+        target.style.transition = 'opacity 140ms ease, outline-color 140ms ease, box-shadow 140ms ease';
+        target.style.opacity = '0.48';
+        target.style.outline = '2px solid rgba(255, 133, 27, 0.95)';
+        target.style.outlineOffset = '2px';
+        target.style.boxShadow = '0 0 0 9999px rgba(255, 133, 27, 0.10)';
+        if (previewCleanupTimer) clearTimeout(previewCleanupTimer);
+        if (options.persistent !== true) {
+            previewCleanupTimer = setTimeout(clearFalconActionPreview, Math.max(800, Number(options.durationMs || 3500)));
+        }
         return true;
     }
 
@@ -1000,6 +1056,18 @@
         if (request.action === 'rescueFalconAction') {
             const restored = rescueOverlayAction(request.record || {});
             sendResponse({ success: restored, restored });
+            return true;
+        }
+
+        if (request.action === 'previewFalconAction') {
+            const previewed = previewFalconAction(request.record || {}, request);
+            sendResponse({ success: previewed, previewed });
+            return true;
+        }
+
+        if (request.action === 'clearFalconActionPreview') {
+            clearFalconActionPreview();
+            sendResponse({ success: true });
             return true;
         }
 

@@ -319,7 +319,74 @@
         if (!(target instanceof HTMLElement)) return false;
         target.setAttribute(RESCUED_ATTRIBUTE, actionId);
         target.removeAttribute(ACTION_ATTRIBUTE);
+        clearFalconActionPreview();
         injectStyles();
+        return true;
+    }
+
+    let previewCleanupTimer = null;
+
+    function clearFalconActionPreview() {
+        document.querySelectorAll('[data-shield-rescue-preview="1"]').forEach((element) => {
+            if (!(element instanceof HTMLElement)) return;
+            element.style.outline = element.dataset.shieldPreviewOutline || '';
+            element.style.outlineOffset = element.dataset.shieldPreviewOutlineOffset || '';
+            element.style.opacity = element.dataset.shieldPreviewOpacity || '';
+            element.style.boxShadow = element.dataset.shieldPreviewBoxShadow || '';
+            element.style.transition = element.dataset.shieldPreviewTransition || '';
+            element.removeAttribute('data-shield-rescue-preview');
+            delete element.dataset.shieldPreviewOutline;
+            delete element.dataset.shieldPreviewOutlineOffset;
+            delete element.dataset.shieldPreviewOpacity;
+            delete element.dataset.shieldPreviewBoxShadow;
+            delete element.dataset.shieldPreviewTransition;
+        });
+        if (previewCleanupTimer) {
+            clearTimeout(previewCleanupTimer);
+            previewCleanupTimer = null;
+        }
+    }
+
+    function findFalconActionTarget(record = {}) {
+        const actionId = String(record.id || '').trim();
+        const selector = String(record.selector || '').trim();
+        let target = null;
+        if (actionId) {
+            target = document.querySelector(`[${ACTION_ATTRIBUTE}="${CSS.escape(actionId)}"]`);
+        }
+        if (!target && selector) {
+            try {
+                const candidates = Array.from(document.querySelectorAll(selector));
+                const elementIndex = Number(record.elementIndex ?? -1);
+                target = elementIndex >= 0 ? candidates[elementIndex] : candidates[0];
+            } catch (_) {
+                target = null;
+            }
+        }
+        return target instanceof HTMLElement ? target : null;
+    }
+
+    function previewFalconAction(record = {}, options = {}) {
+        const target = findFalconActionTarget(record);
+        if (!target) return false;
+        if (target.getAttribute('data-shield-rescue-preview') !== '1') {
+            target.dataset.shieldPreviewOutline = target.style.outline || '';
+            target.dataset.shieldPreviewOutlineOffset = target.style.outlineOffset || '';
+            target.dataset.shieldPreviewOpacity = target.style.opacity || '';
+            target.dataset.shieldPreviewBoxShadow = target.style.boxShadow || '';
+            target.dataset.shieldPreviewTransition = target.style.transition || '';
+        }
+        target.setAttribute('data-shield-rescue-preview', '1');
+        target.style.transition = 'opacity 140ms ease, outline-color 140ms ease, box-shadow 140ms ease';
+        target.style.opacity = '0.48';
+        target.style.outline = '2px solid rgba(255, 133, 27, 0.95)';
+        target.style.outlineOffset = '2px';
+        target.style.boxShadow = '0 0 0 9999px rgba(255, 133, 27, 0.10)';
+
+        if (previewCleanupTimer) clearTimeout(previewCleanupTimer);
+        if (options.persistent !== true) {
+            previewCleanupTimer = setTimeout(clearFalconActionPreview, Math.max(800, Number(options.durationMs || 3500)));
+        }
         return true;
     }
 
@@ -355,6 +422,22 @@
             } catch (error) {
                 sendResponse({ success: false, error: String(error?.message || error), restored: false });
             }
+            return true;
+        }
+
+        if (request.action === 'previewFalconAction') {
+            try {
+                const previewed = previewFalconAction(request.record || {}, request);
+                sendResponse({ success: previewed, previewed });
+            } catch (error) {
+                sendResponse({ success: false, error: String(error?.message || error), previewed: false });
+            }
+            return true;
+        }
+
+        if (request.action === 'clearFalconActionPreview') {
+            clearFalconActionPreview();
+            sendResponse({ success: true });
             return true;
         }
 
