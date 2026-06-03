@@ -40,6 +40,17 @@ def open_dashboard_page(context, extension_id: str, timeout_ms: int):
     return page
 
 
+def open_popup_page(context, extension_id: str, tab_id: int, timeout_ms: int):
+    page = context.new_page()
+    page.goto(
+        f"chrome-extension://{extension_id}/popup/popup.html?pinned=1&tabId={tab_id}",
+        wait_until="domcontentloaded",
+        timeout=timeout_ms,
+    )
+    page.wait_for_timeout(800)
+    return page
+
+
 def seed_hidden_rule(extension_page, hostname: str) -> None:
     extension_page.evaluate(
         """async ({ hostname }) => {
@@ -137,11 +148,11 @@ def build_report(
     checks = {
         "targetInitiallyHidden": hidden_state.get("display") == "none" or hidden_state.get("visibility") == "hidden",
         "actionCollected": len(records) >= 1 and records[0].get("selector") == ".blocked-cta",
-        "rescueSucceeded": rescue_response.get("success") is True,
+        "rescueSucceeded": rescue_response.get("popupRestoreClicked") is True,
         "targetMarkedRescued": bool(final_state.get("rescued")),
         "targetVisibleAfterRescue": final_state.get("display") != "none" and final_state.get("visibility") != "hidden",
         "clickWorksAfterRescue": int(final_state.get("metrics", {}).get("checkoutClicks", 0)) == 1,
-        "falsePositiveReported": report_response.get("success") is True,
+        "falsePositiveReported": report_response.get("popupReportClicked") is True,
         "observationPersisted": len(observations) >= 1 and observations[0].get("selector") == ".blocked-cta",
     }
 
@@ -190,34 +201,23 @@ def main() -> int:
                 page.wait_for_timeout(1000)
 
                 hidden_state = button_state(page)
-                collected = tab_message(extension_page, target_url, {"action": "collectFalconActions"})
-                records = collected.get("records", [])
-                action_id = records[0].get("id") if records else ""
-                if not action_id:
-                    raise RuntimeError(f"missing_action_record:{collected}")
-
-                rescue_response = runtime_message(extension_page, {
-                    "action": "rescueFalconAction",
-                    "actionId": action_id,
+                popup_page = open_popup_page(context, extension_id, int(inject_result["tabId"]), args.timeout_ms)
+                popup_page.locator("#btn-scan-false-positive").click()
+                popup_page.locator(".rescue-item").first.wait_for(state="attached", timeout=args.timeout_ms)
+                collected = runtime_message(extension_page, {
+                    "action": "getFalconActionRecords",
+                    "tabId": int(inject_result["tabId"]),
+                    "includeRestored": False,
                 })
+                popup_page.locator(".rescue-report-btn").first.click()
+                popup_page.wait_for_timeout(500)
+                report_response = {"popupReportClicked": True}
+                popup_page.locator(".rescue-restore-btn").first.click()
+                popup_page.wait_for_timeout(500)
+                rescue_response = {"popupRestoreClicked": True}
                 page.wait_for_timeout(500)
                 page.locator("#checkout-button").click()
                 final_state = button_state(page)
-
-                report_response = runtime_message(extension_page, {
-                    "action": "reportFalsePositive",
-                    "observation": {
-                        "actionId": action_id,
-                        "hostname": "127.0.0.1",
-                        "pageUrl": target_url,
-                        "selector": ".blocked-cta",
-                        "source": "regression",
-                        "reason": "rescued_click_target",
-                        "result": {
-                            "userConfirmed": True
-                        }
-                    },
-                })
                 observations_response = runtime_message(extension_page, {
                     "action": "getFalsePositiveObservations",
                     "hostname": "127.0.0.1",

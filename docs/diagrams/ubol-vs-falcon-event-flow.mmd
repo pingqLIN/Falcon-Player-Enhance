@@ -1,0 +1,19 @@
+flowchart TD
+    A[User clicks fake play button] --> B[Navigation popup overlay iframe events]
+
+    B --> U1[uBOL Lite browser DNR engine]
+    U1 --> U2{Compiled rule matches}
+    U2 -->|Yes| U3[Browser blocks redirects or hides by cosmetic rule]
+    U2 -->|No| U4[Request or element passes unless another rule matches]
+    U4 --> U5[New coverage waits for filter list update]
+
+    B --> F1[Falcon content scripts observe runtime behavior]
+    F1 --> F2[Deterministic rules handle known traps]
+    F2 --> F3[Telemetry updates host risk profile]
+    F3 --> F4[AI provider synthesizes advisory]
+    F4 --> F5[Candidate selectors domains actions]
+    F5 --> F6{Policy Gate}
+    F6 -->|T1| F7[Advisory only]
+    F6 -->|T2| F8[Temporary reversible hardening]
+    F6 -->|T3| F9[Development review and rule promotion]
+    F8 --> F10[No durable runtime mutation]

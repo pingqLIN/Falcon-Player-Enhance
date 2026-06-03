@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnExportAi = document.getElementById('btn-export-ai');
     const btnResetAi = document.getElementById('btn-reset-ai');
     const btnDowngradeHost = document.getElementById('btn-downgrade-host');
+    const falsePositiveRescueSummary = document.getElementById('false-positive-rescue-summary');
+    const falsePositiveRescueList = document.getElementById('false-positive-rescue-list');
+    const btnScanFalsePositive = document.getElementById('btn-scan-false-positive');
     const statsEmptyState = document.getElementById('stats-empty-state');
 
     let currentDomain = '';
@@ -105,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startAutoScan({ immediate: false });
         await loadStats();
         await loadAiMonitorState();
+        await loadFalsePositiveRescueRecords();
         setupShortcutsReference();
         setupAiPanelAutoPeek();
     }
@@ -582,6 +586,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnDowngradeHost) {
                     btnDowngradeHost.disabled = masterToggle.checked === false || !currentDomain;
                 }
+                if (btnScanFalsePositive) {
+                    btnScanFalsePositive.disabled = masterToggle.checked === false || !currentTabId;
+                }
                 return;
             }
 
@@ -599,6 +606,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (btnDowngradeHost) {
             btnDowngradeHost.disabled = masterToggle.checked === false || !currentDomain;
+        }
+        if (btnScanFalsePositive) {
+            btnScanFalsePositive.disabled = masterToggle.checked === false || !currentTabId;
         }
     }
 
@@ -1059,6 +1069,120 @@ document.addEventListener('DOMContentLoaded', () => {
                 resolve(response || null);
             });
         });
+    }
+
+    function tabMessage(tabId, message) {
+        return new Promise((resolve) => {
+            if (!tabId) {
+                resolve(null);
+                return;
+            }
+            chrome.tabs.sendMessage(tabId, message, (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve(null);
+                    return;
+                }
+                resolve(response || null);
+            });
+        });
+    }
+
+    function formatActionRecordMeta(record = {}) {
+        const action = formatPolicyGateAction(record.action || 'blocked');
+        const sourceParts = [record.source, record.reason].filter(Boolean);
+        return [action, ...sourceParts].join(' · ');
+    }
+
+    function renderFalsePositiveRescueRecords(records = [], source = '') {
+        if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
+
+        const list = Array.isArray(records) ? records : [];
+        if (list.length === 0) {
+            const message = source === 'scan'
+                ? t('popupFalsePositiveNoActions')
+                : t('popupFalsePositiveRescueEmpty');
+            falsePositiveRescueSummary.textContent = message;
+            falsePositiveRescueList.innerHTML = `<div class="rescue-empty">${escapeHtml(message)}</div>`;
+            return;
+        }
+
+        falsePositiveRescueSummary.textContent = t('popupFalsePositiveActionCount', [String(list.length)]);
+        falsePositiveRescueList.innerHTML = '';
+
+        list.forEach((record) => {
+            const item = document.createElement('div');
+            item.className = 'rescue-item';
+            item.innerHTML = `
+                <div class="rescue-selector" title="${escapeHtml(record.selector || '')}">${escapeHtml(record.selector || '(no selector)')}</div>
+                <div class="rescue-meta">${escapeHtml(formatActionRecordMeta(record))}</div>
+                <div class="rescue-item-actions">
+                    <button class="rescan-btn rescue-restore-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveRestoreOnce')}</button>
+                    <button class="rescan-btn rescue-report-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveReport')}</button>
+                </div>
+            `;
+            falsePositiveRescueList.appendChild(item);
+        });
+
+        falsePositiveRescueList.querySelectorAll('.rescue-restore-btn').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const response = await runtimeMessage({
+                    action: 'rescueFalconAction',
+                    actionId: button.dataset.actionId
+                });
+                if (!response?.success) {
+                    falsePositiveRescueSummary.textContent = response?.error || t('popupFalsePositiveUpdateFailed');
+                    return;
+                }
+                await loadFalsePositiveRescueRecords('scan');
+            });
+        });
+
+        falsePositiveRescueList.querySelectorAll('.rescue-report-btn').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const record = list.find((item) => item.id === button.dataset.actionId);
+                if (!record) return;
+                const response = await runtimeMessage({
+                    action: 'reportFalsePositive',
+                    observation: {
+                        actionId: record.id,
+                        hostname: record.hostname || currentDomain,
+                        pageUrl: record.pageUrl,
+                        selector: record.selector,
+                        source: 'popup_manual_rescue',
+                        reason: 'user_restored_click_target',
+                        signatureHash: record.signatureHash,
+                        result: {
+                            userConfirmed: true
+                        }
+                    }
+                });
+                falsePositiveRescueSummary.textContent = response?.success
+                    ? t('popupFalsePositiveReported')
+                    : (response?.error || t('popupFalsePositiveUpdateFailed'));
+            });
+        });
+    }
+
+    async function loadFalsePositiveRescueRecords(source = '') {
+        if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
+        if (!currentTabId) {
+            renderFalsePositiveRescueRecords([], source);
+            return;
+        }
+
+        const response = await runtimeMessage({
+            action: 'getFalconActionRecords',
+            tabId: currentTabId,
+            includeRestored: false
+        });
+        renderFalsePositiveRescueRecords(response?.records || [], source);
+    }
+
+    async function scanCurrentPageForFalsePositives() {
+        if (!falsePositiveRescueSummary || !currentTabId) return;
+        falsePositiveRescueSummary.textContent = t('popupFalsePositiveScanning');
+        await tabMessage(currentTabId, { action: 'collectFalconActions' });
+        await loadFalsePositiveRescueRecords('scan');
     }
 
     async function setBlockingLevel(level, options = {}) {
@@ -1523,6 +1647,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (btnScanFalsePositive) {
+        btnScanFalsePositive.addEventListener('click', async () => {
+            await scanCurrentPageForFalsePositives();
+        });
+    }
+
     if (blockingLevelSelect) {
         blockingLevelSelect.addEventListener('change', async () => {
             const targetLevel = normalizeBlockingLevel(blockingLevelSelect.value);
@@ -1544,6 +1674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnExportAi) btnExportAi.disabled = disabled;
         if (btnResetAi) btnResetAi.disabled = disabled;
         if (btnDowngradeHost) btnDowngradeHost.disabled = disabled || !currentDomain;
+        if (btnScanFalsePositive) btnScanFalsePositive.disabled = disabled || !currentTabId;
         if (isPinnedWindowMode) {
             setAiPanelExpanded(true);
         } else if (disabled || aiMonitorPanel?.hidden) {
@@ -1593,6 +1724,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
             loadAiMonitorState();
+        }
+        if (changes.falconActionRecords || changes.falsePositiveObservations) {
+            loadFalsePositiveRescueRecords();
         }
         if (changes.blockingLevel) {
             blockingLevel = normalizeBlockingLevel(changes.blockingLevel.newValue);
