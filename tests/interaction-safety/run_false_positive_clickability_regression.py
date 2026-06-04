@@ -20,7 +20,7 @@ import run_popup_smoke as smoke  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Verify false-positive rescue can restore a single blocked click target."
+        description="Verify false-positive rescue can temporarily and permanently restore clickability."
     )
     parser.add_argument("--extension-dir", default=str(smoke.DEFAULT_EXTENSION_DIR))
     parser.add_argument("--browser-channel", default="chromium")
@@ -51,20 +51,102 @@ def open_popup_page(context, extension_id: str, tab_id: int, timeout_ms: int):
     return page
 
 
-def seed_hidden_rule(extension_page, hostname: str) -> None:
+def seed_clickability_record(extension_page, tab_id: int, target_url: str, hostname: str, action_id: str) -> None:
     extension_page.evaluate(
-        """async ({ hostname }) => {
+        """async ({ tabId, targetUrl, hostname, actionId }) => {
+            const now = Date.now();
             await chrome.storage.local.set({
-                hiddenElements: [{
-                    selector: ".blocked-cta",
+                falconActionRecords: [{
+                    id: actionId,
+                    tabId,
+                    frameId: 0,
                     hostname,
-                    timestamp: Date.now()
+                    pageUrl: targetUrl,
+                    selector: "#billing-button",
+                    elementIndex: 0,
+                    kind: "overlay_inline_style",
+                    source: "overlay-remover",
+                    policyTier: "T1",
+                    action: "disable_pointer_events",
+                    reason: "transparent_click_overlay",
+                    createdAt: now,
+                    expiresAt: now + (30 * 60 * 1000),
+                    restoredAt: 0,
+                    restore: {
+                        display: "",
+                        visibility: "",
+                        pointerEvents: ""
+                    },
+                    signature: {
+                        role: "button",
+                        textSample: "Open billing settings",
+                        hash: "clickability-regression"
+                    },
+                    signatureHash: "clickability-regression"
                 }],
-                falconActionRecords: [],
                 falsePositiveObservations: []
             });
         }""",
-        {"hostname": hostname},
+        {
+            "tabId": tab_id,
+            "targetUrl": target_url,
+            "hostname": hostname,
+            "actionId": action_id,
+        },
+    )
+
+
+def inject_overlay_remover(extension_page, target_url: str) -> dict[str, object]:
+    return extension_page.evaluate(
+        """async ({ targetUrl }) => {
+            const tabs = await chrome.tabs.query({});
+            const targetTab = tabs.find((tab) => tab.url === targetUrl);
+            if (!targetTab?.id) {
+                return { success: false, error: "target_tab_missing" };
+            }
+
+            await chrome.scripting.executeScript({
+                target: { tabId: targetTab.id },
+                files: ["content/overlay-remover.js"]
+            });
+            return { success: true, tabId: targetTab.id };
+        }""",
+        {"targetUrl": target_url},
+    )
+
+
+def prepare_click_blocked_button(page, action_id: str) -> None:
+    page.evaluate(
+        """({ actionId }) => {
+            const button = document.getElementById("billing-button");
+            button.setAttribute("data-shield-action-id", actionId);
+            button.dataset.shieldRestoreDisplay = "";
+            button.dataset.shieldRestoreVisibility = "";
+            button.dataset.shieldRestorePointerEvents = "";
+            button.style.pointerEvents = "none";
+        }""",
+        {"actionId": action_id},
+    )
+
+
+def button_state(page) -> dict[str, object]:
+    return page.evaluate(
+        """() => {
+            const button = document.getElementById("billing-button");
+            const style = window.getComputedStyle(button);
+            return {
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
+                pointerEvents: style.pointerEvents,
+                outlineStyle: style.outlineStyle,
+                outlineColor: style.outlineColor,
+                preview: button.getAttribute("data-shield-rescue-preview") || "",
+                rescued: button.getAttribute("data-shield-rescued") || "",
+                actionId: button.getAttribute("data-shield-action-id") || "",
+                metrics: { ...(window.__falconClickabilityMetrics || {}) }
+            };
+        }"""
     )
 
 
@@ -77,101 +159,40 @@ def runtime_message(page, payload: dict[str, object]) -> dict[str, object]:
     )
 
 
-def tab_message(extension_page, target_url: str, payload: dict[str, object]) -> dict[str, object]:
-    return extension_page.evaluate(
-        """async ({ targetUrl, payload }) => {
-            const tabs = await chrome.tabs.query({});
-            const targetTab = tabs.find((tab) => tab.url === targetUrl);
-            if (!targetTab?.id) {
-                return { success: false, error: 'target_tab_missing' };
-            }
-
-            return await new Promise((resolve) => {
-                chrome.tabs.sendMessage(targetTab.id, payload, (response) => {
-                    resolve({
-                        ...(response || {}),
-                        tabId: targetTab.id,
-                        lastError: chrome.runtime.lastError?.message || null
-                    });
-                });
-            });
-        }""",
-        {"targetUrl": target_url, "payload": payload},
-    )
-
-
-def inject_cosmetic_filter(extension_page, target_url: str) -> dict[str, object]:
-    return extension_page.evaluate(
-        """async ({ targetUrl }) => {
-            const tabs = await chrome.tabs.query({});
-            const targetTab = tabs.find((tab) => tab.url === targetUrl);
-            if (!targetTab?.id) {
-                return { success: false, error: 'target_tab_missing' };
-            }
-
-            await chrome.scripting.executeScript({
-                target: { tabId: targetTab.id },
-                files: ['content/cosmetic-filter.js']
-            });
-            return { success: true, tabId: targetTab.id };
-        }""",
-        {"targetUrl": target_url},
-    )
-
-
-def button_state(page) -> dict[str, object]:
-    return page.evaluate(
-        """() => {
-            const button = document.getElementById('checkout-button');
-            const style = window.getComputedStyle(button);
-            return {
-                display: style.display,
-                visibility: style.visibility,
-                opacity: style.opacity,
-                outlineStyle: style.outlineStyle,
-                outlineColor: style.outlineColor,
-                preview: button.getAttribute('data-shield-rescue-preview') || '',
-                rescued: button.getAttribute('data-shield-rescued') || '',
-                actionId: button.getAttribute('data-shield-action-id') || '',
-                metrics: { ...(window.__falconRescueMetrics || {}) }
-            };
-        }"""
-    )
-
-
 def build_report(
-    hidden_state: dict[str, object],
+    initial_state: dict[str, object],
     preview_state: dict[str, object],
-    collected: dict[str, object],
+    preview_cleared_state: dict[str, object],
     rescue_response: dict[str, object],
     report_response: dict[str, object],
     final_state: dict[str, object],
     observations_response: dict[str, object],
 ) -> dict[str, object]:
-    records = collected.get("records", []) if isinstance(collected, dict) else []
     observations = observations_response.get("observations", []) if isinstance(observations_response, dict) else []
     checks = {
-        "targetInitiallyHidden": hidden_state.get("display") == "none" or hidden_state.get("visibility") == "hidden",
-        "actionCollected": len(records) >= 1 and records[0].get("selector") == ".blocked-cta",
+        "targetInitiallyVisible": initial_state.get("display") != "none" and initial_state.get("visibility") != "hidden",
+        "targetInitiallyNotClickable": initial_state.get("pointerEvents") == "none",
         "previewMarkedTarget": preview_state.get("preview") == "1",
-        "previewUsesTemporaryStyling": preview_state.get("opacity") == "0.72"
-            and preview_state.get("outlineStyle") not in ("", "none"),
+        "previewRestoresPointerEvents": preview_state.get("pointerEvents") == "auto",
+        "previewUsesTemporaryStyling": preview_state.get("outlineStyle") not in ("", "none"),
+        "previewAllowsTemporaryClick": int(preview_state.get("metrics", {}).get("billingClicks", 0)) == 1,
+        "previewAutoClears": preview_cleared_state.get("preview") == "" and preview_cleared_state.get("pointerEvents") == "none",
         "rescueSucceeded": rescue_response.get("popupRestoreClicked") is True,
         "targetMarkedRescued": bool(final_state.get("rescued")),
-        "targetVisibleAfterRescue": final_state.get("display") != "none" and final_state.get("visibility") != "hidden",
-        "previewClearedAfterRescue": final_state.get("preview") == "" and final_state.get("opacity") == "1",
-        "clickWorksAfterRescue": int(final_state.get("metrics", {}).get("checkoutClicks", 0)) == 1,
+        "targetClickableAfterRescue": final_state.get("pointerEvents") == "auto",
+        "previewClearedAfterRescue": final_state.get("preview") == "",
+        "clickWorksAfterRescue": int(final_state.get("metrics", {}).get("billingClicks", 0)) == 2,
         "falsePositiveReported": report_response.get("popupReportClicked") is True,
-        "observationPersisted": len(observations) >= 1 and observations[0].get("selector") == ".blocked-cta",
+        "observationPersisted": len(observations) >= 1 and observations[0].get("selector") == "#billing-button",
     }
 
     return {
         "ok": all(checks.values()),
         "checks": checks,
         "samples": {
-            "hiddenState": hidden_state,
+            "initialState": initial_state,
             "previewState": preview_state,
-            "collected": collected,
+            "previewClearedState": preview_cleared_state,
             "rescueResponse": rescue_response,
             "reportResponse": report_response,
             "finalState": final_state,
@@ -185,7 +206,7 @@ def main() -> int:
     extension_dir = Path(args.extension_dir).resolve()
     server = smoke.StaticServer(REPO_ROOT / "tests")
     server.start()
-    profile_dir = Path(tempfile.mkdtemp(prefix="falcon-fp-rescue-"))
+    profile_dir = Path(tempfile.mkdtemp(prefix="falcon-fp-clickability-"))
 
     try:
         with sync_playwright() as playwright:
@@ -200,47 +221,55 @@ def main() -> int:
                 smoke.wait_for_extension_ready(context, args.timeout_ms)
 
                 extension_page = open_dashboard_page(context, extension_id, args.timeout_ms)
-                seed_hidden_rule(extension_page, "127.0.0.1")
-
-                target_url = f"{server.base_url}/test-false-positive-rescue.html"
+                target_url = f"{server.base_url}/test-false-positive-clickability.html"
                 page = context.new_page()
                 page.goto(target_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
-                inject_result = inject_cosmetic_filter(extension_page, target_url)
+                inject_result = inject_overlay_remover(extension_page, target_url)
                 if not inject_result.get("success"):
-                    raise RuntimeError(f"inject_cosmetic_filter_failed:{inject_result}")
-                page.wait_for_timeout(1000)
+                    raise RuntimeError(f"inject_overlay_remover_failed:{inject_result}")
 
-                hidden_state = button_state(page)
+                action_id = "act-clickability-regression"
+                prepare_click_blocked_button(page, action_id)
+                seed_clickability_record(
+                    extension_page,
+                    int(inject_result["tabId"]),
+                    target_url,
+                    "127.0.0.1",
+                    action_id,
+                )
+
+                initial_state = button_state(page)
                 popup_page = open_popup_page(context, extension_id, int(inject_result["tabId"]), args.timeout_ms)
-                popup_page.locator("#btn-scan-false-positive").click()
                 popup_page.locator(".rescue-item").first.wait_for(state="attached", timeout=args.timeout_ms)
-                collected = runtime_message(extension_page, {
-                    "action": "getFalconActionRecords",
-                    "tabId": int(inject_result["tabId"]),
-                    "includeRestored": False,
-                })
+
                 popup_page.locator(".rescue-preview-btn").first.click()
-                page.wait_for_timeout(300)
+                page.wait_for_timeout(350)
+                page.locator("#billing-button").click()
                 preview_state = button_state(page)
+
+                page.wait_for_timeout(7300)
+                preview_cleared_state = button_state(page)
+
                 popup_page.locator(".rescue-report-btn").first.click()
                 page.wait_for_timeout(500)
                 report_response = {"popupReportClicked": True}
+
                 popup_page.locator(".rescue-restore-btn").first.click()
                 page.wait_for_timeout(500)
                 rescue_response = {"popupRestoreClicked": True}
-                page.wait_for_timeout(500)
-                page.locator("#checkout-button").click()
+
+                page.locator("#billing-button").click()
                 final_state = button_state(page)
                 observations_response = runtime_message(extension_page, {
                     "action": "getFalsePositiveObservations",
                     "hostname": "127.0.0.1",
-                    "selector": ".blocked-cta",
+                    "selector": "#billing-button",
                 })
 
                 report = build_report(
-                    hidden_state,
+                    initial_state,
                     preview_state,
-                    collected,
+                    preview_cleared_state,
                     rescue_response,
                     report_response,
                     final_state,

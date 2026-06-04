@@ -510,6 +510,7 @@ kbd {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
     padding: 10px 16px;
     border-bottom: 0.5px solid var(--separator);
 }
@@ -557,9 +558,24 @@ kbd {
     color: var(--destructive);
 }
 
+.element-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.btn-hidden-preview {
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
 .false-positive-rescue-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     flex-shrink: 0;
 }
 

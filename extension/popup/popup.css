@@ -1374,10 +1374,11 @@ main::-webkit-scrollbar {
 .rescue-item-actions {
     display: flex;
     gap: 6px;
+    flex-wrap: wrap;
 }
 
 .rescue-item-actions .rescan-btn {
-    flex: 1;
+    flex: 1 1 96px;
     justify-content: center;
     padding: 4px 8px;
     font-size: 10px;

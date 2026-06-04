@@ -388,20 +388,47 @@
 
     let previewCleanupTimer = null;
 
+    function buildPreviewDataAttr(property, suffix = 'value') {
+        const normalized = String(property || '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+        return `data-shield-preview-${normalized}-${suffix}`;
+    }
+
+    function storePreviewStyleState(target, property) {
+        target.setAttribute(buildPreviewDataAttr(property), target.style.getPropertyValue(property) || '');
+        target.setAttribute(buildPreviewDataAttr(property, 'priority'), target.style.getPropertyPriority(property) || '');
+    }
+
+    function restorePreviewStyleState(target, property) {
+        const value = target.getAttribute(buildPreviewDataAttr(property)) || '';
+        const priority = target.getAttribute(buildPreviewDataAttr(property, 'priority')) || '';
+        if (value) {
+            target.style.setProperty(property, value, priority);
+        } else {
+            target.style.removeProperty(property);
+        }
+        target.removeAttribute(buildPreviewDataAttr(property));
+        target.removeAttribute(buildPreviewDataAttr(property, 'priority'));
+    }
+
+    function getFalconActionPreviewKind(record = {}) {
+        const action = String(record.action || '').trim().toLowerCase();
+        const restore = record.restore && typeof record.restore === 'object' ? record.restore : {};
+        if (action === 'disable_pointer_events') {
+            return 'interaction_blocked';
+        }
+        if (Object.prototype.hasOwnProperty.call(restore, 'pointerEvents') && !Object.prototype.hasOwnProperty.call(restore, 'display')) {
+            return 'interaction_blocked';
+        }
+        return 'hidden_element';
+    }
+
     function clearFalconActionPreview() {
         document.querySelectorAll('[data-shield-rescue-preview="1"]').forEach((element) => {
             if (!(element instanceof HTMLElement)) return;
-            element.style.outline = element.dataset.shieldPreviewOutline || '';
-            element.style.outlineOffset = element.dataset.shieldPreviewOutlineOffset || '';
-            element.style.opacity = element.dataset.shieldPreviewOpacity || '';
-            element.style.boxShadow = element.dataset.shieldPreviewBoxShadow || '';
-            element.style.transition = element.dataset.shieldPreviewTransition || '';
+            ['display', 'visibility', 'pointer-events', 'outline', 'outline-offset', 'opacity', 'box-shadow', 'transition'].forEach((property) => {
+                restorePreviewStyleState(element, property);
+            });
             element.removeAttribute('data-shield-rescue-preview');
-            delete element.dataset.shieldPreviewOutline;
-            delete element.dataset.shieldPreviewOutlineOffset;
-            delete element.dataset.shieldPreviewOpacity;
-            delete element.dataset.shieldPreviewBoxShadow;
-            delete element.dataset.shieldPreviewTransition;
         });
         if (previewCleanupTimer) {
             clearTimeout(previewCleanupTimer);
@@ -421,22 +448,34 @@
             }
         }
         if (!(target instanceof HTMLElement)) return false;
+        const previewKind = getFalconActionPreviewKind(record);
         if (target.getAttribute('data-shield-rescue-preview') !== '1') {
-            target.dataset.shieldPreviewOutline = target.style.outline || '';
-            target.dataset.shieldPreviewOutlineOffset = target.style.outlineOffset || '';
-            target.dataset.shieldPreviewOpacity = target.style.opacity || '';
-            target.dataset.shieldPreviewBoxShadow = target.style.boxShadow || '';
-            target.dataset.shieldPreviewTransition = target.style.transition || '';
+            ['display', 'visibility', 'pointer-events', 'outline', 'outline-offset', 'opacity', 'box-shadow', 'transition'].forEach((property) => {
+                storePreviewStyleState(target, property);
+            });
         }
         target.setAttribute('data-shield-rescue-preview', '1');
-        target.style.transition = 'opacity 140ms ease, outline-color 140ms ease, box-shadow 140ms ease';
-        target.style.opacity = '0.48';
-        target.style.outline = '2px solid rgba(255, 133, 27, 0.95)';
-        target.style.outlineOffset = '2px';
-        target.style.boxShadow = '0 0 0 9999px rgba(255, 133, 27, 0.10)';
+        target.style.setProperty('transition', 'opacity 140ms ease, outline-color 140ms ease, box-shadow 140ms ease', 'important');
+        target.style.setProperty('outline', '2px solid rgba(255, 133, 27, 0.95)', 'important');
+        target.style.setProperty('outline-offset', '2px', 'important');
+        target.style.setProperty('box-shadow', '0 0 0 9999px rgba(255, 133, 27, 0.10)', 'important');
+        if (previewKind === 'hidden_element') {
+            target.style.setProperty('display', target.getAttribute(buildPreviewDataAttr('display')) || 'block', 'important');
+            target.style.setProperty('visibility', 'visible', 'important');
+            target.style.setProperty('pointer-events', 'auto', 'important');
+            target.style.setProperty('opacity', '0.72', 'important');
+        } else {
+            target.style.setProperty('pointer-events', 'auto', 'important');
+            target.style.setProperty('opacity', target.getAttribute(buildPreviewDataAttr('opacity')) || '1', 'important');
+        }
         if (previewCleanupTimer) clearTimeout(previewCleanupTimer);
-        if (options.persistent !== true) {
-            previewCleanupTimer = setTimeout(clearFalconActionPreview, Math.max(800, Number(options.durationMs || 3500)));
+        const requestedDurationMs = Number(options.durationMs || 0);
+        const shouldAutoClear = !(options.persistent === true && requestedDurationMs <= 0);
+        if (shouldAutoClear) {
+            previewCleanupTimer = setTimeout(
+                clearFalconActionPreview,
+                Math.max(800, requestedDurationMs || 3500)
+            );
         }
         return true;
     }

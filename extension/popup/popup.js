@@ -1206,6 +1206,36 @@ document.addEventListener('DOMContentLoaded', () => {
         return [action, ...sourceParts].join(' · ');
     }
 
+    function getFalconRecoveryType(record = {}) {
+        const action = String(record.action || '').trim().toLowerCase();
+        const restore = record.restore && typeof record.restore === 'object' ? record.restore : {};
+        if (action === 'disable_pointer_events') {
+            return 'interaction_blocked';
+        }
+        if (Object.prototype.hasOwnProperty.call(restore, 'pointerEvents') && !Object.prototype.hasOwnProperty.call(restore, 'display')) {
+            return 'interaction_blocked';
+        }
+        return 'hidden_element';
+    }
+
+    function getFalconRecoveryLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('popupFalsePositiveTypeClickBlocked')
+            : t('popupFalsePositiveTypeHidden');
+    }
+
+    function getFalconRecoveryActionLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('popupFalsePositiveRestoreClickability')
+            : t('popupFalsePositiveRestoreVisibility');
+    }
+
+    function getFalconPreviewActionLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('popupFalsePositivePreviewClickability')
+            : t('popupFalsePositivePreviewVisibility');
+    }
+
     function renderFalsePositiveRescueRecords(records = [], source = '') {
         if (!falsePositiveRescueList || !falsePositiveRescueSummary) return;
 
@@ -1219,7 +1249,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        falsePositiveRescueSummary.textContent = t('popupFalsePositiveActionCount', [String(list.length)]);
+        const hiddenCount = list.filter((record) => getFalconRecoveryType(record) === 'hidden_element').length;
+        const clickBlockedCount = list.length - hiddenCount;
+        falsePositiveRescueSummary.textContent = t('popupFalsePositiveActionCountDetailed', [
+            String(list.length),
+            String(hiddenCount),
+            String(clickBlockedCount)
+        ]);
         falsePositiveRescueList.innerHTML = '';
 
         list.forEach((record) => {
@@ -1227,10 +1263,10 @@ document.addEventListener('DOMContentLoaded', () => {
             item.className = 'rescue-item';
             item.innerHTML = `
                 <div class="rescue-selector" title="${escapeHtml(record.selector || '')}">${escapeHtml(record.selector || '(no selector)')}</div>
-                <div class="rescue-meta">${escapeHtml(formatActionRecordMeta(record))}</div>
+                <div class="rescue-meta">${escapeHtml(getFalconRecoveryLabel(record))} · ${escapeHtml(formatActionRecordMeta(record))}</div>
                 <div class="rescue-item-actions">
-                    <button class="rescan-btn rescue-preview-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositivePreviewAction')}</button>
-                    <button class="rescan-btn rescue-restore-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveRestoreOnce')}</button>
+                    <button class="rescan-btn rescue-preview-btn" data-action-id="${escapeHtml(record.id || '')}">${escapeHtml(getFalconPreviewActionLabel(record))}</button>
+                    <button class="rescan-btn rescue-restore-btn" data-action-id="${escapeHtml(record.id || '')}">${escapeHtml(getFalconRecoveryActionLabel(record))}</button>
                     <button class="rescan-btn rescue-report-btn" data-action-id="${escapeHtml(record.id || '')}">${t('popupFalsePositiveReport')}</button>
                 </div>
             `;
@@ -1271,7 +1307,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         pageUrl: record.pageUrl,
                         selector: record.selector,
                         source: 'popup_manual_rescue',
-                        reason: 'user_restored_click_target',
+                        reason: getFalconRecoveryType(record) === 'interaction_blocked'
+                            ? 'user_restored_clickability'
+                            : 'user_restored_hidden_element',
                         signatureHash: record.signatureHash,
                         result: {
                             userConfirmed: true

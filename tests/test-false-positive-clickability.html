@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Falcon False Positive Clickability Regression</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, sans-serif;
+    }
+
+    main {
+      display: grid;
+      gap: 16px;
+      width: min(480px, calc(100vw - 48px));
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      background: #38bdf8;
+      color: #082f49;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .metrics {
+      color: #94a3b8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Account actions</h1>
+    <p>The primary button stays visible, but a false positive may remove its clickability.</p>
+    <button id="billing-button" type="button">Open billing settings</button>
+    <div class="metrics" id="metrics"></div>
+  </main>
+
+  <script>
+    window.__falconClickabilityMetrics = { billingClicks: 0 };
+
+    document.getElementById('billing-button').addEventListener('click', () => {
+      window.__falconClickabilityMetrics.billingClicks += 1;
+      renderMetrics();
+    });
+
+    function renderMetrics() {
+      document.getElementById('metrics').textContent = JSON.stringify(window.__falconClickabilityMetrics);
+    }
+
+    renderMetrics();
+  </script>
+</body>
+</html>

@@ -186,10 +186,55 @@ document.addEventListener('DOMContentLoaded', () => {
             .sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0))[0] || null;
     }
 
+    function getHostnameFromUrl(url = '') {
+        try {
+            return String(new URL(String(url || '')).hostname || '').trim().toLowerCase();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function isDomainOrSubdomain(hostname, domain) {
+        const normalizedHostname = String(hostname || '').trim().toLowerCase();
+        const normalizedDomain = String(domain || '').trim().toLowerCase();
+        if (!normalizedHostname || !normalizedDomain) return false;
+        return normalizedHostname === normalizedDomain || normalizedHostname.endsWith(`.${normalizedDomain}`);
+    }
+
     function formatPolicyGateAction(action) {
         return String(action || '')
             .replace(/_/g, ' ')
             .replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function getFalconRecoveryType(record = {}) {
+        const action = String(record.action || '').trim().toLowerCase();
+        const restore = record.restore && typeof record.restore === 'object' ? record.restore : {};
+        if (action === 'disable_pointer_events') {
+            return 'interaction_blocked';
+        }
+        if (Object.prototype.hasOwnProperty.call(restore, 'pointerEvents') && !Object.prototype.hasOwnProperty.call(restore, 'display')) {
+            return 'interaction_blocked';
+        }
+        return 'hidden_element';
+    }
+
+    function getFalconRecoveryLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('dashboardFalsePositiveTypeClickBlocked')
+            : t('dashboardFalsePositiveTypeHidden');
+    }
+
+    function getFalconRecoveryActionLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('dashboardFalsePositiveRescueRestoreClickability')
+            : t('dashboardFalsePositiveRescueRestoreVisibility');
+    }
+
+    function getFalconPreviewActionLabel(record = {}) {
+        return getFalconRecoveryType(record) === 'interaction_blocked'
+            ? t('dashboardFalsePositiveRescuePreviewClickability')
+            : t('dashboardFalsePositiveRescuePreviewVisibility');
     }
 
     function formatPolicyGateReason(reason) {
@@ -1033,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Hidden Elements Management ==========
     const hiddenElementsList = document.getElementById('hidden-elements-list');
+    const hiddenElementsSummary = document.getElementById('hidden-elements-summary');
     const falsePositiveRescueList = document.getElementById('false-positive-rescue-list');
     const falsePositiveRescueSummary = document.getElementById('false-positive-rescue-summary');
     const btnRefreshFalsePositiveRescue = document.getElementById('btn-refresh-false-positive-rescue');
@@ -1042,6 +1088,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const result = await chrome.storage.local.get(['hiddenElements']);
         const elements = result.hiddenElements || [];
+
+        if (hiddenElementsSummary) {
+            hiddenElementsSummary.textContent = elements.length > 0
+                ? t('dashboardBlockedElementsCount', [String(elements.length)])
+                : t('dashboardBlockedElementsEmpty');
+        }
 
         if (elements.length === 0) {
             hiddenElementsList.innerHTML = `<div class="empty-state">${t('dashboardEmptyNoBlockedElements')}</div>`;
@@ -1085,7 +1137,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="element-selector" title="${escapeHtml(item.selector)}">${escapeHtml(item.selector)}</span>
                         ${timeStr ? `<span class="element-meta">${t('dashboardAddedAt', [timeStr])}</span>` : ''}
                     </div>
-                    <button class="element-remove" data-index="${item.originalIndex}" title="${t('dashboardRemoveRuleTitle')}">✕</button>
+                    <div class="element-actions">
+                        <button class="btn-secondary btn-hidden-preview" data-selector="${escapeHtml(item.selector)}" data-hostname="${escapeHtml(item.hostname || '')}" title="${t('dashboardBlockedElementsPreviewTitle')}">${t('dashboardBlockedElementsPreview')}</button>
+                        <button class="element-remove" data-index="${item.originalIndex}" title="${t('dashboardRemoveRuleTitle')}">✕</button>
+                    </div>
                 `;
                 groupDiv.appendChild(itemDiv);
             });
@@ -1098,6 +1153,38 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', async () => {
                 const index = parseInt(btn.dataset.index, 10);
                 await removeHiddenElement(index);
+            });
+        });
+
+        hiddenElementsList.querySelectorAll('.btn-hidden-preview').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const selector = String(button.dataset.selector || '').trim();
+                const ruleHostname = String(button.dataset.hostname || '').trim().toLowerCase();
+                if (!selector) return;
+                const activeTab = await getActiveTab();
+                if (!activeTab?.id) {
+                    if (hiddenElementsSummary) hiddenElementsSummary.textContent = t('dashboardBlockedElementsPreviewNoTab');
+                    return;
+                }
+                const activeHostname = getHostnameFromUrl(activeTab.url || '');
+                if (ruleHostname && activeHostname && !isDomainOrSubdomain(activeHostname, ruleHostname)) {
+                    if (hiddenElementsSummary) {
+                        hiddenElementsSummary.textContent = t('dashboardBlockedElementsPreviewHostMismatch', [ruleHostname]);
+                    }
+                    return;
+                }
+                const response = await chrome.tabs.sendMessage(activeTab.id, {
+                    action: 'previewHiddenElementRule',
+                    selector,
+                    persistent: true,
+                    durationMs: 7000
+                }).catch(() => null);
+                if (!hiddenElementsSummary) return;
+                if (!response?.success) {
+                    hiddenElementsSummary.textContent = t('dashboardBlockedElementsPreviewNoMatch');
+                    return;
+                }
+                hiddenElementsSummary.textContent = t('dashboardBlockedElementsPreviewMatched', [String(Number(response.count || 0))]);
             });
         });
     }
@@ -1135,7 +1222,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        falsePositiveRescueSummary.textContent = t('dashboardFalsePositiveRescueCount', [String(records.length)]);
+        const hiddenCount = records.filter((record) => getFalconRecoveryType(record) === 'hidden_element').length;
+        const clickBlockedCount = records.length - hiddenCount;
+        falsePositiveRescueSummary.textContent = t('dashboardFalsePositiveRescueCountDetailed', [
+            String(records.length),
+            String(hiddenCount),
+            String(clickBlockedCount)
+        ]);
         falsePositiveRescueList.innerHTML = '';
 
         records.forEach((record) => {
@@ -1148,14 +1241,30 @@ document.addEventListener('DOMContentLoaded', () => {
             itemDiv.innerHTML = `
                 <div class="element-info">
                     <span class="element-selector" title="${escapeHtml(record.selector || '')}">${escapeHtml(record.selector || '(no selector)')}</span>
-                    <span class="element-meta">${escapeHtml(actionLabel)}${sourceLabel ? ` · ${escapeHtml(sourceLabel)}` : ''}${timeStr ? ` · ${escapeHtml(timeStr)}` : ''}</span>
+                    <span class="element-meta">${escapeHtml(getFalconRecoveryLabel(record))} · ${escapeHtml(actionLabel)}${sourceLabel ? ` · ${escapeHtml(sourceLabel)}` : ''}${timeStr ? ` · ${escapeHtml(timeStr)}` : ''}</span>
                 </div>
                 <div class="false-positive-rescue-actions">
-                    <button class="btn-secondary btn-false-positive-rescue" data-action-id="${escapeHtml(record.id || '')}">${t('dashboardFalsePositiveRescueRestore')}</button>
+                    <button class="btn-secondary btn-false-positive-preview" data-action-id="${escapeHtml(record.id || '')}">${escapeHtml(getFalconPreviewActionLabel(record))}</button>
+                    <button class="btn-secondary btn-false-positive-rescue" data-action-id="${escapeHtml(record.id || '')}">${escapeHtml(getFalconRecoveryActionLabel(record))}</button>
                     <button class="btn-secondary btn-false-positive-report" data-action-id="${escapeHtml(record.id || '')}">${t('dashboardFalsePositiveRescueReport')}</button>
                 </div>
             `;
             falsePositiveRescueList.appendChild(itemDiv);
+        });
+
+        falsePositiveRescueList.querySelectorAll('.btn-false-positive-preview').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const record = records.find((item) => item.id === button.dataset.actionId);
+                if (!record) return;
+                const activeTab = await getActiveTab();
+                if (!activeTab?.id) return;
+                await chrome.tabs.sendMessage(activeTab.id, {
+                    action: 'previewFalconAction',
+                    record,
+                    persistent: true,
+                    durationMs: 7000
+                }).catch(() => null);
+            });
         });
 
         falsePositiveRescueList.querySelectorAll('.btn-false-positive-rescue').forEach((button) => {
@@ -1184,7 +1293,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         pageUrl: record.pageUrl,
                         selector: record.selector,
                         source: 'dashboard_manual_rescue',
-                        reason: 'user_restored_click_target',
+                        reason: getFalconRecoveryType(record) === 'interaction_blocked'
+                            ? 'user_restored_clickability'
+                            : 'user_restored_hidden_element',
                         signatureHash: record.signatureHash,
                         result: {
                             userConfirmed: true
