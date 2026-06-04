@@ -59,6 +59,12 @@ tests/.clean/
 OPEN.txt
 *.psd
 
+# Local-only AI collaboration and planning material
+/docs/local/
+/ai-private/
+/ai-discussion/
+/local/
+
 # Android TV local build artifacts
 android-tv/.gradle/
 android-tv/local.properties

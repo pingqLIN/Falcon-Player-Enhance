@@ -1,46 +1,33 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/banner.png" alt="Falcon-Player-Enhance Banner" width="100%">
-</p>
+[![Falcon-Player-Enhance banner](docs/banner.png)](docs/banner.png)
 
-<p align="center">
-  <a href="https://developer.chrome.com/docs/extensions/mv3/"><img src="https://img.shields.io/badge/Manifest-V3-blue?logo=googlechrome" alt="Manifest V3"></a>
-  <img src="https://img.shields.io/badge/Version-4.4.0-green" alt="Version 4.4.0">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Extension">
-</p>
+# Falcon-Player-Enhance
 
-<p align="center">
-  <b>A Chrome extension specialized in player protection — overlay removal, popup blocking, player enhancement, AI-assisted analysis, and keyboard shortcuts.</b>
-</p>
+![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue?logo=googlechrome)
+![Version 4.4.0](https://img.shields.io/badge/Version-4.4.0-green)
+![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
+[![License MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-screenshots">Screenshots</a> •
-  <a href="#%EF%B8%8F-keyboard-shortcuts">Shortcuts</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-development">Development</a> •
-  <a href="README.zh-TW.md">繁體中文</a> •
-  <a href="docs/FEATURE_GUIDE.zh-TW.md">完整功能指南</a>
-</p>
+> Clean video playback for hostile player pages: player-focused cleanup, popup and redirect guards, recoverable false-positive handling, and AI-assisted policy review.
+
+[Quick Start](#-quick-start) · [Features](#-features) · [Screenshots](#-screenshots) · [Shortcuts](#-keyboard-shortcuts) · [Architecture](#-architecture) · [Development](#-development) · [Documentation](#-documentation) · [繁體中文](README.zh-TW.md)
 
 ---
 
-## Overview
+## 🎯 Overview
 
-**Falcon-Player-Enhance** is a Chrome extension purpose-built for **video player protection** on media websites. It is designed to complement general-purpose blockers such as uBlock Origin Lite, while still providing a basic standalone safety net when no blocker is installed.
+**Falcon-Player-Enhance** protects the video player area on media sites where ads, overlays, popups, fake players, and click traps interfere with playback. It is designed to complement broad blockers such as uBlock Origin Lite while keeping Falcon's scope narrow: repair the player experience, preserve legitimate page controls, and make risky automated actions reversible.
 
 | Capability | Description |
-|------------|-------------|
-| 🛡️ **Overlay Removal** | Auto-detects and removes ad overlays, click-hijack layers above the player |
-| 🚫 **Popup Blocking** | Blocks malicious popups and unauthorized redirects |
-| 🎬 **Player Enhancement** | Auto-detects players, adds controls, popup playback button |
-| ⌨️ **Keyboard Shortcuts** | 14+ hotkeys for playback, volume, speed, and screenshot |
-| 🖥️ **Distraction-Free Player** | Independent popup window with visual adjustments (brightness/contrast/hue/temperature) |
-| 🤖 **AI-Assisted Analysis** | Integrates OpenAI / Gemini / LM Studio for real-time risk assessment |
-| 🌐 **Basic Standalone Protection** | High-confidence DNR and domain guardrails for malicious redirects and player-adjacent traps |
+|---|---|
+| 🛡️ **Player-Centered Cleanup** | Removes overlays, fake videos, and click-hijack layers near the active player |
+| 🚫 **Popup and Redirect Guard** | Blocks suspicious spawned tabs and same-tab redirects from managed player pages |
+| 🧯 **False-Positive Rescue** | Scans for reversible Falcon actions, previews restores, restores once, records negative evidence |
+| 🎬 **Distraction-Free Player** | Opens detected players in a separate playback window with visual controls |
+| 🤖 **AI-Assisted Policy Review** | Turns runtime risk signals into advisory results or candidate rules behind a Policy Gate |
+| 🧠 **Provider Profiles** | Supports OpenAI, Gemini, LM Studio, Chrome Built-in AI, and custom gateway profiles |
+| ⌨️ **Keyboard Controls** | Playback, seek, speed, volume, screenshot, fullscreen, and loop shortcuts |
 
-> 💡 **Recommended:** Use alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) for broad ad/tracker blocking. Falcon focuses on player protection, popup recovery, overlay cleanup, and hostile-player-site repair.
+> 💡 **Recommended:** Use Falcon alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh). uBOL handles broad ad and tracker blocking; Falcon focuses on player repair, popup recovery, false-positive rescue, and player-adjacent hostile behavior.
 
 ---
 
@@ -48,74 +35,95 @@
 
 ### Installation
 
-```
-1. Clone this repository
-2. Open chrome://extensions/ in Chrome
-3. Enable "Developer mode" (top right)
-4. Click "Load unpacked" → select the extension/ directory
+```bash
+# 1. Clone the repository
+git clone https://github.com/pingqLIN/Falcon-Player-Enhance.git
+cd Falcon-Player-Enhance
+
+# 2. Open Chrome Extensions
+# chrome://extensions/
+
+# 3. Enable Developer mode
+
+# 4. Load the unpacked extension directory
+# Select: Falcon-Player-Enhance/extension
 ```
 
-### Optional: AI Provider Setup
+### Optional AI Provider Setup
 
-The extension supports multiple AI providers for enhanced ad detection:
+AI features are optional. Falcon keeps core player protection available without a provider.
 
 | Provider | Type | Setup |
-|----------|------|-------|
-| **OpenAI** | Cloud API | Dashboard → AI tab → Enter API key |
-| **Gemini** | Cloud API | Dashboard → AI tab → Enter API key |
-| **LM Studio** | Local model | Start LM Studio server → Dashboard → AI tab → Health check |
-| **Gateway** | Custom endpoint | Dashboard → AI tab → Enter custom URL |
+|---|---|---|
+| **OpenAI** | Cloud API | Dashboard → AI provider → enter endpoint, model, and API key |
+| **Gemini** | Cloud API | Dashboard → AI provider → enter endpoint, model, and API key |
+| **LM Studio** | Local model | Start the local server, then run a Dashboard health check |
+| **Chrome Built-in AI** | Browser-local capability | Select Chrome Built-in, restore defaults, then run a capability health check |
+| **Gateway** | Custom endpoint | Enter a compatible gateway URL and model name |
 
-See [INSTALL.md](INSTALL.md) for detailed setup instructions.
+Provider secrets are session-scoped in extension storage; provider profiles and non-secret defaults are persisted separately.
+
+See [INSTALL.md](INSTALL.md) for detailed setup.
 
 ---
 
 ## ✨ Features
 
-### 🛡️ Multi-Layer Protection
+### 🛡️ Protection Layers
 
 | Layer | Feature | Description |
-|-------|---------|-------------|
-| **Network** | Baseline DNR Guardrails | High-confidence protection for malicious redirects, popup lures, and player-adjacent trap domains |
-| **DOM** | Overlay Removal | Removes ads and click-hijack layers covering the player |
-| **DOM** | Fake Video Removal | Identifies and removes decoy video elements |
-| **Script** | Anti-Adblock Bypass | Site-specific player recovery in hostile environments (MAIN world injection) |
-| **Script** | Inject Blocker | Blocks malicious script injections in real time |
-| **CSS** | Cosmetic Filter | Applies conservative player-adjacent cleanup instead of broad page-wide blocking |
-| **Window** | Anti-Popup | Blocks unauthorized popups while allowing legitimate ones |
+|---|---|---|
+| **Network** | Baseline DNR guardrails | High-confidence rules for malicious redirects, popup traps, and player-adjacent domains |
+| **DOM** | Overlay cleanup | Removes or disables visible interference above or around the player |
+| **DOM** | Fake video detection | Detects decoy video elements before they steal clicks or confuse controls |
+| **MAIN world** | Anti-anti-adblock repair | Applies player-site compatibility shims where isolated scripts are not enough |
+| **CSS** | Conservative cosmetic filter | Targets player-adjacent clutter without trying to become a page-wide filter list |
+| **Window** | Popup and redirect recovery | Closes suspicious spawned tabs and recovers suspicious same-tab external redirects |
+| **Recovery** | False-positive rescue | Restores hidden or click-blocked elements and records negative evidence for future candidate review |
 
-### 🎬 Player Enhancement
+### 🧯 False-Positive Rescue
 
-| Feature | Description |
-|---------|-------------|
-| **Auto Detection** | Scans for HTML5 `<video>`, `<iframe>`, and custom player frameworks |
-| **Popup Player** | Open any detected video in a dedicated distraction-free window |
-| **Visual Adjustments** | Brightness, contrast, saturation, hue, sharpness, color temperature |
-| **Theme Toggle** | Dark / Light theme with localStorage persistence |
-| **PiP Mode** | Picture-in-Picture for multitasking |
-| **Pin Window** | Keep the player window always-on-top across tab switches |
-| **Player Sync** | Synchronize playback state across multiple windows |
-| **Auto Fit** | Automatically resize window to match video aspect ratio |
+| Control | Description |
+|---|---|
+| **Scan page** | Finds Falcon actions that can be restored on the current page |
+| **Preview** | Temporarily shows hidden elements or restores clickability for inspection |
+| **Restore once** | Reverses one Falcon action for the current page session |
+| **Report false positive** | Records a false-positive observation as structured negative evidence |
+| **Candidate gate** | Blocks candidate promotion when matching recent false-positive evidence exists |
 
-### 🤖 AI Integration
+### 🤖 AI Policy Flow
 
-| Feature | Description |
-|---------|-------------|
-| **Multi-Provider** | OpenAI, Gemini, LM Studio, or custom Gateway |
-| **Risk Assessment** | Real-time risk scoring with LOW / MEDIUM / HIGH / CRITICAL tiers |
-| **Policy Gate** | Runtime policy engine that constrains AI actions |
-| **Advisory / Hybrid** | Choose between AI-as-advisor or AI-with-autonomy modes |
-| **Telemetry** | Action evidence logging (up to 1,500 entries) |
+Falcon does not let runtime AI permanently mutate durable rules. Runtime signals are normalized, AI may summarize risk or propose candidates, and the Policy Gate decides what can happen next.
 
-### 🔧 Tools
+```text
+Site signals
+  -> rules and heuristics
+  -> AI advisory / generated candidates
+  -> Policy Gate
+       -> reversible runtime hardening
+       -> manual or development-time review
+       -> durable rule update outside runtime AI authority
+```
 
-| Feature | Description |
-|---------|-------------|
-| **Element Picker** | Click any page element to create a custom blocking rule |
-| **AI Teach Mode** | Click elements to train the AI — it decides how to handle them |
-| **Protection Modes** | Companion-first protection levels with a basic standalone fallback |
-| **Dashboard** | Full settings panel with 4 tabs: Overview / Sites / AI / Advanced |
-| **Whitelist / Blacklist** | Per-site protection policies |
+| Boundary | Falcon Behavior |
+|---|---|
+| **Runtime signals** | Popup events, redirect attempts, overlay actions, player context, and coarse element evidence |
+| **AI advisory** | Risk summaries and candidate selectors/domains for review |
+| **Policy Gate** | Constrains AI-driven actions by tier, confidence, mode, and negative evidence |
+| **Durable mutation** | Kept outside runtime AI authority; formal rules require review or development workflow |
+| **Privacy posture** | API secrets stay out of local persisted profiles; prompts use normalized evidence rather than raw page dumps |
+
+### 🎬 Player Tools
+
+| Tool | Description |
+|---|---|
+| **Player detection** | Detects HTML5 video, iframe players, and custom embedded players |
+| **Popup player** | Opens a detected player in an independent playback window |
+| **Visual controls** | Brightness, contrast, saturation, hue, sharpness, and color temperature |
+| **Theme toggle** | Dark and light player themes with saved preference |
+| **Picture-in-Picture** | Browser PiP mode for supported video elements |
+| **State sync** | Keeps source tab and popup player state aligned where possible |
+| **Element picker** | Creates targeted custom element rules from the current page |
 
 ---
 
@@ -123,185 +131,185 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 
 ### Distraction-Free Player
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/01-player-dark-full.png" width="80%" alt="Player — Dark Theme">
-</p>
-<p align="center"><em>Distraction-Free Player (Dark Theme) — top info bar + video stage + control panel</em></p>
+[![Player dark theme](docs/screenshots/01-player-dark-full.png)](docs/screenshots/01-player-dark-full.png)
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/03-player-light-full.png" width="80%" alt="Player — Light Theme">
-</p>
-<p align="center"><em>Distraction-Free Player (Light Theme) — frosted-glass panel effect</em></p>
+*Dark player window — video stage, top status, and compact controls*
+
+[![Player light theme](docs/screenshots/03-player-light-full.png)](docs/screenshots/03-player-light-full.png)
+
+*Light player window — frosted control surface and visual adjustment controls*
 
 ### Dashboard
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/05-dashboard-overview.png" width="45%" alt="Dashboard — Overview">&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/07-dashboard-ai.png" width="45%" alt="Dashboard — AI Settings">
-</p>
-<p align="center"><em>Left: Overview tab (stats + protection toggles) · Right: AI provider configuration</em></p>
+[![Dashboard overview](docs/screenshots/05-dashboard-overview.png)](docs/screenshots/05-dashboard-overview.png)
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/06-dashboard-sites.png" width="45%" alt="Dashboard — Sites">&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/08-dashboard-advanced.png" width="45%" alt="Dashboard — Advanced">
-</p>
-<p align="center"><em>Left: Site management (whitelist/blacklist) · Right: Advanced settings (policy gate, blocked elements)</em></p>
+*Dashboard overview — protection status, toggles, and site controls*
+
+[![Dashboard AI settings](docs/screenshots/07-dashboard-ai.png)](docs/screenshots/07-dashboard-ai.png)
+
+*AI provider settings — provider profiles, health checks, policy mode, and candidates*
 
 ### Extension Popup
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pingqLIN/Falcon-Player-Enhance/main/docs/screenshots/09-popup-main.png" width="35%" alt="Extension Popup">
-</p>
-<p align="center"><em>Browser action popup — 3-step flow guide, player detection, stats grid, blocking level</em></p>
+[![Extension popup](docs/screenshots/09-popup-main.png)](docs/screenshots/09-popup-main.png)
 
-> 📖 For a complete visual guide with detailed descriptions of every control, see **[FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md)**.
+*Browser action popup — target player selection, protection level, false-positive rescue, and shortcuts*
+
+> 📖 For a complete visual walkthrough, see [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md).
 
 ---
 
 ## ⌨️ Keyboard Shortcuts
 
-When a player is detected on the page, these shortcuts are automatically activated:
+Shortcuts activate when Falcon has a controllable target player.
 
 ### Playback
 
 | Key | Action |
-|-----|--------|
-| `Space` / `K` | Play / Pause |
+|---|---|
+| `Space` / `K` | Play or pause |
 | `←` / `→` | Seek ±5 seconds |
 | `J` / `L` | Seek ±10 seconds |
-| `Home` / `End` | Jump to start / end |
-| `0`–`9` | Jump to 0%–90% (single press) |
-| Two digits within 500ms | Jump to 00%–99% (e.g. `2` `5` → 25%) |
+| `Home` / `End` | Jump to start or end |
+| `0`-`9` | Jump to 0%-90% |
+| Two digits within 500ms | Jump to 00%-99%, for example `2` then `5` → 25% |
 
-### Volume & Speed
+### Volume and Speed
 
 | Key | Action |
-|-----|--------|
+|---|---|
 | `↑` / `↓` | Volume ±10% |
 | `M` | Toggle mute |
 | `Shift` + `<` | Decrease speed |
 | `Shift` + `>` | Increase speed |
 
-> Speed steps: 0.25× → 0.5× → 0.75× → 1× → 1.25× → 1.5× → 1.75× → 2× → 2.5× → 3×
-
 ### Other
 
 | Key | Action |
-|-----|--------|
+|---|---|
 | `F` | Toggle fullscreen |
-| `S` | Capture screenshot (PNG) |
+| `S` | Capture screenshot |
 | `L` | Toggle loop |
-| `[` / `]` | Set A-B loop start / end |
+| `[` / `]` | Set A-B loop start and end |
 
 ---
 
 ## 🏗 Architecture
 
-```
+```text
 extension/
-├── manifest.json                 # MV3 config
-├── background.js                 # Service Worker — state, rules, windows, messages
+├── manifest.json                 # MV3 configuration
+├── background.js                 # Service worker: state, policy, AI, windows, rules
 ├── content/
-│   ├── player-detector.js        # Player detection (ISOLATED)
-│   ├── player-enhancer.js        # Player enhancement + popup button (ISOLATED)
-│   ├── player-controls.js        # Keyboard shortcuts (ISOLATED)
-│   ├── player-sync.js            # Cross-window sync (ISOLATED)
-│   ├── overlay-remover.js        # Overlay removal (ISOLATED)
-│   ├── fake-video-remover.js     # Fake video removal (ISOLATED)
-│   ├── anti-antiblock.js         # Anti-adblock bypass (MAIN world)
-│   ├── inject-blocker.js         # Script injection blocker (MAIN world)
-│   ├── cosmetic-filter.js        # CSS cosmetic filter (ISOLATED)
-│   ├── anti-popup.js             # Popup blocker (ISOLATED)
-│   ├── element-picker.js         # Manual element selector
+│   ├── player-detector.js        # Player discovery
+│   ├── player-enhancer.js        # Player controls and popup entry
+│   ├── player-controls.js        # Keyboard shortcut handling
+│   ├── player-sync.js            # Source-tab and popup-player sync
+│   ├── overlay-remover.js        # Overlay and click-blocking cleanup
+│   ├── direct-popup-overlay.js   # Falcon-owned UI overlay marker path
+│   ├── cosmetic-filter.js        # Conservative CSS cleanup
+│   ├── anti-popup.js             # Popup guard
+│   ├── anti-antiblock.js         # MAIN-world player-site repair
+│   ├── inject-blocker.js         # Script injection guard
+│   ├── element-picker.js         # Manual blocking rule picker
 │   └── ai-runtime.js             # AI runtime bridge
-├── popup/                        # Browser action popup UI
+├── popup/                        # Browser action popup and side-panel shell
 ├── popup-player/                 # Distraction-free player window
-├── dashboard/                    # Settings dashboard (4 tabs)
-├── rules/
-│   ├── filter-rules.json         # declarativeNetRequest rules
-│   ├── ad-list.json              # Known ad domain list
-│   └── site-registry.json        # Enhanced site definitions
-├── sandbox/                      # Sandboxed execution
-└── security/                     # URL checking utilities
+├── dashboard/                    # Settings, AI provider profiles, rescue tools
+├── rules/                        # DNR rules, site registry, ad domain list
+├── sandbox/                      # Sandboxed helper page
+├── security/                     # URL and threat helpers
+└── shared/                       # Shared helpers
 ```
 
 ### Module Overview
 
 | Module | World | Role |
-|--------|-------|------|
-| `background.js` | Service Worker | State management, rule engine, AI pipeline, window management |
-| `anti-antiblock.js` | MAIN | Spoofs ad APIs (AdSense, DFP, IMA SDK) to bypass detection |
-| `inject-blocker.js` | MAIN | Hooks XHR/fetch/DOM to block malicious injections |
-| `player-detector.js` | ISOLATED | Scans for video/iframe players with stable ID hashing |
-| `player-enhancer.js` | ISOLATED | Adds visual markers, popup button, z-index optimization |
-| `overlay-remover.js` | ISOLATED | Removes click-hijack and ad overlay layers |
-| `cosmetic-filter.js` | ISOLATED | Site-specific CSS hiding rules |
-| `anti-popup.js` | ISOLATED | Blocks popups while preserving age-gate dialogs |
+|---|---|---|
+| `background.js` | Service Worker | State persistence, DNR updates, AI policy, candidate review, false-positive records |
+| `player-detector.js` | ISOLATED | Finds players and assigns stable target IDs |
+| `player-enhancer.js` | ISOLATED | Adds Falcon controls while marking Falcon-owned UI as internal |
+| `overlay-remover.js` | ISOLATED | Records reversible overlay actions before hiding or disabling interference |
+| `cosmetic-filter.js` | ISOLATED | Applies conservative CSS rules and honors rescued elements |
+| `anti-popup.js` | ISOLATED | Blocks suspicious popup flows while preserving legitimate dialogs |
+| `anti-antiblock.js` | MAIN | Repairs player-page compatibility where page scripts must be intercepted |
+| `dashboard.js` | Extension page | Configures providers, candidates, blocked elements, rescue controls, and site lists |
 
 ### Message Flow
 
-```
-Content Scripts ──playerDetected──▶ background.js ──▶ chrome.windows.create()
-                                         │                     │
-popup.js ──controlCommand──▶ background.js ──▶ content script (source tab)
-                                         │
-popup-player.js ◀──playerSync──▶ content script (via sourceTabId)
-                                         │
-All scripts ──statsUpdate──▶ background.js ──aipolicyUpdate──▶ All scripts
+```text
+Content scripts
+  -> background.js: playerDetected, statsUpdate, recordFalconAction
+  -> popup/dashboard: status, rescue records, candidates
+
+popup.js / dashboard.js
+  -> background.js: controlCommand, provider settings, scan rescue, promote candidate
+  -> content scripts: restore action, preview action, refresh rescue state
+
+AI provider
+  -> background.js: advisory or generated candidates
+  -> Policy Gate: reversible action or review queue
 ```
 
 ---
 
 ## 🧪 Development
 
-### Test Commands
+### High-Signal Checks
 
 ```bash
-npm run test:ai              # AI evaluation suite
-npm run test:e2e-replay      # End-to-end replay tests
-npm run test:popup:smoke     # 3-case popup smoke suite
-npm run test:popup:state-restore # Popup state restore verification
-npm run test:lmstudio        # LM Studio integration tests
-npm run check:lmstudio       # LM Studio health check
+node --check extension/background.js
+node --check extension/dashboard/dashboard.js
+
+npm run test:ai:element-classification
+npm run test:ai:element-classification:behavior
+npm run test:ai:chrome-builtin-element
+npm run test:ai:provider-profiles
+npm run test:ai:candidate-promotion
+npm run test:interaction-safety
+npm run test:popup:smoke
+```
+
+### Utility Commands
+
+```bash
+npm run docs:screenshots          # Regenerate README and guide screenshots
+npm run check:lmstudio            # Check local LM Studio endpoint
+npm run check:gateway             # Check custom gateway endpoint
+npm run browser:workflow          # Run the local browser workflow helper
 ```
 
 ### Tech Stack
 
-- **Platform:** Chrome Extension (Manifest V3)
-- **APIs:** declarativeNetRequest · Scripting · Storage · Tabs · SidePanel · Windows
-- **Languages:** JavaScript · HTML · CSS
-- **AI:** OpenAI API · Gemini API · LM Studio (local) · Custom Gateway
-
-### Regenerate Screenshots
-
-```bash
-npm run docs:screenshots
-```
+| Area | Stack |
+|---|---|
+| **Platform** | Chrome Extension Manifest V3 |
+| **Extension APIs** | declarativeNetRequest, scripting, storage, tabs, sidePanel, windows, webNavigation |
+| **Languages** | JavaScript, HTML, CSS |
+| **AI Providers** | OpenAI, Gemini, LM Studio, Chrome Built-in AI, custom gateway |
+| **Tests** | Node.js checks, Python regression harnesses, Playwright-backed browser workflows |
 
 ---
 
 ## 📄 Documentation
 
 | Document | Description |
-|----------|-------------|
-| [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | Complete feature guide with screenshots (繁體中文) |
-| [PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md](docs/PRODUCT_STRATEGY_UBOL_COMPANION.zh-TW.md) | Product boundary and mode strategy for companion use with uBOL |
-| [ROADMAP_UBOL_COMPANION.zh-TW.md](docs/ROADMAP_UBOL_COMPANION.zh-TW.md) | Roadmap grouped by keep / baseline / de-scope / AI expansion |
-| [DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md](docs/DEVELOPMENT_EXECUTION_BOOK_2026-03-31.zh-TW.md) | Current execution baseline and YOLO-mode development priorities |
-| [INSTALL.md](INSTALL.md) | Installation and setup instructions |
-| [AI_INTEGRATED_VERSION.zh-TW.md](docs/AI_INTEGRATED_VERSION.zh-TW.md) | AI Edition fork documentation |
+|---|---|
+| [INSTALL.md](INSTALL.md) | Installation and provider setup |
+| [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | Complete feature guide with screenshots |
+| [AI_CAPABILITY_BOUNDARY.zh-TW.md](docs/AI_CAPABILITY_BOUNDARY.zh-TW.md) | AI capability boundaries and runtime authority |
+| [AI_POLICY_GATE_PARAMETERS.zh-TW.md](docs/AI_POLICY_GATE_PARAMETERS.zh-TW.md) | Policy Gate tiers and parameters |
+| [BLOCKED_ELEMENTS_FEATURE.zh-TW.md](docs/BLOCKED_ELEMENTS_FEATURE.zh-TW.md) | Custom blocked-elements workflow |
+| [PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md](docs/PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md) | Protection status contract |
+| [LIVE_BROWSER_SAFE_TESTING.zh-TW.md](docs/LIVE_BROWSER_SAFE_TESTING.zh-TW.md) | Safe live-browser testing workflow |
+
+Local planning notes, raw AI discussions, and implementation memos belong under `docs/local/`, `ai-private/`, `ai-discussion/`, or `local/`; those paths are not part of the publishable documentation surface.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please open an Issue first to discuss proposed changes.
-
----
-
-## 📜 License
-
-This project is licensed under the [MIT License](LICENSE).
+Contributions are welcome. Please open an issue first for behavior changes, provider integrations, or rules that may affect legitimate page interaction.
 
 ---
 
@@ -309,8 +317,16 @@ This project is licensed under the [MIT License](LICENSE).
 
 This project was developed with AI assistance.
 
-**AI Models Used:**
-- Gemini 2.5 Pro (Google DeepMind) — initial development
-- Claude Opus 4.6 (Anthropic) — architecture review, UI redesign, documentation
+| Model | Role |
+|---|---|
+| Gemini 2.5 Pro (Google DeepMind) | Initial feature planning and implementation review |
+| Claude Opus 4.6 (Anthropic) | Architecture review, UI redesign, documentation review |
+| OpenAI Codex | Repository maintenance, README rewrite, and pre-push verification support |
 
 > ⚠️ **Disclaimer:** While the author has made every effort to review and validate the AI-generated code, no guarantee can be made regarding its correctness, security, or fitness for any particular purpose. Use at your own risk.
+
+---
+
+## 📜 License
+
+[MIT License](LICENSE)
