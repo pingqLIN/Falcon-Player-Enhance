@@ -205,6 +205,22 @@
         'previously watched', 'yes, please', 'no, thanks'
     ];
 
+    function isInternalShieldElement(element) {
+        if (!(element instanceof Element)) return false;
+        let cursor = element;
+        let depth = 0;
+        while (cursor && depth < 10) {
+            const className = (cursor.className || '').toString();
+            if (cursor.getAttribute?.('data-shield-internal') === 'true') return true;
+            if (className.split(/\s+/).some((token) => token.startsWith('shield-') || token.startsWith('falcon-popup-'))) {
+                return true;
+            }
+            cursor = cursor.parentElement;
+            depth += 1;
+        }
+        return false;
+    }
+
     /**
      * 判斷元素是否為年齡驗證對話框（應保留，不得移除）
      */
@@ -706,6 +722,7 @@
      * 檢查元素是否包含廣告內容
      */
     function hasAdContent(element) {
+        if (isInternalShieldElement(element)) return false;
         const text = `${element.innerText || ''} ${element.getAttribute?.('aria-label') || ''} ${element.getAttribute?.('title') || ''}`.toLowerCase().substring(0, 500);
         const className = (element.className || '').toString().toLowerCase();
         const id = (element.id || '').toLowerCase();
@@ -743,6 +760,7 @@
      */
     function isOverlay(element, playerRect) {
         if (processedElements.has(element)) return false;
+        if (isInternalShieldElement(element)) return false;
         
         const style = window.getComputedStyle(element);
         const rect = element.getBoundingClientRect();
@@ -817,6 +835,7 @@
                     if (isPlayerStructureElement(element, player)) return;
                     if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
                     if (element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return;
+                    if (isInternalShieldElement(element)) return;
                     if (isPlayerControl(element)) return;
                     if (isMediaResumeDialog(element)) return;
                     if (processedElements.has(element)) return;
@@ -884,6 +903,7 @@
         
         suspiciousElements.forEach(element => {
             if (isPlayerStructureElement(element, player)) return;
+            if (isInternalShieldElement(element)) return;
             if (isPlayerControl(element)) return;
             if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;
@@ -918,6 +938,7 @@
         // inset-0 覆蓋層
         const insetOverlays = document.querySelectorAll('[class*="inset-0"], [style*="inset: 0"]');
         insetOverlays.forEach(element => {
+            if (isInternalShieldElement(element)) return;
             if (isPlayerControl(element)) return;
             if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;
@@ -947,6 +968,7 @@
         // 高 z-index 覆蓋層
         const highZElements = document.querySelectorAll('[style*="z-index"]');
         highZElements.forEach(element => {
+            if (isInternalShieldElement(element)) return;
             if (isPlayerControl(element)) return;
             if (isMediaResumeDialog(element)) return;
             if (processedElements.has(element)) return;

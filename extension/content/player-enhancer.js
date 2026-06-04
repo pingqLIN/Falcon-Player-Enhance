@@ -46,6 +46,22 @@
         )];
     }
 
+    function isInternalShieldElement(element) {
+        if (!(element instanceof Element)) return false;
+        let cursor = element;
+        let depth = 0;
+        while (cursor && depth < 10) {
+            const className = (cursor.className || '').toString();
+            if (cursor.getAttribute?.('data-shield-internal') === 'true') return true;
+            if (className.split(/\s+/).some((token) => token.startsWith('shield-') || token.startsWith('falcon-popup-'))) {
+                return true;
+            }
+            cursor = cursor.parentElement;
+            depth += 1;
+        }
+        return false;
+    }
+
     function applyCleanupModeFromState(state = null) {
         const helper = window.__ShieldSiteStateHelper;
         if (helper?.shouldRunMediaAutomation) {
@@ -1576,6 +1592,7 @@
                 if (element === player || player.contains(element)) return;
                 if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
                 if (element.tagName === 'VIDEO' || element.tagName === 'IFRAME') return;
+                if (isInternalShieldElement(element)) return;
                 if (element.classList.contains('player-enhanced-badge')) return;
                 if (isMediaResumeDialog(element)) return;
                 
@@ -1611,6 +1628,7 @@
         allElements.forEach(element => {
             // 跳過播放器本身及其子元素
             if (player.contains(element) || element === player) return;
+            if (isInternalShieldElement(element)) return;
 
             // 跳過我們自己的標籤
             if (element.classList.contains('player-enhanced-badge')) return;
@@ -1728,6 +1746,7 @@
         allElements.forEach(element => {
             // 不處理 iframe 內部元素 (實際上也無法存取)
             if (element.tagName === 'IFRAME') return;
+            if (isInternalShieldElement(element)) return;
             
             const className = (element.className || '').toString().toLowerCase();
             const id = (element.id || '').toLowerCase();

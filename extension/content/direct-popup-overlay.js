@@ -398,6 +398,7 @@
 
     const root = document.createElement('div');
     root.id = ROOT_ID;
+    root.setAttribute('data-shield-internal', 'true');
     root.innerHTML = `
       <button class="falcon-popup-launcher" type="button">Falcon Deck</button>
       <section class="falcon-popup-panel">
