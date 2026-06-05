@@ -43,6 +43,9 @@ download*.png
 extension.crx
 extension.pem
 
+# Raw screenshot intake; curated images live in docs/screenshots/
+.PIC/
+
 # Python bytecode
 __pycache__/
 *.pyc

@@ -7,7 +7,7 @@
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-> 讓惡劣播放器頁面恢復乾淨播放：播放器周邊清理、彈窗與導流防護、可回復的誤判處理，以及 AI 輔助策略審核。
+> 紳士的好幫手：專為影片播放器體驗打造的 AI 輔助防護與修復工具。
 
 [快速開始](#-快速開始) · [功能特色](#-功能特色) · [截圖預覽](#-截圖預覽) · [快捷鍵](#-鍵盤快捷鍵) · [架構](#-架構) · [開發](#-開發) · [文件](#-文件) · [English](README.md)
 
@@ -15,7 +15,9 @@
 
 ## 🎯 概述
 
-**Falcon-Player-Enhance** 專注保護媒體網站上的影片播放器區域，處理廣告覆蓋層、彈窗、假播放器、點擊陷阱與惡意導流對播放體驗造成的干擾。它不是要取代 uBlock Origin Lite 這類廣域 blocker，而是補上播放器修復、可回復清理與 AI 候選規則審核這一層。
+**Falcon-Player-Enhance** 是專為影片播放器體驗打造的 AI 輔助防護工具。和一般廣告阻擋器的不同，是它專門處理影片播放器周邊的干擾情境：覆蓋層、彈窗、惡意跳轉、假播放器、點擊陷阱，以及誤判後的可逆救援。
+
+它結合 Chrome MV3 規則、播放器偵測、可逆 DOM 清理、popup/redirect 防護，以及 AI 輔助的 policy review，讓播放器防護更精準、可審查、可回退。對社群，它就是：**紳士的好幫手**。
 
 | 能力 | 說明 |
 |---|---|
@@ -27,7 +29,7 @@
 | 🧠 **Provider Profiles** | 支援 OpenAI、Gemini、LM Studio、Chrome Built-in AI 與自訂 gateway |
 | ⌨️ **鍵盤控制** | 播放、快轉、速度、音量、截圖、全螢幕與循環快捷鍵 |
 
-> 💡 **建議：** 搭配 [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) 使用。uBOL 處理廣域廣告與追蹤阻擋；Falcon 專注播放器修復、彈窗恢復、誤判救援與播放器周邊 hostile behavior。
+> 💡 **建議：** 搭配 [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) 使用。uBOL 處理廣域廣告與追蹤阻擋；Falcon 專門修復播放器體驗，處理播放器周邊 hostile behavior、彈窗恢復、誤判救援與 AI 輔助審查。
 
 ---
 
@@ -129,31 +131,35 @@ Site signals
 
 ## 📸 截圖預覽
 
-### 無干擾播放器
+### 實際頁面側邊面板
 
-[![播放器暗色主題](docs/screenshots/01-player-dark-full.png)](docs/screenshots/01-player-dark-full.png)
+[![實際頁面上的 Falcon 側邊面板](docs/screenshots/14-live-side-panel.png)](docs/screenshots/14-live-side-panel.png)
 
-*暗色播放視窗 — 影片舞台、頂部狀態與緊湊控制列*
-
-[![播放器亮色主題](docs/screenshots/03-player-light-full.png)](docs/screenshots/03-player-light-full.png)
-
-*亮色播放視窗 — 毛玻璃控制面板與影像調整控制*
+*實際頁面側邊面板 — 在網頁旁顯示播放器控制、AI review 狀態、generated candidates 與可逆救援動作*
 
 ### Dashboard
 
-[![Dashboard overview](docs/screenshots/05-dashboard-overview.png)](docs/screenshots/05-dashboard-overview.png)
+[![目前 Dashboard overview](docs/screenshots/15-dashboard-overview-current.png)](docs/screenshots/15-dashboard-overview-current.png)
 
-*Dashboard overview — 防護狀態、開關與站點控制*
+*Overview — 防護計數、防護層、popup guard、sticky reference 與 runtime switches*
 
-[![Dashboard AI settings](docs/screenshots/07-dashboard-ai.png)](docs/screenshots/07-dashboard-ai.png)
+[![站點規則管理](docs/screenshots/16-dashboard-sites-rules.png)](docs/screenshots/16-dashboard-sites-rules.png)
 
-*AI provider settings — provider profiles、health checks、policy mode 與 candidates*
+*Sites — whitelist、blacklist、enhanced-site profiles 與 advanced host patterns*
 
-### Extension Popup
+[![AI policy settings](docs/screenshots/17-dashboard-ai-policy.png)](docs/screenshots/17-dashboard-ai-policy.png)
 
-[![Extension popup](docs/screenshots/09-popup-main.png)](docs/screenshots/09-popup-main.png)
+*AI settings — provider selection、model endpoints、policy mode、candidate generation 與 expert controls*
 
-*Browser action popup — 目標播放器選擇、防護等級、誤判恢復與快捷鍵*
+### 救援與控制
+
+[![誤判救援](docs/screenshots/19-false-positive-rescue.png)](docs/screenshots/19-false-positive-rescue.png)
+
+*False-positive rescue — hidden elements、click-blocked elements、restore actions 與 report flow*
+
+[![快捷鍵與控制概覽](docs/screenshots/20-shortcuts-controls.png)](docs/screenshots/20-shortcuts-controls.png)
+
+*Shortcuts — quick actions、playback keys、volume controls、speed controls、fullscreen 與 screenshot capture*
 
 > 📖 完整視覺導覽請見 [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md)。
 

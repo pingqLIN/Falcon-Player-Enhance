@@ -69,6 +69,10 @@ Falcon-Player-Enhance 是一款專為**影片播放場景**設計的 Chrome 擴�
 
 *圖：Popup 主畫面 — 顯示三步驟流程指引、播放器偵測區、統計數據及封鎖等級控制*
 
+![實際頁面側邊面板](screenshots/14-live-side-panel.png)
+
+*圖：實際頁面側邊面板 — 在瀏覽頁面旁顯示 AI review 狀態、候選規則、回復控制與目前保護狀態*
+
 ### 2.1 三步驟操作流程
 
 Popup 頂部以視覺流程圖引導使用者：
@@ -140,6 +144,10 @@ Popup 頂部以視覺流程圖引導使用者：
 | Gate tier / Mode / Reason | 政策閘門的層級與執行原因 |
 | Evidence | 最近 8 筆動作紀錄 |
 
+![AI 候選規則審查](screenshots/18-ai-candidate-review.png)
+
+*圖：AI 候選規則審查 — 使用者可逐條接受、拒絕、Promote 或 Rollback，避免候選規則直接變成不可回復的封鎖*
+
 ### 2.7 工具列與快捷鍵
 
 底部工具列提供快速存取：
@@ -151,6 +159,14 @@ Popup 頂部以視覺流程圖引導使用者：
 | ＋ | 新增功能（保留） |
 | ⚙ | 開啟 Dashboard 設定面板 |
 | 快捷鍵參考 | 可展開的快捷鍵速查表 |
+
+![快捷鍵與控制概覽](screenshots/20-shortcuts-controls.png)
+
+*圖：快捷鍵與控制概覽 — 快速動作、播放器鎖定、元素封鎖模式、播放/音量/速度快捷鍵與截圖功能*
+
+![誤判救援](screenshots/19-false-positive-rescue.png)
+
+*圖：誤判救援 — 針對 hidden、click-blocked、visible-but-not-clickable 元素提供 restore 與 report false positive*
 
 ---
 
@@ -285,9 +301,9 @@ Popup 頂部以視覺流程圖引導使用者：
 
 ### 4.1 Overview — 總覽
 
-![Dashboard Overview](screenshots/05-dashboard-overview.png)
+![Dashboard Overview](screenshots/15-dashboard-overview-current.png)
 
-*圖：Dashboard 總覽頁面 — 狀態列、統計卡片、保護功能開關、Popup 顯示設定*
+*圖：Dashboard 總覽頁面 — 防護統計、保護層開關、Popup guard、sticky reference 與執行階段狀態*
 
 #### 狀態列
 
@@ -329,9 +345,9 @@ Popup 頂部以視覺流程圖引導使用者：
 
 ### 4.2 Sites — 站點管理
 
-![Dashboard Sites](screenshots/06-dashboard-sites.png)
+![Dashboard Sites](screenshots/16-dashboard-sites-rules.png)
 
-*圖：Dashboard 站點管理 — 白名單、黑名單、增強站點三區管理*
+*圖：Dashboard 站點管理 — 白名單、黑名單、增強站點與進階 host patterns*
 
 #### 白名單 — 不套用任何規則
 
@@ -363,9 +379,9 @@ Popup 頂部以視覺流程圖引導使用者：
 
 ### 4.3 AI — 人工智慧設定
 
-![Dashboard AI](screenshots/07-dashboard-ai.png)
+![Dashboard AI](screenshots/17-dashboard-ai-policy.png)
 
-*圖：Dashboard AI 設定 — 服務商選擇、連線狀態、API 設定、評估模式*
+*圖：Dashboard AI 設定 — 服務商選擇、連線狀態、API 設定、評估模式、candidate generation 與 expert controls*
 
 #### 狀態指示器
 

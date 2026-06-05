@@ -7,7 +7,7 @@
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-> Clean video playback for hostile player pages: player-focused cleanup, popup and redirect guards, recoverable false-positive handling, and AI-assisted policy review.
+> AI-assisted, reversible player defense for hostile player pages.
 
 [Quick Start](#-quick-start) · [Features](#-features) · [Screenshots](#-screenshots) · [Shortcuts](#-keyboard-shortcuts) · [Architecture](#-architecture) · [Development](#-development) · [Documentation](#-documentation) · [繁體中文](README.zh-TW.md)
 
@@ -15,7 +15,9 @@
 
 ## 🎯 Overview
 
-**Falcon-Player-Enhance** protects the video player area on media sites where ads, overlays, popups, fake players, and click traps interfere with playback. It is designed to complement broad blockers such as uBlock Origin Lite while keeping Falcon's scope narrow: repair the player experience, preserve legitimate page controls, and make risky automated actions reversible.
+**Falcon-Player-Enhance** is built specifically for the video player experience. Unlike general ad blockers, Falcon focuses on the messy edge cases around player surfaces: overlays, popups, redirects, fake players, click traps, and reversible false-positive rescue.
+
+It combines Chrome MV3 rules, player detection, reversible DOM cleanup, popup and redirect protection, and AI-assisted policy review so player defense stays precise, inspectable, and recoverable.
 
 | Capability | Description |
 |---|---|
@@ -27,7 +29,7 @@
 | 🧠 **Provider Profiles** | Supports OpenAI, Gemini, LM Studio, Chrome Built-in AI, and custom gateway profiles |
 | ⌨️ **Keyboard Controls** | Playback, seek, speed, volume, screenshot, fullscreen, and loop shortcuts |
 
-> 💡 **Recommended:** Use Falcon alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh). uBOL handles broad ad and tracker blocking; Falcon focuses on player repair, popup recovery, false-positive rescue, and player-adjacent hostile behavior.
+> 💡 **Recommended:** Use Falcon alongside [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh). uBOL handles broad ad and tracker blocking; Falcon handles player-adjacent interference, popup recovery, false-positive rescue, and AI-assisted review.
 
 ---
 
@@ -129,31 +131,35 @@ Site signals
 
 ## 📸 Screenshots
 
-### Distraction-Free Player
+### Real Page Side Panel
 
-[![Player dark theme](docs/screenshots/01-player-dark-full.png)](docs/screenshots/01-player-dark-full.png)
+[![Falcon side panel on a live page](docs/screenshots/14-live-side-panel.png)](docs/screenshots/14-live-side-panel.png)
 
-*Dark player window — video stage, top status, and compact controls*
-
-[![Player light theme](docs/screenshots/03-player-light-full.png)](docs/screenshots/03-player-light-full.png)
-
-*Light player window — frosted control surface and visual adjustment controls*
+*Live side panel — player-focused controls, AI review state, generated candidates, and reversible rescue actions beside the page*
 
 ### Dashboard
 
-[![Dashboard overview](docs/screenshots/05-dashboard-overview.png)](docs/screenshots/05-dashboard-overview.png)
+[![Current dashboard overview](docs/screenshots/15-dashboard-overview-current.png)](docs/screenshots/15-dashboard-overview-current.png)
 
-*Dashboard overview — protection status, toggles, and site controls*
+*Overview — protection counters, defensive layers, popup guard, sticky reference, and runtime switches*
 
-[![Dashboard AI settings](docs/screenshots/07-dashboard-ai.png)](docs/screenshots/07-dashboard-ai.png)
+[![Site rule management](docs/screenshots/16-dashboard-sites-rules.png)](docs/screenshots/16-dashboard-sites-rules.png)
 
-*AI provider settings — provider profiles, health checks, policy mode, and candidates*
+*Sites — whitelist, blacklist, enhanced-site profiles, and advanced host patterns*
 
-### Extension Popup
+[![AI policy settings](docs/screenshots/17-dashboard-ai-policy.png)](docs/screenshots/17-dashboard-ai-policy.png)
 
-[![Extension popup](docs/screenshots/09-popup-main.png)](docs/screenshots/09-popup-main.png)
+*AI settings — provider selection, model endpoints, policy mode, candidate generation, and expert controls*
 
-*Browser action popup — target player selection, protection level, false-positive rescue, and shortcuts*
+### Rescue and Controls
+
+[![False-positive rescue](docs/screenshots/19-false-positive-rescue.png)](docs/screenshots/19-false-positive-rescue.png)
+
+*False-positive rescue — hidden elements, click-blocked elements, restore actions, and report flow*
+
+[![Keyboard shortcuts and controls](docs/screenshots/20-shortcuts-controls.png)](docs/screenshots/20-shortcuts-controls.png)
+
+*Shortcuts — quick actions, playback keys, volume controls, speed controls, fullscreen, and screenshot capture*
 
 > 📖 For a complete visual walkthrough, see [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md).
 
