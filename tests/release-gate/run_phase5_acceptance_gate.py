@@ -54,13 +54,14 @@ PY_COMPILE_FILES = [
     "tests/site-state/run_site_state_helper_regression.py",
     "tests/site-registry/run_site_registry_contract_regression.py",
     "tests/side-panel/run_side_panel_behavior_regression.py",
+    "tests/side-panel/run_ai_candidate_clickability_regression.py",
     "tests/release-gate/run_phase5_acceptance_gate.py",
 ]
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run Falcon Phase 5 acceptance gates (G-00 to G-09) with fresh evidence."
+        description="Run Falcon Phase 5 acceptance gates (G-00 to G-10) with fresh evidence."
     )
     parser.add_argument(
         "--headless",
@@ -348,6 +349,11 @@ def build_gates(headless: bool) -> list[dict[str, object]]:
             "steps": [
                 build_retryable_browser_step(
                     "tests/side-panel/run_side_panel_behavior_regression.py",
+                    headless,
+                    retries=1,
+                ),
+                build_retryable_browser_step(
+                    "tests/side-panel/run_ai_candidate_clickability_regression.py",
                     headless,
                     retries=1,
                 ),
