@@ -589,10 +589,7 @@
                 window.parent.postMessage({
                     type: FRAME_SOURCE_MESSAGE_TYPE,
                     href: resolvedHref,
-                    videoSrc: resolvedVideo?.src || '',
-                    poster: resolvedVideo?.poster || '',
-                    title: document.title || '',
-                    origin: window.location.origin || ''
+                    hasPlayableMedia: Boolean(resolvedVideo?.src)
                 }, '*');
             } catch (_) {
                 // Ignore cross-origin parent failures.
@@ -639,7 +636,7 @@
 
             const resolvedHref = normalizeResolvedFrameUrl(data.href);
             if (!resolvedHref) return;
-            const resolvedVideoSrc = normalizeCandidateUrl(data.videoSrc || '');
+            const resolvedVideoSrc = '';
 
             const matchedIframe = Array.from(document.querySelectorAll('iframe')).find((iframe) => {
                 try {
@@ -654,12 +651,6 @@
             matchedIframe.dataset.shieldResolvedSrc = resolvedHref;
             if (resolvedVideoSrc) {
                 matchedIframe.dataset.shieldResolvedVideoSrc = resolvedVideoSrc;
-            }
-            if (data.poster) {
-                matchedIframe.dataset.shieldResolvedPoster = String(data.poster);
-            }
-            if (data.title) {
-                matchedIframe.dataset.shieldResolvedTitle = String(data.title);
             }
             matchedIframe.dataset.shieldResolvedAt = String(Date.now());
             console.log('🔗 iframe 最終來源已同步:', {

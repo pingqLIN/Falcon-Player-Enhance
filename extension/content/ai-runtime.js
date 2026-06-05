@@ -14,6 +14,8 @@
   const FLUSH_INTERVAL_MS = 1200;
   const DOM_HEALTH_INTERVAL_MS = 4000;
   const MAX_BATCH_SIZE = 12;
+  const MAIN_WORLD_BRIDGE_VERSION = 2;
+  const MAIN_WORLD_BRIDGE_SOURCE = 'inject-blocker';
 
   const OUTBOUND_RISK_PATTERNS = [
     'exoclick',
@@ -419,12 +421,17 @@
     if (event.source !== window) return;
 
     const data = event.data;
-    if (data?.type === '__SHIELD_POTENTIAL_EXTERNAL_NAV_TRAP__' && data.payload) {
+    if (data?.type === '__SHIELD_POTENTIAL_EXTERNAL_NAV_TRAP__') {
+      const payload = data.bridgeVersion === MAIN_WORLD_BRIDGE_VERSION && data.payload?.source === MAIN_WORLD_BRIDGE_SOURCE
+        ? data.payload
+        : null;
+      if (!payload) return;
+
       try {
         chrome.runtime.sendMessage({
           action: 'recordPotentialExternalNavigationTrap',
-          pageUrl: String(data.payload.pageUrl || window.location.href),
-          interaction: data.payload.interaction || {}
+          pageUrl: String(payload.pageUrl || window.location.href),
+          interaction: payload.interaction || {}
         }).catch(() => {});
       } catch (_) {
         // no-op
@@ -432,15 +439,9 @@
       return;
     }
 
-    if (!data || data.type !== '__SHIELD_AI_EVENT__' || !data.payload) return;
-
-    const payload = data.payload;
-    queueTelemetry(payload.type || 'unknown_event', {
-      severity: payload.severity,
-      confidence: payload.confidence,
-      source: payload.source || 'main-world',
-      detail: payload.detail || payload
-    });
+    // Deliberately ignore MAIN-world AI telemetry postMessage payloads. Page
+    // scripts can forge this channel, while isolated runtime telemetry and
+    // background-side schema sanitization remain the trusted AI inputs.
   }
 
   function requestCurrentPolicy() {

@@ -22,8 +22,8 @@
 - [AI_CAPABILITY_BOUNDARY.zh-TW.md](./AI_CAPABILITY_BOUNDARY.zh-TW.md)
 - [AI_POLICY_GATE_PARAMETERS.zh-TW.md](./AI_POLICY_GATE_PARAMETERS.zh-TW.md)
 - [BLOCKED_ELEMENTS_FEATURE.zh-TW.md](./BLOCKED_ELEMENTS_FEATURE.zh-TW.md)
-- [AUDIT_ROUND2.zh-TW.md](./AUDIT_ROUND2.zh-TW.md)（歷史審查快照，請搭配最新 progress snapshot 一起判讀）
-- [DASHBOARD_REFACTOR_PLAN.md](./DASHBOARD_REFACTOR_PLAN.md)
+- [Archive 整理索引](./archive/README.zh-TW.md)（完整歷史審查快照保留在本機備份，不屬於公開 rebuild surface）
+- [Rebuild 檔案地圖](./REBUILD_FILE_MAP.zh-TW.md)
 
 ## 目前基線與新方向差異
 

@@ -127,7 +127,7 @@ AI Monitor 現在除了原本的：
 - [AI 能力邊界說明](./AI_CAPABILITY_BOUNDARY.zh-TW.md)
 - [封鎖元素功能說明](./BLOCKED_ELEMENTS_FEATURE.zh-TW.md)
 - [AI 自主學習補充設計](./AI_AUTONOMOUS_AD_LEARNING_SUPPLEMENT.zh-TW.md)
-- [Dashboard 重建計畫](./DASHBOARD_REFACTOR_PLAN.md)
+- [Rebuild 檔案地圖](./REBUILD_FILE_MAP.zh-TW.md)
 
 ## 6. 交給 Opus 時建議優先審查的點
 

@@ -1,7 +1,7 @@
 {
   "langCode": { "message": "zh_TW" },
   "extName": { "message": "Falcon-Player-Enhance" },
-  "extDescription": { "message": "播放器防護工具組：覆蓋層移除、彈窗攔截、播放器增強、本地 AI 監控與快捷鍵控制。" },
+  "extDescription": { "message": "AI 輔助的播放器防護工具，處理覆蓋層、彈窗、跳轉、假播放器、點擊陷阱與可逆救援。" },
   "actionTitle": { "message": "開啟 Falcon-Player-Enhance 控制面板" },
 
   "popupPageTitle": { "message": "Falcon-Player-Enhance" },

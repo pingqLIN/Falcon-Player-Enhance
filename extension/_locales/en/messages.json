@@ -1,7 +1,7 @@
 {
   "langCode": { "message": "en" },
   "extName": { "message": "Falcon-Player-Enhance" },
-  "extDescription": { "message": "Player protection toolkit: overlay removal, popup blocking, player enhancement, local-AI monitoring, and shortcut controls." },
+  "extDescription": { "message": "AI-assisted player protection for overlays, popups, redirects, fake players, click traps, and reversible rescue." },
   "actionTitle": { "message": "Open Falcon-Player-Enhance control panel" },
 
   "popupPageTitle": { "message": "Falcon-Player-Enhance" },

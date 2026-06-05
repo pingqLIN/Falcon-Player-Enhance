@@ -302,12 +302,15 @@ npm run browser:workflow          # 執行本機 browser workflow helper
 | 文件 | 說明 |
 |---|---|
 | [INSTALL.md](INSTALL.md) | 安裝與 provider 設定 |
-| [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | 含截圖的完整功能導覽 |
+| [REBUILD_FILE_MAP.zh-TW.md](docs/REBUILD_FILE_MAP.zh-TW.md) | 以 rebuild 角度整理的 runtime、tests 與 docs 必備檔案地圖 |
+| [FEATURE_GUIDE.md](docs/FEATURE_GUIDE.md) / [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | 完整功能地圖與截圖導覽 |
+| [ADVANCED_AI_POLICY_GUIDE.zh-TW.md](docs/ADVANCED_AI_POLICY_GUIDE.zh-TW.md) | 進階 AI provider、Policy Gate、candidate review 與 privacy 教學 |
 | [AI_CAPABILITY_BOUNDARY.zh-TW.md](docs/AI_CAPABILITY_BOUNDARY.zh-TW.md) | AI 能力邊界與 runtime 權限 |
 | [AI_POLICY_GATE_PARAMETERS.zh-TW.md](docs/AI_POLICY_GATE_PARAMETERS.zh-TW.md) | Policy Gate tier 與參數 |
 | [BLOCKED_ELEMENTS_FEATURE.zh-TW.md](docs/BLOCKED_ELEMENTS_FEATURE.zh-TW.md) | 自訂封鎖元素流程 |
 | [PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md](docs/PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md) | 防護狀態 contract |
 | [LIVE_BROWSER_SAFE_TESTING.zh-TW.md](docs/LIVE_BROWSER_SAFE_TESTING.zh-TW.md) | 安全 live-browser 測試流程 |
+| [docs/archive/](docs/archive/README.zh-TW.md) | 保留開發演變、外部審查與舊計畫資料 |
 
 Local planning notes、raw AI discussions 與 implementation memos 應放在 `docs/local/`、`ai-private/`、`ai-discussion/` 或 `local/`；這些路徑不屬於 publishable documentation surface。
 

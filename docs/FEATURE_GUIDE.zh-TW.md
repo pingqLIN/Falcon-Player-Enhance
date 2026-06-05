@@ -427,6 +427,8 @@ OpenAI direct · advisory mode · Last check: 12s ago
 | **Advisory** | AI 提供建議，最終動作仍由規則引擎決定（低風險） |
 | **Hybrid** | AI 可主動套用安全政策，適合需要動態判斷的複雜站點 |
 
+進階 provider profile、Policy Gate、candidate review 與隱私邊界教學請見 [進階 AI Policy Guide](ADVANCED_AI_POLICY_GUIDE.zh-TW.md)。
+
 ---
 
 ### 4.4 Advanced — 進階設定

@@ -4033,19 +4033,138 @@ function normalizeAiEvent(input) {
   if (!input || typeof input !== 'object') return null;
 
   const type = String(input.type || '').trim();
-  if (!type) return null;
+  if (!/^[a-z0-9_:-]{1,64}$/i.test(type)) return null;
 
   const severity = clamp(Number(input.severity || 1), 0.1, 3);
   const confidence = clamp(Number(input.confidence || 0.7), 0.1, 1);
 
   return {
     type,
-    source: String(input.source || 'unknown'),
+    source: sanitizeTelemetryToken(input.source || 'unknown', 64),
     severity,
     confidence,
-    detail: input.detail || {},
+    detail: sanitizeAiEventDetail(input.detail || {}),
     ts: Number(input.ts || getNow())
   };
+}
+
+function sanitizeTelemetryToken(value, maxLength = 96) {
+  const normalized = String(value || '').trim().slice(0, maxLength);
+  if (!normalized) return '';
+  return /^[a-z0-9_:. -]+$/i.test(normalized) ? normalized : 'redacted';
+}
+
+function sanitizeTelemetryUrl(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const hostname = getHostname(value.hostname);
+    const protocol = sanitizeTelemetryToken(value.protocol || '', 16);
+    const pathLength = Number(value.pathLength);
+    const length = Number(value.length);
+    return {
+      ...(protocol ? { protocol } : {}),
+      ...(hostname ? { hostname } : {}),
+      ...(Number.isFinite(pathLength) ? { pathLength: Math.max(0, Math.round(pathLength)) } : {}),
+      ...(Number.isFinite(length) ? { length: Math.max(0, Math.round(length)) } : {}),
+      ...(value.hasQuery !== undefined ? { hasQuery: value.hasQuery === true } : {}),
+      ...(value.hasHash !== undefined ? { hasHash: value.hasHash === true } : {}),
+      ...(value.malformed !== undefined ? { malformed: value.malformed === true } : {})
+    };
+  }
+
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    return {
+      protocol: parsed.protocol.replace(/:$/, ''),
+      hostname: getHostname(parsed.hostname),
+      pathLength: parsed.pathname.length,
+      hasQuery: parsed.search.length > 0,
+      hasHash: parsed.hash.length > 0
+    };
+  } catch (_) {
+    return { malformed: true, length: raw.length };
+  }
+}
+
+function sanitizeAiEventDetail(detail) {
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return {};
+
+  const sanitized = {};
+  const tokenFields = ['reason', 'eventType', 'target', 'navigationKind'];
+  const urlFields = ['url', 'href', 'action', 'popupUrl'];
+  const numericFields = ['removed', 'count', 'zIndex', 'width', 'height', 'area'];
+  const booleanFields = ['fromLink', 'imageLike', 'lowIntent', 'embeddedFrame'];
+
+  tokenFields.forEach((key) => {
+    if (detail[key] !== undefined) {
+      const value = sanitizeTelemetryToken(detail[key], 96);
+      if (value) sanitized[key] = value;
+    }
+  });
+
+  urlFields.forEach((key) => {
+    if (detail[key] !== undefined) {
+      const value = sanitizeTelemetryUrl(detail[key]);
+      if (value) sanitized[key] = value;
+    }
+  });
+
+  numericFields.forEach((key) => {
+    if (detail[key] !== undefined) {
+      const value = Number(detail[key]);
+      if (Number.isFinite(value)) sanitized[key] = Number(value.toFixed(3));
+    }
+  });
+
+  booleanFields.forEach((key) => {
+    if (detail[key] !== undefined) {
+      sanitized[key] = detail[key] === true;
+    }
+  });
+
+  return sanitized;
+}
+
+function sanitizeProviderContextUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.href.slice(0, 300);
+  } catch (_) {
+    return '';
+  }
+}
+
+function sanitizeAiTelemetryContext(context) {
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    return {};
+  }
+
+  const sanitized = {};
+  const hostname = getHostname(context.hostname) || getHostname(context.url);
+  if (hostname) sanitized.hostname = hostname;
+
+  const url = sanitizeProviderContextUrl(context.url);
+  if (url) sanitized.url = url;
+
+  const source = sanitizeTelemetryToken(context.source || '', 64);
+  if (source) sanitized.source = source;
+
+  const frame = sanitizeTelemetryToken(context.frame || '', 32);
+  if (frame) sanitized.frame = frame;
+
+  if (context.blockingLevel !== undefined) {
+    const blockingLevel = Number(context.blockingLevel);
+    if (Number.isFinite(blockingLevel)) sanitized.blockingLevel = clamp(Math.round(blockingLevel), 0, 3);
+  }
+
+  return sanitized;
 }
 
 function applyRiskDecay(profile, nowTs) {
@@ -4135,7 +4254,7 @@ function buildLmStudioMessages(hostname, context, policy, recentEvents) {
       content: JSON.stringify({
         task: 'classify_player_ad_obstruction',
         hostname,
-        url: String(context?.url || ''),
+        url: sanitizeProviderContextUrl(context?.url || ''),
         heuristicPolicy: {
           riskTier: String(policy?.riskTier || 'low'),
           riskScore: Number(policy?.riskScore || 0),
@@ -5091,7 +5210,7 @@ function buildGatewayPolicyRequest(hostname, context, policy, recentEvents, sett
     timestamp: getNow(),
     hostContext: {
       hostname: getHostname(hostname) || 'unknown-host',
-      url: String(context?.url || ''),
+      url: sanitizeProviderContextUrl(context?.url || ''),
       topFrame: context?.frame !== 'sub_frame',
       tabRiskTier: String(policy?.riskTier || 'low')
     },
@@ -6359,7 +6478,7 @@ function appendTelemetry(hostname, event, context) {
   aiState.telemetryLog.push({
     hostname,
     event,
-    context: context || {},
+    context: sanitizeAiTelemetryContext(context),
     ingestedAt: getNow()
   });
 
@@ -6480,9 +6599,10 @@ function processAiTelemetry(request, sender) {
     };
   }
 
-  const context = request.context || {};
+  const rawContext = request.context || {};
   const hostname =
-    getHostname(context.hostname) || getHostname(context.url) || getHostname(sender?.tab?.url) || 'unknown-host';
+    getHostname(rawContext.hostname) || getHostname(rawContext.url) || getHostname(sender?.tab?.url) || 'unknown-host';
+  const context = sanitizeAiTelemetryContext(rawContext);
 
   const rawEvents = Array.isArray(request.events)
     ? request.events
@@ -6532,6 +6652,7 @@ function processAiTelemetry(request, sender) {
 
   return {
     hostname,
+    context,
     policy,
     policyChanged: beforeSignature !== afterSignature,
     acceptedEvents: events.length,
@@ -6982,7 +7103,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       if (shouldQueryAiProvider(hostname, result.policy, Array.isArray(request.events) ? request.events : [request.event].filter(Boolean))) {
         try {
-          const advisory = await requestAiProviderAdvisory(hostname, request.context || {}, result.policy);
+          const advisory = await requestAiProviderAdvisory(hostname, result.context || {}, result.policy);
           const providerSettings = normalizeAiProviderSettings(aiState.providerSettings || {});
           const mergedPolicy = mergePolicyWithProviderAdvisory(result.policy, advisory, {
             mode: providerSettings.mode
@@ -7821,8 +7942,3 @@ setInterval(() => {
 setInterval(() => {
   persistAiState().catch(() => {});
 }, 2 * 60 * 1000);
-
-
-
-
-

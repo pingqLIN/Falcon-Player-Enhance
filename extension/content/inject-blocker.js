@@ -249,19 +249,84 @@ function isLevelAtLeast(level) {
 
 setProtectionLevel(protectionLevel);
 
-function emitAiEvent(type, options = {}) {
+function sanitizeTelemetryToken(value, maxLength = 96) {
+    const normalized = String(value || '').trim().slice(0, maxLength);
+    if (!normalized) return '';
+    return /^[a-z0-9_:. -]+$/i.test(normalized) ? normalized : 'redacted';
+}
+
+function summarizeTelemetryUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
     try {
-        window.postMessage({
-            type: '__SHIELD_AI_EVENT__',
-            payload: {
-                type,
-                source: 'inject-blocker',
-                severity: Number(options.severity || 1),
-                confidence: Number(options.confidence || 0.8),
-                detail: options.detail || {},
-                ts: Date.now()
-            }
-        }, '*');
+        const parsed = new URL(raw, window.location.href);
+        return {
+            protocol: parsed.protocol.replace(/:$/, ''),
+            hostname: parsed.hostname.toLowerCase(),
+            pathLength: parsed.pathname.length,
+            hasQuery: parsed.search.length > 0,
+            hasHash: parsed.hash.length > 0
+        };
+    } catch (e) {
+        return { malformed: true, length: raw.length };
+    }
+}
+
+function sanitizeTelemetryDetail(detail = {}) {
+    if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return {};
+
+    const sanitized = {};
+    ['reason', 'eventType', 'target', 'navigationKind'].forEach((key) => {
+        if (detail[key] !== undefined) {
+            const value = sanitizeTelemetryToken(detail[key]);
+            if (value) sanitized[key] = value;
+        }
+    });
+    ['url', 'href', 'action', 'popupUrl'].forEach((key) => {
+        if (detail[key] !== undefined) {
+            const value = summarizeTelemetryUrl(detail[key]);
+            if (value) sanitized[key] = value;
+        }
+    });
+    ['removed', 'count', 'zIndex', 'width', 'height', 'area'].forEach((key) => {
+        if (detail[key] !== undefined) {
+            const value = Number(detail[key]);
+            if (Number.isFinite(value)) sanitized[key] = Number(value.toFixed(3));
+        }
+    });
+    ['fromLink', 'imageLike', 'lowIntent', 'embeddedFrame'].forEach((key) => {
+        if (detail[key] !== undefined) {
+            sanitized[key] = detail[key] === true;
+        }
+    });
+    return sanitized;
+}
+
+function emitAiEvent(type, options = {}) {
+    const event = {
+        type,
+        source: 'inject-blocker',
+        severity: Number(options.severity || 1),
+        confidence: Number(options.confidence || 0.8),
+        detail: sanitizeTelemetryDetail(options.detail || {}),
+        ts: Date.now()
+    };
+    const context = {
+        source: 'inject-blocker',
+        hostname: window.location.hostname,
+        url: window.location.href
+    };
+
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({
+                action: 'aiTelemetry',
+                events: [event],
+                context
+            }, () => {});
+            return;
+        }
     } catch (e) {}
 }
 
@@ -569,19 +634,35 @@ function shouldTrackPotentialExternalNavigation(interaction = {}) {
 
 function notifyPotentialExternalNavigationTrap(interaction = {}) {
     if (!shouldTrackPotentialExternalNavigation(interaction)) return;
+
+    const payload = {
+        source: 'inject-blocker',
+        pageUrl: window.location.href,
+        interaction: {
+            fromLink: interaction.fromLink === true,
+            imageLike: interaction.imageLike === true,
+            lowIntent: interaction.lowIntent === true,
+            href: String(interaction.href || '').slice(0, 300),
+            target: String(interaction.target || '').slice(0, 64)
+        }
+    };
+
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({
+                action: 'recordPotentialExternalNavigationTrap',
+                pageUrl: payload.pageUrl,
+                interaction: payload.interaction
+            }, () => {});
+            return;
+        }
+    } catch (e) {}
+
     try {
         window.postMessage({
             type: '__SHIELD_POTENTIAL_EXTERNAL_NAV_TRAP__',
-            payload: {
-                pageUrl: window.location.href,
-                interaction: {
-                    fromLink: interaction.fromLink === true,
-                    imageLike: interaction.imageLike === true,
-                    lowIntent: interaction.lowIntent === true,
-                    href: String(interaction.href || '').slice(0, 300),
-                    target: String(interaction.target || '').slice(0, 64)
-                }
-            }
+            bridgeVersion: 2,
+            payload
         }, '*');
     } catch (e) {}
 }

@@ -302,12 +302,15 @@ npm run browser:workflow          # Run the local browser workflow helper
 | Document | Description |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Installation and provider setup |
-| [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | Complete feature guide with screenshots |
+| [REBUILD_FILE_MAP.md](docs/REBUILD_FILE_MAP.md) | Rebuild-oriented map of required runtime, test, and documentation files |
+| [FEATURE_GUIDE.md](docs/FEATURE_GUIDE.md) / [FEATURE_GUIDE.zh-TW.md](docs/FEATURE_GUIDE.zh-TW.md) | Complete feature map and screenshot walkthrough |
+| [ADVANCED_AI_POLICY_GUIDE.md](docs/ADVANCED_AI_POLICY_GUIDE.md) | Advanced AI provider, Policy Gate, candidate review, and privacy guide |
 | [AI_CAPABILITY_BOUNDARY.zh-TW.md](docs/AI_CAPABILITY_BOUNDARY.zh-TW.md) | AI capability boundaries and runtime authority |
 | [AI_POLICY_GATE_PARAMETERS.zh-TW.md](docs/AI_POLICY_GATE_PARAMETERS.zh-TW.md) | Policy Gate tiers and parameters |
 | [BLOCKED_ELEMENTS_FEATURE.zh-TW.md](docs/BLOCKED_ELEMENTS_FEATURE.zh-TW.md) | Custom blocked-elements workflow |
 | [PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md](docs/PROTECTION_STATUS_CONTRACT_2026-04-25.zh-TW.md) | Protection status contract |
 | [LIVE_BROWSER_SAFE_TESTING.zh-TW.md](docs/LIVE_BROWSER_SAFE_TESTING.zh-TW.md) | Safe live-browser testing workflow |
+| [docs/archive/](docs/archive/README.md) | Preserved development history, external reviews, and older planning material |
 
 Local planning notes, raw AI discussions, and implementation memos belong under `docs/local/`, `ai-private/`, `ai-discussion/`, or `local/`; those paths are not part of the publishable documentation surface.
 

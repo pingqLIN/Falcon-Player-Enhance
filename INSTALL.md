@@ -74,9 +74,9 @@
 
 ### 防護定位
 
-- 本專案不是要取代完整清單型 blocker。
-- 建議搭配 uBlock Origin Lite 等通用 blocker 使用。
-- Falcon-Player-Enhance 專注於播放器保護、popup/redirect 復原、overlay 清理與 hostile player site 修復。
+- Falcon-Player-Enhance 和一般廣告阻擋器的不同，是專門為影片播放器體驗打造。
+- 它聚焦處理播放器周邊常見的 overlay、popup、redirect、fake player、click trap，並加入可逆修復與 AI 輔助判斷。
+- 建議搭配 uBlock Origin Lite 等通用 blocker 使用：通用 blocker 處理廣域廣告與追蹤阻擋，Falcon 負責讓播放器環境更乾淨、更可控。
 
 ## 疑難排解
 
@@ -108,11 +108,11 @@
 
 ## 隱私權
 
-- ✅ 不收集任何使用者資料
-- ✅ 預設不連接外部伺服器
-- ✅ 所有處理都在本地進行
+- ✅ 預設不連接外部 AI 伺服器
+- ✅ 核心播放器防護與統計資料在瀏覽器本地運作
 - ✅ 統計資料僅保存在您的瀏覽器中
 - ✅ AI 功能是選用增強，不會在未設定 provider 時自動連線雲端模型
+- ✅ 啟用雲端 AI provider 時，只送出正規化的風險訊號與候選規則上下文，不會傾倒完整頁面內容
 
 ### 可選 AI Provider
 
