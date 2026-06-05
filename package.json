@@ -24,6 +24,7 @@
     "test:interaction-safety:flow": "python tests/interaction-safety/run_labs_flow_cta_regression.py",
     "test:interaction-safety:public": "python tests/interaction-safety/run_public_false_block_experiment.py",
     "test:side-panel:behavior": "python tests/side-panel/run_side_panel_behavior_regression.py",
+    "test:side-panel:ai-candidate-clickability": "python tests/side-panel/run_ai_candidate_clickability_regression.py",
     "browser:workflow": "python scripts/browser_workflow.py",
     "test:content-scripts:basic-exclusion": "python tests/content-scripts/run_basic_content_script_exclusion_regression.py",
     "test:frame-source:privacy": "python tests/player-detection/run_frame_source_metadata_privacy_regression.py",

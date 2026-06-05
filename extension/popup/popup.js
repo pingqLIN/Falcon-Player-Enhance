@@ -987,8 +987,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const hostname = String(candidate.hostname || '');
             const state = formatCandidateState(candidate);
             const canSelect = !candidate.latestPromotion?.active && candidate.latestDecision?.decision !== 'rejected';
-            const item = document.createElement('label');
+            const item = document.createElement('div');
             item.className = `ai-candidate-item ai-candidate-${state.replace(/\s+/g, '-')}`;
+            item.dataset.hostname = hostname;
+            item.setAttribute('role', 'checkbox');
+            item.setAttribute('aria-checked', 'false');
+            item.tabIndex = canSelect ? 0 : -1;
+            if (!canSelect) {
+                item.setAttribute('aria-disabled', 'true');
+            }
             item.innerHTML = `
                 <input type="checkbox" class="ai-candidate-checkbox" data-hostname="${escapeHtml(hostname)}" ${canSelect ? '' : 'disabled'}>
                 <span class="ai-candidate-body">
@@ -1006,6 +1013,21 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             aiCandidatesList.appendChild(item);
         });
+    }
+
+    function setAiCandidateItemSelection(item, checked) {
+        const input = item?.querySelector?.('.ai-candidate-checkbox');
+        if (!input || input.disabled) return false;
+        input.checked = Boolean(checked);
+        item.setAttribute('aria-checked', input.checked ? 'true' : 'false');
+        item.classList.toggle('selected', input.checked);
+        return true;
+    }
+
+    function toggleAiCandidateItem(item) {
+        const input = item?.querySelector?.('.ai-candidate-checkbox');
+        if (!input || input.disabled) return false;
+        return setAiCandidateItemSelection(item, !input.checked);
     }
 
     function getSelectedAiCandidateHosts() {
@@ -1864,8 +1886,39 @@ document.addEventListener('DOMContentLoaded', () => {
         btnAiSelectAllCandidates.addEventListener('click', () => {
             if (!aiCandidatesList) return;
             aiCandidatesList.querySelectorAll('.ai-candidate-checkbox:not(:disabled)').forEach((input) => {
-                input.checked = true;
+                setAiCandidateItemSelection(input.closest('.ai-candidate-item'), true);
             });
+        });
+    }
+
+    if (aiCandidatesList) {
+        aiCandidatesList.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const item = target.closest('.ai-candidate-item');
+            if (!item || !aiCandidatesList.contains(item)) return;
+            if (target instanceof HTMLInputElement && target.matches('.ai-candidate-checkbox')) {
+                setAiCandidateItemSelection(item, target.checked);
+                return;
+            }
+            event.preventDefault();
+            toggleAiCandidateItem(item);
+        });
+
+        aiCandidatesList.addEventListener('change', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement) || !target.matches('.ai-candidate-checkbox')) return;
+            setAiCandidateItemSelection(target.closest('.ai-candidate-item'), target.checked);
+        });
+
+        aiCandidatesList.addEventListener('keydown', (event) => {
+            if (event.key !== ' ' && event.key !== 'Enter') return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const item = target.closest('.ai-candidate-item');
+            if (!item || !aiCandidatesList.contains(item)) return;
+            event.preventDefault();
+            toggleAiCandidateItem(item);
         });
     }
 

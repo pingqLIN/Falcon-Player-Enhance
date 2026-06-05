@@ -1253,6 +1253,21 @@ main::-webkit-scrollbar {
     cursor: pointer;
 }
 
+.ai-candidate-item.selected {
+    border-color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.ai-candidate-item:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.ai-candidate-item[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
 .ai-candidate-item input {
     margin: 2px 0 0;
 }
