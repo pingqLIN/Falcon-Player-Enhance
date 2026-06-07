@@ -128,9 +128,11 @@ def button_state(page) -> dict[str, object]:
                 display: style.display,
                 visibility: style.visibility,
                 opacity: style.opacity,
+                pointerEvents: style.pointerEvents,
                 outlineStyle: style.outlineStyle,
                 outlineColor: style.outlineColor,
                 preview: button.getAttribute('data-shield-rescue-preview') || '',
+                previewKind: button.getAttribute('data-shield-rescue-preview-kind') || '',
                 rescued: button.getAttribute('data-shield-rescued') || '',
                 actionId: button.getAttribute('data-shield-action-id') || '',
                 metrics: { ...(window.__falconRescueMetrics || {}) }
@@ -154,6 +156,8 @@ def build_report(
         "targetInitiallyHidden": hidden_state.get("display") == "none" or hidden_state.get("visibility") == "hidden",
         "actionCollected": len(records) >= 1 and records[0].get("selector") == ".blocked-cta",
         "previewMarkedTarget": preview_state.get("preview") == "1",
+        "previewIsNonBlockingForHiddenElement": preview_state.get("previewKind") == "hidden_element"
+            and preview_state.get("pointerEvents") == "none",
         "previewUsesTemporaryStyling": preview_state.get("opacity") == "0.72"
             and preview_state.get("outlineStyle") not in ("", "none"),
         "rescueSucceeded": rescue_response.get("popupRestoreClicked") is True,

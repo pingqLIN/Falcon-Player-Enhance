@@ -771,6 +771,36 @@ kbd {
     min-width: 92px;
 }
 
+.ai-candidate-help {
+    margin-bottom: 8px;
+}
+
+.candidate-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.dashboard-candidate-checkbox {
+    margin: 0 2px 0 0;
+}
+
+#ai.ai-service-disabled .settings-group:not(:first-of-type) {
+    opacity: 0.55;
+}
+
+#ai.ai-service-disabled .provider-card,
+#ai.ai-service-disabled .mode-card {
+    cursor: not-allowed;
+}
+
+#ai.ai-service-disabled .provider-card:hover,
+#ai.ai-service-disabled .mode-card:hover {
+    border-color: var(--separator);
+    background-color: var(--bg-primary);
+}
+
 .candidate-review-chip {
     font-weight: 600;
 }

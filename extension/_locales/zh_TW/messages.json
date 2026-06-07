@@ -305,5 +305,12 @@
   "popupFlowClickSub": { "message": "點選播放器" },
   "popupFlowDetectSub": { "message": "偵測與清除" },
   "popupFlowPlaySub": { "message": "安全播放" },
-  "dashboardAiRestoreDefaults": { "message": "恢復預設" }
+  "dashboardAiRestoreDefaults": { "message": "恢復預設" },
+  "dashboardAiCandidateHelp": { "message": "Accept 代表已人工審核通過，但尚未改動正式規則。Promote 會把已接受的 candidate 升級成 confirmed rules；Rollback 可撤回這次升級。" },
+  "dashboardAiSelectAllCandidates": { "message": "全選可審核項目" },
+  "dashboardAiAcceptSelectedCandidates": { "message": "接受所選" },
+  "popupPickElementActivating": { "message": "正在啟動元素封鎖模式，請到頁面上點選要封鎖的元素。" },
+  "popupPickElementFailed": { "message": "元素封鎖模式啟動失敗：$1" },
+  "popupPickElementNoTab": { "message": "目前沒有可使用 Block element 的頁面分頁。" },
+  "popupPickElementDisabled": { "message": "請先啟用防護，再使用 Block element。" }
 }

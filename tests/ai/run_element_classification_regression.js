@@ -9,6 +9,8 @@ const dashboardCssPath = path.join(repoRoot, 'extension', 'dashboard', 'dashboar
 const dashboardHtmlPath = path.join(repoRoot, 'extension', 'dashboard', 'dashboard.html');
 const popupPath = path.join(repoRoot, 'extension', 'popup', 'popup.js');
 const popupHtmlPath = path.join(repoRoot, 'extension', 'popup', 'popup.html');
+const cosmeticFilterPath = path.join(repoRoot, 'extension', 'content', 'cosmetic-filter.js');
+const overlayRemoverPath = path.join(repoRoot, 'extension', 'content', 'overlay-remover.js');
 
 const background = fs.readFileSync(backgroundPath, 'utf8');
 const dashboard = fs.readFileSync(dashboardPath, 'utf8');
@@ -16,6 +18,8 @@ const dashboardCss = fs.readFileSync(dashboardCssPath, 'utf8');
 const dashboardHtml = fs.readFileSync(dashboardHtmlPath, 'utf8');
 const popup = fs.readFileSync(popupPath, 'utf8');
 const popupHtml = fs.readFileSync(popupHtmlPath, 'utf8');
+const cosmeticFilter = fs.readFileSync(cosmeticFilterPath, 'utf8');
+const overlayRemover = fs.readFileSync(overlayRemoverPath, 'utf8');
 
 function functionBody(source, name) {
   const marker = `function ${name}`;
@@ -159,6 +163,15 @@ assert(dashboard.includes("if (provider === 'gemini') return 'gemini-2.5-flash';
 assert(dashboard.includes("'Gemini Nano'"), 'dashboard provider switching must recognize the Chrome Built-in default model');
 assert(dashboard.includes('AI_PROVIDER_TEMPERATURES'), 'dashboard must expose per-provider temperature defaults');
 assert(dashboard.includes('AI_PROVIDER_TOP_K'), 'dashboard must expose per-provider Top K defaults');
+assert(background.includes('aiEnabled: aiState.enabled'), 'provider settings response must expose global AI enabled state');
+assert(dashboard.includes('let aiServiceEnabled = false'), 'dashboard must track global AI service state separately from provider settings');
+assert(dashboard.includes("aiStatusTitle.textContent = 'AI enabled'"), 'dashboard top AI status must use fixed global enabled wording');
+assert(dashboard.includes("aiStatusTitle.textContent = 'AI disabled'"), 'dashboard top AI status must use fixed global disabled wording');
+assert(dashboard.includes('applyAiServiceControlState'), 'dashboard must gray and lock AI provider controls when AI is disabled');
+assert(dashboardHtml.includes('id="btn-select-all-lmstudio-candidates"'), 'dashboard must expose bulk candidate select all');
+assert(dashboardHtml.includes('id="btn-accept-selected-lmstudio-candidates"'), 'dashboard must expose bulk candidate accept');
+assert(dashboardHtml.includes('dashboardAiCandidateHelp'), 'dashboard must explain Accept versus Promote');
+assert(popup.includes('applyAiMonitorDisabledState'), 'side-panel AI controls must gray and lock when AI is disabled');
 
 assert(background.includes("const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings'"), 'background must define auto reload setting key');
 assert(dashboardHtml.includes('id="toggle-display-auto-reload"'), 'dashboard must expose the display auto-reload setting');
@@ -168,5 +181,9 @@ assert(popup.includes('updateDisplayReloadWarning'), 'popup must render pending 
 assert(popup.includes("markDisplaySettingsChanged(['blockingLevel']"), 'blocking level changes must use display reload policy');
 assert(popup.includes("markDisplaySettingsChanged(['popupGuardEnabled']"), 'popup guard changes must use display reload policy');
 assert(popup.includes("markDisplaySettingsChanged(['sameTabRedirectGuardEnabled']"), 'same-tab redirect guard changes must use display reload policy');
+assert(popup.includes('popupPickElementActivating'), 'Block element must provide visible activation feedback');
+assert(popup.includes('!isSidecarContext && !isPinnedWindowMode'), 'Block element must keep the side-panel open after activation');
+assert(cosmeticFilter.includes("target.style.setProperty('pointer-events', 'none', 'important');"), 'hidden-element preview must not intercept clicks in cosmetic-filter');
+assert(overlayRemover.includes("target.style.setProperty('pointer-events', 'none', 'important');"), 'hidden-element preview must not intercept clicks in overlay-remover');
 
 console.log('element classification regression checks passed');

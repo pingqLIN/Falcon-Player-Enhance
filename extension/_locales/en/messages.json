@@ -305,5 +305,12 @@
   "popupFlowClickSub": { "message": "Click the player" },
   "popupFlowDetectSub": { "message": "Detect & clean" },
   "popupFlowPlaySub": { "message": "Safe playback" },
-  "dashboardAiRestoreDefaults": { "message": "Restore defaults" }
+  "dashboardAiRestoreDefaults": { "message": "Restore defaults" },
+  "dashboardAiCandidateHelp": { "message": "Accept records that a generated candidate passed review. Promote installs an accepted candidate as confirmed rules; use Rollback to undo that promotion." },
+  "dashboardAiSelectAllCandidates": { "message": "Select all reviewable" },
+  "dashboardAiAcceptSelectedCandidates": { "message": "Accept selected" },
+  "popupPickElementActivating": { "message": "Element blocking mode is starting. Pick an element on the page." },
+  "popupPickElementFailed": { "message": "Element blocking mode could not start: $1" },
+  "popupPickElementNoTab": { "message": "No page tab is available for Block element." },
+  "popupPickElementDisabled": { "message": "Enable protection before using Block element." }
 }

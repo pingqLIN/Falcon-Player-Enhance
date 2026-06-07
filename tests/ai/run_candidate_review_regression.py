@@ -82,6 +82,11 @@ def open_dashboard_page(context, extension_id: str, timeout_ms: int) -> Page:
     return page
 
 
+def open_ai_tab(page: Page) -> None:
+    page.locator(".menu-item[data-tab='ai']").click()
+    page.locator("#ai.tab-panel.active").wait_for(state="attached")
+
+
 def runtime_message(page: Page, payload: dict[str, object]) -> dict[str, object]:
     return page.evaluate(
         """(payload) => new Promise((resolve) => {
@@ -102,6 +107,21 @@ def click_candidate_review(page: Page, hostname: str, decision: str, reason: str
     locator.wait_for(state="attached")
     locator.evaluate("(button) => button.click()")
     page.wait_for_timeout(300)
+
+
+def bulk_accept_reviewable_candidates(page: Page) -> dict[str, object]:
+    open_ai_tab(page)
+    page.locator("#btn-select-all-lmstudio-candidates").wait_for(state="attached")
+    page.locator("#btn-select-all-lmstudio-candidates").click()
+    selected_count = page.evaluate(
+        """() => document.querySelectorAll('.dashboard-candidate-checkbox:checked').length"""
+    )
+    page.locator("#btn-accept-selected-lmstudio-candidates").click()
+    page.wait_for_timeout(500)
+    return {
+        "selectedCount": selected_count,
+        "status": page.locator("#lmstudio-status").inner_text(),
+    }
 
 
 def seed_candidate_storage(page: Page, generated_at: int, clear_review_log: bool = False) -> None:
@@ -137,7 +157,14 @@ def seed_candidate_storage(page: Page, generated_at: int, clear_review_log: bool
     )
 
 
-def build_report(initial_snapshot: dict[str, object], accept_snapshot: dict[str, object], reject_snapshot: dict[str, object], refreshed_snapshot: dict[str, object], export_dataset: dict[str, object]) -> dict[str, object]:
+def build_report(
+    initial_snapshot: dict[str, object],
+    accept_snapshot: dict[str, object],
+    reject_snapshot: dict[str, object],
+    refreshed_snapshot: dict[str, object],
+    export_dataset: dict[str, object],
+    bulk_accept_result: dict[str, object],
+) -> dict[str, object]:
     initial_candidates = initial_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     accept_candidates = accept_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
     reject_candidates = reject_snapshot.get("provider", {}).get("generatedRuleCandidates", [])
@@ -160,6 +187,8 @@ def build_report(initial_snapshot: dict[str, object], accept_snapshot: dict[str,
 
     checks = {
         "initialCandidatePresent": len(initial_candidates) == 1,
+        "dashboardBulkSelectAvailable": int(bulk_accept_result.get("selectedCount") or 0) == 1,
+        "dashboardBulkAcceptStatusVisible": "Accepted" in str(bulk_accept_result.get("status") or ""),
         "acceptDecisionRecorded": len(accept_snapshot.get("candidateReviewLog", [])) >= 1,
         "acceptSummaryUpdated": int(accept_snapshot.get("provider", {}).get("candidateReviewSummary", {}).get("acceptedCount", 0)) >= 1,
         "acceptLatestDecisionVisible": isinstance(latest_accept, dict) and latest_accept.get("decision") == "accepted",
@@ -183,6 +212,7 @@ def build_report(initial_snapshot: dict[str, object], accept_snapshot: dict[str,
         "checks": checks,
         "snapshots": {
             "initial": initial_snapshot,
+            "bulkAccept": bulk_accept_result,
             "accepted": accept_snapshot,
             "rejected": reject_snapshot,
             "refreshed": refreshed_snapshot,
@@ -225,7 +255,7 @@ def main() -> int:
                 dashboard_page = open_dashboard_page(context, extension_id, args.timeout_ms)
 
                 initial_snapshot = runtime_message(dashboard_page, {"action": "getAiInsights"}).get("snapshot", {})
-                click_candidate_review(dashboard_page, "javboys.com", "accepted", "manual_review_accept")
+                bulk_accept_result = bulk_accept_reviewable_candidates(dashboard_page)
                 accept_snapshot = runtime_message(dashboard_page, {"action": "getAiInsights"}).get("snapshot", {})
                 click_candidate_review(dashboard_page, "javboys.com", "rejected", "manual_review_reject")
                 reject_snapshot = runtime_message(dashboard_page, {"action": "getAiInsights"}).get("snapshot", {})
@@ -251,6 +281,7 @@ def main() -> int:
                     reject_snapshot,
                     refreshed_snapshot,
                     export_dataset,
+                    bulk_accept_result,
                 )
                 print(json.dumps({
                     "ok": report["ok"],

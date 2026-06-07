@@ -1203,6 +1203,16 @@ main::-webkit-scrollbar {
     margin-top: 6px;
 }
 
+.ai-monitor-panel.ai-disabled .ai-monitor-body {
+    opacity: 0.48;
+    filter: grayscale(0.35);
+}
+
+.ai-monitor-panel.ai-disabled button,
+.ai-monitor-panel.ai-disabled input {
+    cursor: not-allowed;
+}
+
 .ai-action-btn {
     flex: 1;
     justify-content: center;

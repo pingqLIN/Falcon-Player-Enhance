@@ -445,6 +445,7 @@
                 restorePreviewStyleState(element, property);
             });
             element.removeAttribute('data-shield-rescue-preview');
+            element.removeAttribute('data-shield-rescue-preview-kind');
         });
         if (previewCleanupTimer) {
             clearTimeout(previewCleanupTimer);
@@ -471,6 +472,7 @@
             });
         }
         target.setAttribute('data-shield-rescue-preview', '1');
+        target.setAttribute('data-shield-rescue-preview-kind', previewKind);
         target.style.setProperty('transition', 'opacity 140ms ease, outline-color 140ms ease, box-shadow 140ms ease', 'important');
         target.style.setProperty('outline', '2px solid rgba(255, 133, 27, 0.95)', 'important');
         target.style.setProperty('outline-offset', '2px', 'important');
@@ -478,7 +480,7 @@
         if (previewKind === 'hidden_element') {
             target.style.setProperty('display', target.getAttribute(buildPreviewDataAttr('display')) || 'block', 'important');
             target.style.setProperty('visibility', 'visible', 'important');
-            target.style.setProperty('pointer-events', 'auto', 'important');
+            target.style.setProperty('pointer-events', 'none', 'important');
             target.style.setProperty('opacity', '0.72', 'important');
         } else {
             target.style.setProperty('pointer-events', 'auto', 'important');

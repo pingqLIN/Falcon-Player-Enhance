@@ -406,6 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiMonitorToggle) {
             aiMonitorToggle.checked = aiMonitorEnabled;
         }
+        applyAiMonitorDisabledState(aiMonitorEnabled === false);
         const whitelistEnhanceOnly = result.whitelistEnhanceOnly !== false;
         if (whitelistEnhanceOnlyToggle) {
             whitelistEnhanceOnlyToggle.checked = whitelistEnhanceOnly;
@@ -939,6 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiMonitorToggle) {
             aiMonitorToggle.checked = aiMonitorEnabled;
         }
+        applyAiMonitorDisabledState(aiMonitorEnabled === false);
         if (aiHighRiskCount) {
             aiHighRiskCount.textContent = formatNumber(snapshot.highRiskHosts?.length || 0);
         }
@@ -953,6 +955,14 @@ document.addEventListener('DOMContentLoaded', () => {
             aiProviderModel.textContent = snapshot.provider?.state?.lastResolvedModel || '-';
         }
         renderAiCandidates(snapshot.provider?.generatedRuleCandidates || [], snapshot.provider || {});
+    }
+
+    function applyAiMonitorDisabledState(disabled) {
+        if (!aiMonitorPanel) return;
+        aiMonitorPanel.classList.toggle('ai-disabled', Boolean(disabled));
+        aiMonitorPanel.querySelectorAll('button, input, select, textarea').forEach((control) => {
+            control.disabled = Boolean(disabled);
+        });
     }
 
     function getProviderLabel(provider) {
@@ -995,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', () => {
         latestAiCandidates.forEach((candidate) => {
             const hostname = String(candidate.hostname || '');
             const state = formatCandidateState(candidate);
-            const canSelect = !candidate.latestPromotion?.active && candidate.latestDecision?.decision !== 'rejected';
+            const canSelect = aiMonitorEnabled !== false && !candidate.latestPromotion?.active && candidate.latestDecision?.decision !== 'rejected';
             const isAccepted = candidate.latestDecision?.decision === 'accepted';
             const isRejected = candidate.latestDecision?.decision === 'rejected';
             const isPromoted = candidate.latestPromotion?.active === true;
@@ -1021,10 +1031,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </span>
                     <span class="ai-candidate-summary-text">${escapeHtml(candidate.summary || t('popupAiCandidatesNoSummary'))}</span>
                     <span class="ai-candidate-row-actions" role="group" aria-label="Candidate actions">
-                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-accept" data-action="accept" data-hostname="${escapeHtml(hostname)}" ${isAccepted || isPromoted ? 'disabled' : ''}>${escapeHtml(t('popupAiCandidateAccept'))}</button>
-                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-reject" data-action="reject" data-hostname="${escapeHtml(hostname)}" ${isRejected || isPromoted ? 'disabled' : ''}>${escapeHtml(t('popupAiCandidateReject'))}</button>
-                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-promote" data-action="promote" data-hostname="${escapeHtml(hostname)}" ${isAccepted && !isPromoted ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidatePromote'))}</button>
-                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-rollback" data-action="rollback" data-promotion-id="${escapeHtml(promotionId)}" ${isPromoted && promotionId ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidateRollback'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-accept" data-action="accept" data-hostname="${escapeHtml(hostname)}" ${aiMonitorEnabled !== false && !isAccepted && !isPromoted ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidateAccept'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-reject" data-action="reject" data-hostname="${escapeHtml(hostname)}" ${aiMonitorEnabled !== false && !isRejected && !isPromoted ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidateReject'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-promote" data-action="promote" data-hostname="${escapeHtml(hostname)}" ${aiMonitorEnabled !== false && isAccepted && !isPromoted ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidatePromote'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-rollback" data-action="rollback" data-promotion-id="${escapeHtml(promotionId)}" ${aiMonitorEnabled !== false && isPromoted && promotionId ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidateRollback'))}</button>
                     </span>
                 </span>
             `;
@@ -1694,29 +1704,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function toggleElementPicker() {
-        if (!currentTabId || masterToggle.checked === false) return;
+        if (!currentTabId) {
+            updateFlowStatus(0, t('popupPickElementNoTab'));
+            return;
+        }
+        if (masterToggle.checked === false) {
+            updateFlowStatus(0, t('popupPickElementDisabled'));
+            return;
+        }
 
         if (pickerActive) {
             // 停用：直接發送到 content script
             chrome.tabs.sendMessage(currentTabId, { action: 'deactivateElementPicker' }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error('Failed to deactivate element picker:', chrome.runtime.lastError.message);
+                    updateFlowStatus(0, t('popupPickElementFailed', [chrome.runtime.lastError.message]));
                     return;
                 }
                 updatePickerButtonState(false);
+                updateFlowStatus(0, t('popupFlowStatusClickLock'));
             });
         } else {
             // 啟用：透過 background 按需注入後自動啟用
+            updateFlowStatus(0, t('popupPickElementActivating'));
             chrome.runtime.sendMessage({ action: 'injectElementPicker', tabId: currentTabId }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error('Failed to inject element picker:', chrome.runtime.lastError.message);
+                    updateFlowStatus(0, t('popupPickElementFailed', [chrome.runtime.lastError.message]));
                     return;
                 }
                 if (response?.success) {
                     updatePickerButtonState(true);
+                    updateFlowStatus(0, t('popupPickElementActivating'));
                     // 啟動後關閉 popup，讓使用者可以直接在頁面選取元素
-                    window.close();
+                    if (!isSidecarContext && !isPinnedWindowMode) {
+                        window.close();
+                    }
+                    return;
                 }
+                updateFlowStatus(0, t('popupPickElementFailed', [response?.error || 'unknown_error']));
             });
         }
     }
@@ -2083,14 +2109,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const pinnedPick = document.getElementById('pinned-pick-element');
         if (pinnedPick) pinnedPick.disabled = disabled;
         if (btnRescan) btnRescan.disabled = disabled;
-        if (aiMonitorToggle) aiMonitorToggle.disabled = disabled;
-        if (btnExportAi) btnExportAi.disabled = disabled;
-        if (btnResetAi) btnResetAi.disabled = disabled;
-        if (btnDowngradeHost) btnDowngradeHost.disabled = disabled || !currentDomain;
+        const aiDisabled = disabled || aiMonitorEnabled === false;
+        if (aiMonitorToggle) aiMonitorToggle.disabled = aiDisabled;
+        if (btnExportAi) btnExportAi.disabled = aiDisabled;
+        if (btnResetAi) btnResetAi.disabled = aiDisabled;
+        if (btnDowngradeHost) btnDowngradeHost.disabled = aiDisabled || !currentDomain;
         if (btnScanFalsePositive) btnScanFalsePositive.disabled = disabled || !currentTabId;
         if (falsePositivePreviewToggle) falsePositivePreviewToggle.disabled = disabled || !currentTabId;
-        if (btnAiSelectAllCandidates) btnAiSelectAllCandidates.disabled = disabled;
-        if (btnAiAcceptSelectedCandidates) btnAiAcceptSelectedCandidates.disabled = disabled;
+        if (btnAiSelectAllCandidates) btnAiSelectAllCandidates.disabled = aiDisabled;
+        if (btnAiAcceptSelectedCandidates) btnAiAcceptSelectedCandidates.disabled = aiDisabled;
         if (isPinnedWindowMode) {
             setAiPanelExpanded(true);
         } else if (disabled || aiMonitorPanel?.hidden) {

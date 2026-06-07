@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const lmstudioCandidateSummary = document.getElementById('lmstudio-candidate-summary');
     const lmstudioCandidateList = document.getElementById('lmstudio-candidate-list');
     const btnExportLmstudioCandidates = document.getElementById('btn-export-lmstudio-candidates');
+    const btnSelectAllLmstudioCandidates = document.getElementById('btn-select-all-lmstudio-candidates');
+    const btnAcceptSelectedLmstudioCandidates = document.getElementById('btn-accept-selected-lmstudio-candidates');
     const aiStatusDot = document.getElementById('ai-status-dot');
     const aiStatusTitle = document.getElementById('ai-status-title');
     const aiStatusSub = document.getElementById('ai-status-sub');
@@ -90,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastSelectedProvider = 'openai';
     let hasStoredCredential = false;
     let providerSelectionRevision = 0;
+    let aiServiceEnabled = false;
 
     async function initTheme() {
         const result = await chrome.storage.local.get(['theme']);
@@ -508,13 +511,52 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
+    function applyAiServiceControlState() {
+        const disabled = aiServiceEnabled !== true;
+        const aiPanel = document.getElementById('ai');
+        aiPanel?.classList.toggle('ai-service-disabled', disabled);
+
+        const controls = Array.from(document.querySelectorAll(
+            '#ai-configure-panel input, #ai-configure-panel button, #ai-configure-panel select, ' +
+            '#ai .collapsible-section input, #ai .collapsible-section button, #ai .collapsible-section select, ' +
+            '#ai .ai-save-bar button, ' +
+            '#btn-select-all-lmstudio-candidates, #btn-accept-selected-lmstudio-candidates'
+        ));
+        controls.forEach((control) => {
+            if (control === lmstudioEnabled) return;
+            if (control === aiKeyDisplay) {
+                control.disabled = true;
+                return;
+            }
+            control.disabled = disabled;
+        });
+
+        providerCards.forEach((card) => {
+            card.classList.toggle('disabled', disabled);
+            card.setAttribute('aria-disabled', String(disabled));
+            card.tabIndex = disabled ? -1 : 0;
+        });
+
+        modeCards.forEach((card) => {
+            card.classList.toggle('disabled', disabled);
+            card.setAttribute('aria-disabled', String(disabled));
+            card.tabIndex = disabled ? -1 : (card.getAttribute('aria-checked') === 'true' ? 0 : -1);
+        });
+
+        if (disabled && lmstudioCandidateList) {
+            lmstudioCandidateList.querySelectorAll('button, input').forEach((control) => {
+                control.disabled = true;
+            });
+        }
+    }
+
     function renderAiStatusCard(settings, state) {
         if (!aiStatusTitle || !aiStatusSub || !aiStatusDot) return;
 
         const provider = String(settings?.provider || lastSelectedProvider || 'openai');
         const providerLabel = getProviderLabel(provider);
         const mode = String(settings?.mode || 'off');
-        const enabled = settings?.enabled === true;
+        const enabled = aiServiceEnabled === true;
         const lastHealthOk = state?.lastHealthOk === true;
         const error = state?.lastError ? String(state.lastError) : '';
         const model = settings?.model || getProviderDefaultModel(provider) || 'runtime default';
@@ -532,14 +574,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!enabled) {
             aiStatusTitle.textContent = 'AI disabled';
-            aiStatusSub.textContent = `${providerLabel} · mode=${mode}`;
+            aiStatusSub.textContent = 'Provider settings are locked until AI is enabled.';
             return;
         }
 
-        aiStatusTitle.textContent = providerLabel;
+        aiStatusTitle.textContent = 'AI enabled';
         aiStatusSub.textContent = error
-            ? `${model} · ${error}${needsAttention ? ' · setup needed' : ''}`
-            : `${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
+            ? `${providerLabel} · ${model} · ${error}${needsAttention ? ' · setup needed' : ''}`
+            : `${providerLabel} · ${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
     }
 
     function formatAiHealthFailure(providerLabel, response = {}) {
@@ -580,6 +622,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectProvider(nextProvider) {
+        if (aiServiceEnabled !== true) {
+            setLmStudioStatus('Enable AI before changing provider settings.', true);
+            return;
+        }
         providerSelectionRevision += 1;
         syncProviderDefaults(nextProvider);
         if (aiProvider) {
@@ -592,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderAiStatusCard({
             provider: nextProvider,
-            enabled: lmstudioEnabled?.checked === true,
+            enabled: aiServiceEnabled === true,
             mode: lmstudioMode?.value || 'off',
             model: lmstudioModel?.value || getProviderDefaultModel(nextProvider)
         });
@@ -605,6 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!Array.isArray(candidateList) || candidateList.length === 0) {
             lmstudioCandidateList.innerHTML = '<div class="empty-state">No generated rule candidates yet.</div>';
+            applyAiServiceControlState();
             return;
         }
 
@@ -614,6 +661,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const providerLabel = getProviderLabel(String(candidate.provider || 'lmstudio'));
             const latestDecision = candidate.latestDecision || null;
             const latestPromotion = candidate.latestPromotion || null;
+            const isAccepted = latestDecision?.decision === 'accepted';
+            const isRejected = latestDecision?.decision === 'rejected';
+            const isPromoted = latestPromotion?.active === true;
+            const canBulkAccept = !isAccepted && !isRejected && !isPromoted;
             const decisionLabel = latestDecision
                 ? `${latestDecision.decision}${latestDecision.reason ? ` · ${latestDecision.reason}` : ''}`
                 : 'pending review';
@@ -624,6 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'rolled back';
             item.innerHTML = `
                 <div class="policy-host-main">
+                    <input type="checkbox" class="dashboard-candidate-checkbox" data-hostname="${escapeHtml(candidate.hostname || '')}" ${canBulkAccept && aiServiceEnabled === true ? '' : 'disabled'} aria-label="Select generated candidate">
                     <span class="policy-host-name">${escapeHtml(candidate.hostname || 'unknown-host')}</span>
                     <span class="policy-chip">${escapeHtml(candidate.model || providerLabel)}</span>
                 </div>
@@ -638,10 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>${escapeHtml(candidate.summary || 'No summary')}</span>
                 </div>
                 <div class="candidate-review-actions">
-                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="accepted">Accept</button>
-                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="rejected">Reject</button>
-                    <button class="btn-secondary btn-candidate-promote" data-hostname="${escapeHtml(candidate.hostname || '')}" ${latestDecision?.decision === 'accepted' && !latestPromotion?.active ? '' : 'disabled'}>Promote</button>
-                    <button class="btn-secondary btn-candidate-rollback" data-promotion-id="${escapeHtml(latestPromotion?.promotionId || '')}" ${latestPromotion?.active ? '' : 'disabled'}>Rollback</button>
+                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="accepted" ${aiServiceEnabled === true && !isAccepted && !isPromoted ? '' : 'disabled'}>Accept</button>
+                    <button class="btn-secondary btn-candidate-review" data-hostname="${escapeHtml(candidate.hostname || '')}" data-decision="rejected" ${aiServiceEnabled === true && !isRejected && !isPromoted ? '' : 'disabled'}>Reject</button>
+                    <button class="btn-secondary btn-candidate-promote" data-hostname="${escapeHtml(candidate.hostname || '')}" ${aiServiceEnabled === true && latestDecision?.decision === 'accepted' && !latestPromotion?.active ? '' : 'disabled'}>Promote</button>
+                    <button class="btn-secondary btn-candidate-rollback" data-promotion-id="${escapeHtml(latestPromotion?.promotionId || '')}" ${aiServiceEnabled === true && latestPromotion?.active ? '' : 'disabled'}>Rollback</button>
                 </div>
             `;
             lmstudioCandidateList.appendChild(item);
@@ -725,6 +777,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+
+        applyAiServiceControlState();
+    }
+
+    function setAllDashboardCandidateSelection(checked) {
+        if (!lmstudioCandidateList) return;
+        lmstudioCandidateList.querySelectorAll('.dashboard-candidate-checkbox:not(:disabled)').forEach((checkbox) => {
+            checkbox.checked = Boolean(checked);
+        });
+    }
+
+    function getSelectedDashboardCandidateHosts() {
+        if (!lmstudioCandidateList) return [];
+        return Array.from(lmstudioCandidateList.querySelectorAll('.dashboard-candidate-checkbox:checked'))
+            .map((checkbox) => String(checkbox.dataset.hostname || '').trim())
+            .filter(Boolean);
+    }
+
+    async function acceptSelectedDashboardCandidates() {
+        const hosts = getSelectedDashboardCandidateHosts();
+        if (hosts.length === 0) {
+            setLmStudioStatus('No reviewable candidates selected.', true);
+            return;
+        }
+        if (btnAcceptSelectedLmstudioCandidates) btnAcceptSelectedLmstudioCandidates.disabled = true;
+        let successCount = 0;
+        const failures = [];
+        try {
+            for (const hostname of hosts) {
+                const response = await runtimeMessage({
+                    action: 'reviewAiRuleCandidate',
+                    hostname,
+                    decision: 'accepted',
+                    reason: 'dashboard_bulk_accept'
+                });
+                if (response?.success) {
+                    successCount += 1;
+                } else {
+                    failures.push(hostname);
+                }
+            }
+            setLmStudioStatus(failures.length > 0
+                ? `Accepted ${successCount} candidate(s), ${failures.length} failed.`
+                : `Accepted ${successCount} selected candidate(s).`);
+            await loadPolicyGateOverview();
+        } finally {
+            if (btnAcceptSelectedLmstudioCandidates) btnAcceptSelectedLmstudioCandidates.disabled = aiServiceEnabled !== true;
+        }
     }
 
     async function loadPolicyGateOverview() {
@@ -771,17 +871,16 @@ document.addEventListener('DOMContentLoaded', () => {
         renderLmStudioCandidates(candidateList);
     }
 
-    loadPolicyGateOverview();
-
     function setLmStudioStatus(text, isError = false) {
         if (!lmstudioStatus) return;
         lmstudioStatus.textContent = text;
         lmstudioStatus.style.color = isError ? 'var(--danger, #b42318)' : '';
     }
 
-    function hydrateProviderForm(settings, state) {
+    function hydrateProviderForm(settings, state, aiEnabled = aiServiceEnabled) {
         const provider = String(settings?.provider || 'openai');
         const hasStoredApiKey = settings?.hasApiKey === true;
+        aiServiceEnabled = aiEnabled !== false;
         hasStoredCredential = hasStoredApiKey;
         lastSelectedProvider = provider;
         if (aiProvider) aiProvider.value = provider;
@@ -792,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'OpenAI API key, Gemini API key, or gateway bearer token';
         }
         renderApiKeyState(hasStoredApiKey, false);
-        if (lmstudioEnabled) lmstudioEnabled.checked = settings?.enabled === true;
+        if (lmstudioEnabled) lmstudioEnabled.checked = aiServiceEnabled === true;
         if (lmstudioEndpoint) lmstudioEndpoint.value = settings?.endpoint || getProviderDefaultEndpoint(provider);
         if (lmstudioModel) {
             lmstudioModel.value = settings?.model || getProviderDefaultModel(provider);
@@ -809,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiConfigurePanel.style.display = 'block';
         }
         renderAiStatusCard(settings, state);
+        applyAiServiceControlState();
 
         if (state) {
             const providerLabel = getProviderLabel(String(state.lastProvider || provider));
@@ -827,7 +927,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const provider = getSelectedProvider();
         return {
             provider,
-            enabled: lmstudioEnabled?.checked === true,
+            enabled: aiServiceEnabled === true,
             endpoint: lmstudioEndpoint?.value || getProviderDefaultEndpoint(provider),
             model: lmstudioModel?.value || (
                 getProviderDefaultModel(provider)
@@ -854,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lmstudioDynamicRules) lmstudioDynamicRules.checked = true;
         renderAiStatusCard({
             provider,
-            enabled: lmstudioEnabled?.checked === true,
+            enabled: aiServiceEnabled === true,
             mode: lmstudioMode?.value || 'hybrid',
             model: getProviderDefaultModel(provider)
         });
@@ -878,7 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (String(response.settings?.provider || '') !== requestedProvider) {
             return;
         }
-        hydrateProviderForm(response.settings, response.state);
+        hydrateProviderForm(response.settings, response.state, response.aiEnabled);
+        await loadPolicyGateOverview();
     }
 
     async function saveAiProviderSettings() {
@@ -892,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setLmStudioStatus(response?.error || `Failed to save ${providerLabel} settings.`, true);
             return;
         }
-        hydrateProviderForm(response.settings, response.state);
+        hydrateProviderForm(response.settings, response.state, response.aiEnabled);
         loadStatusBar();
         setLmStudioStatus(`${providerLabel} provider settings saved.`);
     }
@@ -937,6 +1038,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modeCards.forEach((card) => {
         const activate = () => {
+            if (aiServiceEnabled !== true) {
+                setLmStudioStatus('Enable AI before changing mode settings.', true);
+                return;
+            }
             const mode = card.dataset.mode || 'off';
             if (lmstudioMode) {
                 lmstudioMode.value = mode;
@@ -944,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setSelectedModeCard(mode);
             renderAiStatusCard({
                 provider: lastSelectedProvider,
-                enabled: lmstudioEnabled?.checked === true,
+                enabled: aiServiceEnabled === true,
                 mode,
                 model: lmstudioModel?.value || getProviderDefaultModel(lastSelectedProvider)
             });
@@ -977,13 +1082,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (lmstudioEnabled) {
-        lmstudioEnabled.addEventListener('change', () => {
+        lmstudioEnabled.addEventListener('change', async () => {
+            const nextEnabled = lmstudioEnabled.checked === true;
+            const response = await runtimeMessage({ action: 'setAiMonitorEnabled', enabled: nextEnabled });
+            if (!response?.success) {
+                lmstudioEnabled.checked = aiServiceEnabled === true;
+                setLmStudioStatus(response?.error || 'Failed to update AI service state.', true);
+                return;
+            }
+            aiServiceEnabled = response.enabled !== false;
+            applyAiServiceControlState();
             renderAiStatusCard({
                 provider: lastSelectedProvider,
-                enabled: lmstudioEnabled.checked,
+                enabled: aiServiceEnabled === true,
                 mode: lmstudioMode?.value || 'off',
                 model: lmstudioModel?.value || getProviderDefaultModel(lastSelectedProvider)
             });
+            setLmStudioStatus(aiServiceEnabled
+                ? 'AI service enabled. Provider settings are editable.'
+                : 'AI service disabled. Provider settings are locked.');
+            loadStatusBar();
+            await loadPolicyGateOverview();
         });
     }
 
@@ -1006,6 +1125,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
             downloadJsonFile(`falcon-ai-candidates-${stamp}.json`, response.candidates || {});
         });
+    }
+    if (btnSelectAllLmstudioCandidates) {
+        btnSelectAllLmstudioCandidates.addEventListener('click', () => {
+            setAllDashboardCandidateSelection(true);
+        });
+    }
+    if (btnAcceptSelectedLmstudioCandidates) {
+        btnAcceptSelectedLmstudioCandidates.addEventListener('click', acceptSelectedDashboardCandidates);
     }
 
     loadAiProviderSettings();

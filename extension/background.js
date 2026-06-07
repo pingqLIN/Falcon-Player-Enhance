@@ -7066,6 +7066,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const requestedProfile = getAiProviderProfile(request.provider);
     sendResponse({
       success: true,
+      aiEnabled: aiState.enabled,
+      activeProvider: normalizeAiProviderSettings(aiState.providerSettings || {}).provider,
       settings: redactAiProviderSettings(requestedProfile, getAiProviderSecret(requestedProfile.provider)),
       state: normalizeAiProviderState(aiState.providerState || {})
     });
@@ -7098,6 +7100,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       scheduleAiPersist();
       sendResponse({
         success: true,
+        aiEnabled: aiState.enabled,
+        activeProvider: normalizeAiProviderSettings(aiState.providerSettings || {}).provider,
         settings: redactAiProviderSettings(aiState.providerSettings, getAiProviderSecret(aiState.providerSettings?.provider)),
         state: normalizeAiProviderState(aiState.providerState || {})
       });
