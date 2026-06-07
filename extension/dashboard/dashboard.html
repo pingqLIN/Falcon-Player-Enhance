@@ -112,6 +112,27 @@
                     </div>
                 </div>
 
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardDisplayApplyHeader">Page display updates</div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title" data-i18n="dashboardDisplayAutoReloadTitle">Reload page after display-related settings</div>
+                                <div class="setting-desc" data-i18n="dashboardDisplayAutoReloadDesc">Settings that change page cleanup, blocking, hidden elements, or site lists reload the active page by default so the current view is updated.</div>
+                            </div>
+                            <label class="toggle-switch" data-i18n-title="dashboardDisplayAutoReloadTitle" title="Reload page after display-related settings">
+                                <input type="checkbox" id="toggle-display-auto-reload" checked data-i18n-aria-label="dashboardDisplayAutoReloadTitle" aria-label="Reload page after display-related settings">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="display-reload-notice" id="display-reload-notice">
+                        <span data-i18n="dashboardDisplayReloadNotice">Falcon classifies page cleanup, protection level, navigation guards, hidden-element rules, and site lists as display-related. Changes reload the active page automatically unless you turn this off.</span>
+                        <button class="btn-secondary display-reload-dismiss" id="btn-dismiss-display-reload-notice" data-i18n="dashboardDisplayReloadNoticeDismiss">Got it</button>
+                    </div>
+                    <div class="info-text" id="display-reload-status"></div>
+                </div>
+
                 <!-- Popup display settings -->
                 <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardPopupDisplayHeader">Popup display</div>

@@ -61,6 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const falsePositiveRescueList = document.getElementById('false-positive-rescue-list');
     const btnScanFalsePositive = document.getElementById('btn-scan-false-positive');
     const falsePositivePreviewToggle = document.getElementById('false-positive-preview-toggle');
+    const displayReloadWarning = document.getElementById('display-reload-warning');
+    const displayReloadWarningBody = document.getElementById('display-reload-warning-body');
+    const btnDisplayReloadNow = document.getElementById('btn-display-reload-now');
     const statsEmptyState = document.getElementById('stats-empty-state');
     const aiCandidatesCount = document.getElementById('ai-candidates-count');
     const aiCandidatesSummary = document.getElementById('ai-candidates-summary');
@@ -70,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentDomain = '';
     let currentTabId = null;
+    let currentTabUrl = '';
     let blockedPlayers = [];
     let currentFlowStep = 0; // 0=detect, 1=play, 2=monitor
     let pickerActive = false;
@@ -90,6 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPinnedWindowMode = urlParams.get('pinned') === '1';
     const pinnedTabId = Number(urlParams.get('tabId') || 0);
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
+    const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings';
+    const DISPLAY_SETTINGS_PENDING_RELOAD_KEY = 'displaySettingsPendingReload';
     const POPUP_SCAN_INTERVAL_MS = 1000;
     const PINNED_SCAN_INTERVAL_MS = 4000;
     let latestAiCandidates = [];
@@ -100,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadSettings();
         await getCurrentTab();
         await syncPinnedControlState();
+        await updateDisplayReloadWarning();
 
         // 如果側面板已開啟且目前是普通 popup 視窗模式，直接關閉避免重複顯示
         if (!isSidecarContext && isPinnedWindowMode) {
@@ -583,6 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (tab?.id) {
                     currentTabId = tab.id;
                     if (tab.url) {
+                        currentTabUrl = tab.url;
                         const url = new URL(tab.url);
                         currentDomain = url.hostname.replace(/^www\./, '');
                     }
@@ -603,6 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tab) {
                 currentTabId = tab.id;
                 if (tab.url) {
+                    currentTabUrl = tab.url;
                     const url = new URL(tab.url);
                     currentDomain = url.hostname.replace(/^www\./, '');
                 }
@@ -987,15 +996,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const hostname = String(candidate.hostname || '');
             const state = formatCandidateState(candidate);
             const canSelect = !candidate.latestPromotion?.active && candidate.latestDecision?.decision !== 'rejected';
+            const isAccepted = candidate.latestDecision?.decision === 'accepted';
+            const isRejected = candidate.latestDecision?.decision === 'rejected';
+            const isPromoted = candidate.latestPromotion?.active === true;
+            const promotionId = String(candidate.latestPromotion?.promotionId || '');
             const item = document.createElement('div');
             item.className = `ai-candidate-item ai-candidate-${state.replace(/\s+/g, '-')}`;
             item.dataset.hostname = hostname;
+            item.dataset.selectionDisabled = canSelect ? 'false' : 'true';
             item.setAttribute('role', 'checkbox');
             item.setAttribute('aria-checked', 'false');
             item.tabIndex = canSelect ? 0 : -1;
-            if (!canSelect) {
-                item.setAttribute('aria-disabled', 'true');
-            }
             item.innerHTML = `
                 <input type="checkbox" class="ai-candidate-checkbox" data-hostname="${escapeHtml(hostname)}" ${canSelect ? '' : 'disabled'}>
                 <span class="ai-candidate-body">
@@ -1009,6 +1020,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span>${escapeHtml(state)}</span>
                     </span>
                     <span class="ai-candidate-summary-text">${escapeHtml(candidate.summary || t('popupAiCandidatesNoSummary'))}</span>
+                    <span class="ai-candidate-row-actions" role="group" aria-label="Candidate actions">
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-accept" data-action="accept" data-hostname="${escapeHtml(hostname)}" ${isAccepted || isPromoted ? 'disabled' : ''}>${escapeHtml(t('popupAiCandidateAccept'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-reject" data-action="reject" data-hostname="${escapeHtml(hostname)}" ${isRejected || isPromoted ? 'disabled' : ''}>${escapeHtml(t('popupAiCandidateReject'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-promote" data-action="promote" data-hostname="${escapeHtml(hostname)}" ${isAccepted && !isPromoted ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidatePromote'))}</button>
+                        <button class="rescan-btn ai-candidate-row-btn btn-ai-candidate-rollback" data-action="rollback" data-promotion-id="${escapeHtml(promotionId)}" ${isPromoted && promotionId ? '' : 'disabled'}>${escapeHtml(t('popupAiCandidateRollback'))}</button>
+                    </span>
                 </span>
             `;
             aiCandidatesList.appendChild(item);
@@ -1044,6 +1061,51 @@ document.addEventListener('DOMContentLoaded', () => {
             decision,
             reason
         });
+    }
+
+    async function promoteCandidate(hostname) {
+        return runtimeMessage({
+            action: 'promoteAiRuleCandidate',
+            hostname,
+            reason: 'popup_side_panel_promotion',
+            evidenceRefs: ['popup_side_panel_promotion']
+        });
+    }
+
+    async function rollbackCandidatePromotion(promotionId) {
+        return runtimeMessage({
+            action: 'rollbackAiCandidatePromotion',
+            promotionId,
+            reason: 'popup_side_panel_rollback',
+            evidenceRefs: ['popup_side_panel_rollback']
+        });
+    }
+
+    async function handleCandidateRowAction(button) {
+        const action = String(button.dataset.action || '');
+        const hostname = String(button.dataset.hostname || '').trim();
+        const promotionId = String(button.dataset.promotionId || '').trim();
+        button.disabled = true;
+        let response = null;
+        try {
+            if (action === 'accept') {
+                response = await reviewCandidate(hostname, 'accepted', 'popup_side_panel_accept');
+            } else if (action === 'reject') {
+                response = await reviewCandidate(hostname, 'rejected', 'popup_side_panel_reject');
+            } else if (action === 'promote') {
+                response = await promoteCandidate(hostname);
+            } else if (action === 'rollback') {
+                response = await rollbackCandidatePromotion(promotionId);
+            }
+            if (!response?.success) {
+                aiCandidatesSummary.textContent = response?.error || t('popupAiCandidateActionFailed');
+                return;
+            }
+            aiCandidatesSummary.textContent = t('popupAiCandidateActionDone', [formatPolicyGateAction(action)]);
+            await loadAiMonitorState();
+        } finally {
+            button.disabled = false;
+        }
     }
 
     async function acceptSelectedAiCandidates() {
@@ -1220,6 +1282,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 resolve(response || null);
             });
         });
+    }
+
+    async function clearDisplaySettingsPendingReload() {
+        await chrome.storage.local.set({ [DISPLAY_SETTINGS_PENDING_RELOAD_KEY]: {} });
+    }
+
+    function pendingReloadMatchesCurrentTab(pending = {}) {
+        const pendingTabId = Number(pending.tabId || 0);
+        if (!pendingTabId || !currentTabId || pendingTabId !== Number(currentTabId)) {
+            return false;
+        }
+        return Number(pending.changedAt || 0) > 0;
+    }
+
+    async function markDisplaySettingsChanged(settingKeys = [], source = 'popup') {
+        const result = await chrome.storage.local.get([DISPLAY_RELOAD_ON_CHANGE_KEY]);
+        const shouldReload = result[DISPLAY_RELOAD_ON_CHANGE_KEY] !== false;
+        if (shouldReload) {
+            reloadCurrentTab();
+            await clearDisplaySettingsPendingReload();
+            await updateDisplayReloadWarning();
+            return;
+        }
+        await chrome.storage.local.set({
+            [DISPLAY_SETTINGS_PENDING_RELOAD_KEY]: {
+                tabId: Number(currentTabId || 0),
+                url: String(currentTabUrl || ''),
+                settingKeys: Array.isArray(settingKeys) ? settingKeys.map((key) => String(key || '')).filter(Boolean) : [],
+                source,
+                changedAt: Date.now()
+            }
+        });
+        await updateDisplayReloadWarning();
+    }
+
+    async function updateDisplayReloadWarning() {
+        if (!displayReloadWarning) return;
+        if (!isSidecarContext && !isPinnedWindowMode) {
+            displayReloadWarning.hidden = true;
+            return;
+        }
+        const result = await chrome.storage.local.get([
+            DISPLAY_RELOAD_ON_CHANGE_KEY,
+            DISPLAY_SETTINGS_PENDING_RELOAD_KEY
+        ]);
+        const shouldWarn = result[DISPLAY_RELOAD_ON_CHANGE_KEY] === false &&
+            pendingReloadMatchesCurrentTab(result[DISPLAY_SETTINGS_PENDING_RELOAD_KEY] || {});
+        displayReloadWarning.hidden = !shouldWarn;
+        if (shouldWarn && displayReloadWarningBody) {
+            const keys = Array.isArray(result[DISPLAY_SETTINGS_PENDING_RELOAD_KEY]?.settingKeys)
+                ? result[DISPLAY_SETTINGS_PENDING_RELOAD_KEY].settingKeys.join(', ')
+                : '';
+            displayReloadWarningBody.textContent = keys
+                ? t('popupDisplayReloadWarningBodyWithKeys', [keys])
+                : t('popupDisplayReloadWarningBody');
+        }
     }
 
     function formatActionRecordMeta(record = {}) {
@@ -1423,8 +1541,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePickerButtonState(false);
         }
 
-        if (options.reloadTab) {
-            reloadCurrentTab();
+        if (options.displayRelated !== false) {
+            await markDisplaySettingsChanged(['blockingLevel'], 'popup_blocking_level');
         }
 
         return true;
@@ -1663,7 +1781,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetLevel = enabled
             ? resolvePreferredEnabledLevel()
             : 0;
-        const success = await setBlockingLevel(targetLevel, { reloadTab: true });
+        const success = await setBlockingLevel(targetLevel, { displayRelated: true });
         if (!success) {
             masterToggle.checked = !enabled;
         }
@@ -1804,6 +1922,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     enabled
                 }).catch(() => {});
             }
+            await markDisplaySettingsChanged(['whitelistEnhanceOnly'], 'popup_whitelist_enhance_only');
         });
     }
 
@@ -1825,7 +1944,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!success) {
                 popupGuardToggle.checked = !nextValue;
+                return;
             }
+            await markDisplaySettingsChanged(['popupGuardEnabled'], 'popup_navigation_guard');
         });
     }
 
@@ -1838,7 +1959,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!success) {
                 sameTabRedirectGuardToggle.checked = !nextValue;
+                return;
             }
+            await markDisplaySettingsChanged(['sameTabRedirectGuardEnabled'], 'popup_navigation_guard');
         });
     }
 
@@ -1857,6 +1980,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnDowngradeHost) {
         btnDowngradeHost.addEventListener('click', async () => {
             await downgradeCurrentHostPolicy();
+        });
+    }
+
+    if (btnDisplayReloadNow) {
+        btnDisplayReloadNow.addEventListener('click', async () => {
+            reloadCurrentTab();
+            await clearDisplaySettingsPendingReload();
+            await updateDisplayReloadWarning();
         });
     }
 
@@ -1895,6 +2026,12 @@ document.addEventListener('DOMContentLoaded', () => {
         aiCandidatesList.addEventListener('click', (event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
+            const actionButton = target.closest('.ai-candidate-row-actions button');
+            if (actionButton && aiCandidatesList.contains(actionButton)) {
+                event.preventDefault();
+                handleCandidateRowAction(actionButton);
+                return;
+            }
             const item = target.closest('.ai-candidate-item');
             if (!item || !aiCandidatesList.contains(item)) return;
             if (target instanceof HTMLInputElement && target.matches('.ai-candidate-checkbox')) {
@@ -1915,6 +2052,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.key !== ' ' && event.key !== 'Enter') return;
             const target = event.target;
             if (!(target instanceof Element)) return;
+            if (target.closest('.ai-candidate-row-actions')) return;
             const item = target.closest('.ai-candidate-item');
             if (!item || !aiCandidatesList.contains(item)) return;
             event.preventDefault();
@@ -1931,7 +2069,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (blockingLevelSelect) {
         blockingLevelSelect.addEventListener('change', async () => {
             const targetLevel = normalizeBlockingLevel(blockingLevelSelect.value);
-            const success = await setBlockingLevel(targetLevel, { reloadTab: targetLevel === 0 });
+            const success = await setBlockingLevel(targetLevel, { displayRelated: true });
             if (!success) {
                 blockingLevelSelect.value = String(blockingLevel);
                 updateBlockingLevelHint(blockingLevel);
@@ -2026,6 +2164,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (changes.sameTabRedirectGuardEnabled && sameTabRedirectGuardToggle) {
             sameTabRedirectGuardToggle.checked = changes.sameTabRedirectGuardEnabled.newValue !== false;
+        }
+        if (changes[DISPLAY_RELOAD_ON_CHANGE_KEY] || changes[DISPLAY_SETTINGS_PENDING_RELOAD_KEY]) {
+            updateDisplayReloadWarning();
         }
     });
 

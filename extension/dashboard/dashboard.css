@@ -1067,6 +1067,10 @@ details.collapsible-section[open] .collapsible-summary::after {
     background-color: #34C759;
 }
 
+.ai-status-dot.warning {
+    background-color: #FF9F0A;
+}
+
 .ai-status-dot.error {
     background-color: var(--destructive);
 }
@@ -1107,6 +1111,29 @@ details.collapsible-section[open] .collapsible-summary::after {
     color: #30D158;
     border-color: rgba(48,209,88,0.35);
     background-color: rgba(48,209,88,0.1);
+}
+
+.display-reload-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 159, 10, 0.45);
+    border-radius: 8px;
+    background-color: rgba(255, 159, 10, 0.1);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.display-reload-notice[hidden] {
+    display: none;
+}
+
+.display-reload-dismiss {
+    white-space: nowrap;
 }
 
 /* ── Enhanced sites merged list ──────────────────────────── */

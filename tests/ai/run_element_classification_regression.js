@@ -5,9 +5,17 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const backgroundPath = path.join(repoRoot, 'extension', 'background.js');
 const dashboardPath = path.join(repoRoot, 'extension', 'dashboard', 'dashboard.js');
+const dashboardCssPath = path.join(repoRoot, 'extension', 'dashboard', 'dashboard.css');
+const dashboardHtmlPath = path.join(repoRoot, 'extension', 'dashboard', 'dashboard.html');
+const popupPath = path.join(repoRoot, 'extension', 'popup', 'popup.js');
+const popupHtmlPath = path.join(repoRoot, 'extension', 'popup', 'popup.html');
 
 const background = fs.readFileSync(backgroundPath, 'utf8');
 const dashboard = fs.readFileSync(dashboardPath, 'utf8');
+const dashboardCss = fs.readFileSync(dashboardCssPath, 'utf8');
+const dashboardHtml = fs.readFileSync(dashboardHtmlPath, 'utf8');
+const popup = fs.readFileSync(popupPath, 'utf8');
+const popupHtml = fs.readFileSync(popupHtmlPath, 'utf8');
 
 function functionBody(source, name) {
   const marker = `function ${name}`;
@@ -113,10 +121,52 @@ const healthBody = sectionBetween(background, 'runChromeBuiltinHealthCheck', 'ru
 assert(healthBody.includes('capabilityStatus'), 'Chrome Built-in health check must return capabilityStatus');
 assert(healthBody.includes('getChromeBuiltinCapabilitySnapshot'), 'Chrome Built-in health check must include capability snapshot');
 assert(healthBody.includes('attempts'), 'Chrome Built-in health check must report route attempts');
+assert(healthBody.includes('attemptChromeBuiltinDownloadStart'), 'Chrome Built-in downloadable health must try to start model download');
+assert(healthBody.includes('downloadAttempted'), 'Chrome Built-in health must report download attempts');
 assert(healthBody.includes("probe: 'create_prompt_destroy'"), 'Chrome Built-in health check must perform a create/prompt/destroy probe');
 assert(healthBody.includes('probeSession?.destroy?.();'), 'Chrome Built-in health check must destroy probe sessions');
 
 assert(dashboard.includes('capabilityStatus='), 'dashboard health output must display capabilityStatus');
-assert(dashboard.includes('await loadAiProviderSettings();'), 'dashboard must refresh provider state after health check');
+assert(dashboard.includes('download='), 'dashboard health output must display Chrome Built-in download attempts');
+assert(dashboard.includes('isChromeBuiltinAttentionState'), 'dashboard must classify Chrome Built-in setup/download as attention state');
+assert(dashboard.includes("aiStatusDot.classList.add('warning')"), 'dashboard must show Chrome Built-in setup/download as warning status');
+assert(dashboard.includes('await loadAiProviderSettings(settings.provider);'), 'dashboard health refresh must stay on the checked provider');
+assert(dashboardCss.includes('.ai-status-dot.warning'), 'dashboard CSS must define the orange warning AI status dot');
+
+assert(background.includes("const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'"), 'Gemini backend default must stay gemini-2.5-flash');
+assert(background.includes('const OPENAI_DEFAULT_TIMEOUT_MS = 30000'), 'OpenAI default timeout must be 30000 ms');
+assert(background.includes('const OPENAI_DEFAULT_COOLDOWN_MS = 60000'), 'OpenAI default cooldown must be 60000 ms');
+assert(background.includes('const OPENAI_DEFAULT_TEMPERATURE = 0.1'), 'OpenAI default temperature must be 0.1');
+assert(background.includes('const OPENAI_DEFAULT_TOP_K = 40'), 'OpenAI default Top K must be 40');
+assert(background.includes('const GEMINI_DEFAULT_TIMEOUT_MS = 30000'), 'Gemini default timeout must be 30000 ms');
+assert(background.includes('const GEMINI_DEFAULT_COOLDOWN_MS = 60000'), 'Gemini default cooldown must be 60000 ms');
+assert(background.includes('const GEMINI_DEFAULT_TEMPERATURE = 0.1'), 'Gemini default temperature must be 0.1');
+assert(background.includes('const GEMINI_DEFAULT_TOP_K = 40'), 'Gemini default Top K must be 40');
+assert(background.includes('const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 10000'), 'Chrome Built-in default timeout must be 10000 ms');
+assert(background.includes('const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 5000'), 'Chrome Built-in default cooldown must be 5000 ms');
+const providerDefaultsBody = sectionBetween(background, 'getProviderDefaults', 'buildDefaultAiProviderSettings');
+const geminiDefaultsStart = providerDefaultsBody.indexOf("provider === 'gemini'");
+const gatewayDefaultsStart = providerDefaultsBody.indexOf("provider === 'gateway'", geminiDefaultsStart);
+assert.notStrictEqual(geminiDefaultsStart, -1, 'Gemini provider defaults branch must exist');
+assert.notStrictEqual(gatewayDefaultsStart, -1, 'Gateway provider defaults branch must follow Gemini branch');
+const geminiDefaultsBody = providerDefaultsBody.slice(geminiDefaultsStart, gatewayDefaultsStart);
+assert(geminiDefaultsBody.includes('model: GEMINI_DEFAULT_MODEL'), 'Gemini defaults must use GEMINI_DEFAULT_MODEL');
+assert(!geminiDefaultsBody.includes('OPENAI_DEFAULT_MODEL'), 'Gemini defaults must not reuse the OpenAI model');
+const geminiGenerateBody = functionBody(background, 'buildGeminiGenerateContentBody');
+assert(geminiGenerateBody.includes('settings?.temperature ?? GEMINI_DEFAULT_TEMPERATURE'), 'Gemini request body must honor configured temperature');
+assert(geminiGenerateBody.includes('settings?.topK ?? GEMINI_DEFAULT_TOP_K'), 'Gemini request body must honor configured Top K');
+assert(dashboard.includes("if (provider === 'gemini') return 'gemini-2.5-flash';"), 'dashboard Gemini default must stay gemini-2.5-flash');
+assert(dashboard.includes("'Gemini Nano'"), 'dashboard provider switching must recognize the Chrome Built-in default model');
+assert(dashboard.includes('AI_PROVIDER_TEMPERATURES'), 'dashboard must expose per-provider temperature defaults');
+assert(dashboard.includes('AI_PROVIDER_TOP_K'), 'dashboard must expose per-provider Top K defaults');
+
+assert(background.includes("const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings'"), 'background must define auto reload setting key');
+assert(dashboardHtml.includes('id="toggle-display-auto-reload"'), 'dashboard must expose the display auto-reload setting');
+assert(dashboard.includes('applyDisplaySettingChange'), 'dashboard must reload or mark pending after display-related setting changes');
+assert(popupHtml.includes('id="display-reload-warning"'), 'side-panel popup must include pending display reload warning');
+assert(popup.includes('updateDisplayReloadWarning'), 'popup must render pending display reload warning state');
+assert(popup.includes("markDisplaySettingsChanged(['blockingLevel']"), 'blocking level changes must use display reload policy');
+assert(popup.includes("markDisplaySettingsChanged(['popupGuardEnabled']"), 'popup guard changes must use display reload policy');
+assert(popup.includes("markDisplaySettingsChanged(['sameTabRedirectGuardEnabled']"), 'same-tab redirect guard changes must use display reload policy');
 
 console.log('element classification regression checks passed');

@@ -364,26 +364,40 @@ const AI_POLICY_VERSION = 2;
 const AI_POLICY_GATE_VERSION = 1;
 const AI_PROVIDER_VERSION = 2;
 const AI_PROVIDER_TYPES = ['openai', 'gemini', 'lmstudio', 'gateway', 'chrome_builtin'];
+const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings';
+const DISPLAY_RELOAD_NOTICE_DISMISSED_KEY = 'displaySettingsReloadNoticeDismissed';
+const DISPLAY_SETTINGS_PENDING_RELOAD_KEY = 'displaySettingsPendingReload';
 const AI_MAX_TELEMETRY = 1500;
 const AI_DECAY_PER_MINUTE = 0.96;
 const AI_HOST_FALLBACK_DURATION_MS = 8 * 60 * 1000;
 const AI_HOST_FALLBACK_COOLDOWN_MS = 2 * 60 * 1000;
 const LM_STUDIO_DEFAULT_ENDPOINT = 'http://127.0.0.1:1234/v1/chat/completions';
 const LM_STUDIO_DEFAULT_MODEL = '';
-const LM_STUDIO_DEFAULT_TIMEOUT_MS = 4000;
-const LM_STUDIO_DEFAULT_COOLDOWN_MS = 25000;
+const LM_STUDIO_DEFAULT_TIMEOUT_MS = 8000;
+const LM_STUDIO_DEFAULT_COOLDOWN_MS = 30000;
+const LM_STUDIO_DEFAULT_TEMPERATURE = 0.1;
+const LM_STUDIO_DEFAULT_TOP_K = 40;
 const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1/responses';
 const OPENAI_DEFAULT_MODEL = 'gpt-5.4-mini';
-const OPENAI_DEFAULT_TIMEOUT_MS = 20000;
+const OPENAI_DEFAULT_TIMEOUT_MS = 30000;
+const OPENAI_DEFAULT_COOLDOWN_MS = 60000;
+const OPENAI_DEFAULT_TEMPERATURE = 0.1;
+const OPENAI_DEFAULT_TOP_K = 40;
 const GEMINI_DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
-const GEMINI_DEFAULT_TIMEOUT_MS = 20000;
+const GEMINI_DEFAULT_TIMEOUT_MS = 30000;
+const GEMINI_DEFAULT_COOLDOWN_MS = 60000;
+const GEMINI_DEFAULT_TEMPERATURE = 0.1;
+const GEMINI_DEFAULT_TOP_K = 40;
 const GATEWAY_DEFAULT_ENDPOINT = '';
 const GATEWAY_DEFAULT_MODEL = 'gpt-5.4-mini';
-const GATEWAY_DEFAULT_TIMEOUT_MS = 8000;
+const GATEWAY_DEFAULT_TIMEOUT_MS = 15000;
+const GATEWAY_DEFAULT_COOLDOWN_MS = 30000;
+const GATEWAY_DEFAULT_TEMPERATURE = 0.1;
+const GATEWAY_DEFAULT_TOP_K = 40;
 const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
-const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 8000;
-const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 1000;
+const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 10000;
+const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 5000;
 const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0.2;
 const CHROME_BUILTIN_DEFAULT_TOP_K = 8;
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
@@ -588,7 +602,10 @@ async function initStorage(reason = 'update') {
     'aiElementClassificationCache',
     'aiCandidateReviewLog',
     'aiKnowledgeStore',
-    'theme'
+    'theme',
+    DISPLAY_RELOAD_ON_CHANGE_KEY,
+    DISPLAY_RELOAD_NOTICE_DISMISSED_KEY,
+    DISPLAY_SETTINGS_PENDING_RELOAD_KEY
   ]);
 
   const patch = {};
@@ -730,6 +747,18 @@ async function initStorage(reason = 'update') {
 
   if (!result.theme) {
     patch.theme = 'light';
+  }
+
+  if (typeof result[DISPLAY_RELOAD_ON_CHANGE_KEY] !== 'boolean') {
+    patch[DISPLAY_RELOAD_ON_CHANGE_KEY] = true;
+  }
+
+  if (typeof result[DISPLAY_RELOAD_NOTICE_DISMISSED_KEY] !== 'boolean') {
+    patch[DISPLAY_RELOAD_NOTICE_DISMISSED_KEY] = false;
+  }
+
+  if (typeof result[DISPLAY_SETTINGS_PENDING_RELOAD_KEY] !== 'object' || result[DISPLAY_SETTINGS_PENDING_RELOAD_KEY] === null) {
+    patch[DISPLAY_SETTINGS_PENDING_RELOAD_KEY] = {};
   }
 
   if (Object.keys(patch).length > 0) {
@@ -2687,7 +2716,10 @@ function getProviderDefaults(provider = 'lmstudio') {
       endpoint: OPENAI_DEFAULT_ENDPOINT,
       model: OPENAI_DEFAULT_MODEL,
       apiKey: '',
-      timeoutMs: OPENAI_DEFAULT_TIMEOUT_MS
+      timeoutMs: OPENAI_DEFAULT_TIMEOUT_MS,
+      cooldownMs: OPENAI_DEFAULT_COOLDOWN_MS,
+      temperature: OPENAI_DEFAULT_TEMPERATURE,
+      topK: OPENAI_DEFAULT_TOP_K
     };
   }
 
@@ -2697,7 +2729,10 @@ function getProviderDefaults(provider = 'lmstudio') {
       endpoint: GEMINI_DEFAULT_ENDPOINT,
       model: GEMINI_DEFAULT_MODEL,
       apiKey: '',
-      timeoutMs: GEMINI_DEFAULT_TIMEOUT_MS
+      timeoutMs: GEMINI_DEFAULT_TIMEOUT_MS,
+      cooldownMs: GEMINI_DEFAULT_COOLDOWN_MS,
+      temperature: GEMINI_DEFAULT_TEMPERATURE,
+      topK: GEMINI_DEFAULT_TOP_K
     };
   }
 
@@ -2707,7 +2742,10 @@ function getProviderDefaults(provider = 'lmstudio') {
       endpoint: GATEWAY_DEFAULT_ENDPOINT,
       model: GATEWAY_DEFAULT_MODEL,
       apiKey: '',
-      timeoutMs: GATEWAY_DEFAULT_TIMEOUT_MS
+      timeoutMs: GATEWAY_DEFAULT_TIMEOUT_MS,
+      cooldownMs: GATEWAY_DEFAULT_COOLDOWN_MS,
+      temperature: GATEWAY_DEFAULT_TEMPERATURE,
+      topK: GATEWAY_DEFAULT_TOP_K
     };
   }
 
@@ -2718,7 +2756,9 @@ function getProviderDefaults(provider = 'lmstudio') {
       model: CHROME_BUILTIN_DEFAULT_MODEL,
       apiKey: '',
       timeoutMs: CHROME_BUILTIN_DEFAULT_TIMEOUT_MS,
-      cooldownMs: CHROME_BUILTIN_DEFAULT_COOLDOWN_MS
+      cooldownMs: CHROME_BUILTIN_DEFAULT_COOLDOWN_MS,
+      temperature: CHROME_BUILTIN_DEFAULT_TEMPERATURE,
+      topK: CHROME_BUILTIN_DEFAULT_TOP_K
     };
   }
 
@@ -2728,7 +2768,9 @@ function getProviderDefaults(provider = 'lmstudio') {
     model: LM_STUDIO_DEFAULT_MODEL,
     apiKey: 'lm-studio',
     timeoutMs: LM_STUDIO_DEFAULT_TIMEOUT_MS,
-    cooldownMs: LM_STUDIO_DEFAULT_COOLDOWN_MS
+    cooldownMs: LM_STUDIO_DEFAULT_COOLDOWN_MS,
+    temperature: LM_STUDIO_DEFAULT_TEMPERATURE,
+    topK: LM_STUDIO_DEFAULT_TOP_K
   };
 }
 
@@ -2746,8 +2788,8 @@ function buildDefaultAiProviderSettings() {
     cooldownMs: defaults.cooldownMs || LM_STUDIO_DEFAULT_COOLDOWN_MS,
     minRiskScore: LM_STUDIO_DEFAULT_MIN_RISK_SCORE,
     maxRecentEvents: LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS,
-    temperature: CHROME_BUILTIN_DEFAULT_TEMPERATURE,
-    topK: CHROME_BUILTIN_DEFAULT_TOP_K,
+    temperature: defaults.temperature,
+    topK: defaults.topK,
     enableDynamicRuleCandidates: true
   };
 }
@@ -2791,8 +2833,8 @@ function normalizeAiProviderSettings(input = {}) {
     cooldownMs: clamp(Number(input.cooldownMs || providerDefaults.cooldownMs || defaults.cooldownMs), 500, 5 * 60 * 1000),
     minRiskScore: clamp(Number(input.minRiskScore || defaults.minRiskScore), 0, 50),
     maxRecentEvents: clamp(Number(input.maxRecentEvents || defaults.maxRecentEvents), 2, 20),
-    temperature: clamp(Number(input.temperature ?? defaults.temperature), 0, 2),
-    topK: clamp(Number(input.topK ?? defaults.topK), 1, 128),
+    temperature: clamp(Number(input.temperature ?? providerDefaults.temperature ?? defaults.temperature), 0, 2),
+    topK: clamp(Number(input.topK ?? providerDefaults.topK ?? defaults.topK), 1, 128),
     enableDynamicRuleCandidates:
       input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true
   };
@@ -4398,7 +4440,8 @@ function buildGeminiGenerateContentBody(hostname, context, policy, recentEvents,
     ],
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.1
+      temperature: clamp(Number(settings?.temperature ?? GEMINI_DEFAULT_TEMPERATURE), 0, 2),
+      topK: Math.round(clamp(Number(settings?.topK ?? GEMINI_DEFAULT_TOP_K), 1, 128))
     }
   };
 }
@@ -4560,6 +4603,37 @@ function promptChromeBuiltinSession(session, prompt, options = {}, timeoutMs = C
         clearTimeout(timer);
       });
   });
+}
+
+async function attemptChromeBuiltinDownloadStart(api, sessionConfig, settings = {}) {
+  const downloadTimeout = createRequestTimeout(Math.min(Number(settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 3000));
+  let downloadSession = null;
+  try {
+    downloadSession = await api.create({
+      ...sessionConfig.options,
+      signal: downloadTimeout.signal
+    });
+    return {
+      attempted: true,
+      started: true,
+      route: sessionConfig.route
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      started: false,
+      route: sessionConfig.route,
+      error: String(error?.message || error),
+      errorType: classifyAiProviderError(error)
+    };
+  } finally {
+    downloadTimeout.cleanup();
+    try {
+      downloadSession?.destroy?.();
+    } catch (_) {
+      // no-op
+    }
+  }
 }
 
 function buildTeachFeatureSummary(features = {}) {
@@ -5566,7 +5640,12 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
     const isAvailable = capabilityStatus === 'available';
 
     if (!isAvailable) {
-      const error = `chrome_builtin_not_ready_${capabilityStatus}`;
+      const downloadAttempt = capabilityStatus === 'downloadable'
+        ? await attemptChromeBuiltinDownloadStart(api, sessionConfig, normalized)
+        : null;
+      const readinessStatus = downloadAttempt?.started ? 'downloading' : capabilityStatus;
+      const error = `chrome_builtin_not_ready_${readinessStatus}`;
+      const serviceSuffix = downloadAttempt?.attempted ? ':download_attempted' : '';
       aiState.providerState = normalizeAiProviderState({
         ...aiState.providerState,
         lastHealthCheckAt: getNow(),
@@ -5576,7 +5655,9 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
         lastModelCount: 0,
         lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
         lastProvider: 'chrome_builtin',
-        lastService: `chrome_prompt_api:${capabilityStatus}`
+        lastService: `chrome_prompt_api:${readinessStatus}${serviceSuffix}`,
+        lastDownloadAttemptAt: downloadAttempt?.attempted ? getNow() : Number(aiState.providerState?.lastDownloadAttemptAt || 0),
+        lastDownloadStarted: downloadAttempt?.started === true
       });
       scheduleAiPersist();
 
@@ -5588,11 +5669,14 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
         resolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
         modelCount: 0,
         availability,
-        capabilityStatus,
+        capabilityStatus: readinessStatus,
         error,
         errorType: classifyAiProviderError(error),
         route: sessionConfig.route,
         attempts: sessionConfig.attempts,
+        downloadAttempted: downloadAttempt?.attempted === true,
+        downloadStarted: downloadAttempt?.started === true,
+        downloadError: downloadAttempt?.error || '',
         params,
         capability: getChromeBuiltinCapabilitySnapshot()
       };

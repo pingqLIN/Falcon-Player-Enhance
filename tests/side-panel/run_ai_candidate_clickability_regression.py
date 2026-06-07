@@ -39,7 +39,6 @@ def seed_candidate_storage(page: Page) -> None:
         """async () => {
             await chrome.storage.local.set({
                 popupAiMonitorVisible: true,
-                aiCandidatePromotionLog: [],
                 aiCandidateRollbackLog: [],
                 aiGeneratedRuleCandidates: {
                     "javboys.com": {
@@ -68,6 +67,19 @@ def seed_candidate_storage(page: Page) -> None:
                             { pattern: "tracker.example", reason: "provider_candidate_domain" }
                         ]
                     },
+                    "promoted.example": {
+                        hostname: "promoted.example",
+                        provider: "gemini",
+                        model: "gemini-2.5-flash",
+                        summary: "already promoted candidate",
+                        generatedAt: 1775040000000,
+                        selectorRules: [
+                            { selector: ".promoted-ad", reason: "provider_candidate_selector" }
+                        ],
+                        domainRules: [
+                            { pattern: "promoted.example", reason: "provider_candidate_domain" }
+                        ]
+                    },
                     "rejected.example": {
                         hostname: "rejected.example",
                         provider: "openai",
@@ -84,6 +96,36 @@ def seed_candidate_storage(page: Page) -> None:
                 },
                 aiCandidateReviewLog: [
                     {
+                        id: "review_facebook_accept",
+                        hostname: "www.facebook.com",
+                        decision: "accepted",
+                        reason: "manual_review_accept",
+                        provider: "chrome_builtin",
+                        model: "gemini-nano",
+                        generatedAt: 1775060000000,
+                        selectorCount: 1,
+                        domainCount: 1,
+                        actor: "regression_seed",
+                        decidedAt: 1775061000000,
+                        schemaVersion: "track_e_v2",
+                        evidenceRefs: []
+                    },
+                    {
+                        id: "review_promoted_example_accept",
+                        hostname: "promoted.example",
+                        decision: "accepted",
+                        reason: "manual_review_accept",
+                        provider: "gemini",
+                        model: "gemini-2.5-flash",
+                        generatedAt: 1775040000000,
+                        selectorCount: 1,
+                        domainCount: 1,
+                        actor: "regression_seed",
+                        decidedAt: 1775041000000,
+                        schemaVersion: "track_e_v2",
+                        evidenceRefs: []
+                    },
+                    {
                         id: "review_rejected_example",
                         hostname: "rejected.example",
                         decision: "rejected",
@@ -98,6 +140,25 @@ def seed_candidate_storage(page: Page) -> None:
                         schemaVersion: "track_e_v2",
                         evidenceRefs: []
                     }
+                ],
+                aiCandidatePromotionLog: [
+                    {
+                        promotionId: "promotion_promoted_example",
+                        hostname: "promoted.example",
+                        provider: "gemini",
+                        model: "gemini-2.5-flash",
+                        generatedAt: 1775040000000,
+                        decisionId: "review_promoted_example_accept",
+                        selectorCount: 1,
+                        domainCount: 1,
+                        confirmedPatternIds: ["pat_promoted_example_selector__promoted-ad"],
+                        reusedPatternIds: [],
+                        reason: "regression_seed_promotion",
+                        actor: "regression_seed",
+                        promotedAt: 1775042000000,
+                        schemaVersion: "track_e_v2",
+                        evidenceRefs: ["regression_seed_promotion"]
+                    }
                 ]
             });
             return true;
@@ -105,11 +166,12 @@ def seed_candidate_storage(page: Page) -> None:
     )
 
 
-def open_popup_page(context, extension_id: str, timeout_ms: int) -> Page:
+def open_popup_page(context, extension_id: str, timeout_ms: int, tab_id: int | None = None) -> Page:
     page = context.new_page()
     page.set_viewport_size({"width": 620, "height": 760})
+    tab_query = f"&tabId={tab_id}" if tab_id else ""
     page.goto(
-        f"chrome-extension://{extension_id}/popup/popup.html?pinned=1",
+        f"chrome-extension://{extension_id}/popup/popup.html?pinned=1{tab_query}",
         wait_until="domcontentloaded",
         timeout=timeout_ms,
     )
@@ -117,14 +179,48 @@ def open_popup_page(context, extension_id: str, timeout_ms: int) -> Page:
     return page
 
 
+def seed_pending_display_reload(context, extension_page: Page) -> int:
+    watched_page = context.new_page()
+    watched_url = (REPO_ROOT / "tests" / "test-page.html").resolve().as_uri()
+    watched_page.goto(watched_url, wait_until="domcontentloaded")
+    tab_id = extension_page.evaluate(
+        """async (watchedUrl) => {
+            const tabs = await chrome.tabs.query({});
+            const tab = tabs.find((item) => String(item.url || '') === watchedUrl);
+            if (!tab?.id) throw new Error('watched_tab_not_found');
+            await chrome.storage.local.set({
+                autoReloadDisplaySettings: false,
+                displaySettingsPendingReload: {
+                    tabId: tab.id,
+                    url: watchedUrl,
+                    settingKeys: ['blockingLevel', 'popupGuardEnabled'],
+                    source: 'regression_seed',
+                    changedAt: Date.now()
+                }
+            });
+            return tab.id;
+        }""",
+        watched_url,
+    )
+    return int(tab_id)
+
+
 def build_report(page: Page) -> dict[str, object]:
     initial = page.evaluate(
         """() => ({
             itemCount: document.querySelectorAll('.ai-candidate-item').length,
-            disabledCount: document.querySelectorAll('.ai-candidate-item[aria-disabled="true"]').length,
+            disabledCount: document.querySelectorAll('.ai-candidate-item[data-selection-disabled="true"]').length,
             checkedCount: document.querySelectorAll('.ai-candidate-checkbox:checked').length,
             firstAriaChecked: document.querySelector('.ai-candidate-item')?.getAttribute('aria-checked') || '',
-            firstSelected: document.querySelector('.ai-candidate-item')?.classList.contains('selected') === true
+            firstSelected: document.querySelector('.ai-candidate-item')?.classList.contains('selected') === true,
+            acceptButtons: document.querySelectorAll('.btn-ai-candidate-accept').length,
+            rejectButtons: document.querySelectorAll('.btn-ai-candidate-reject').length,
+            promoteButtons: document.querySelectorAll('.btn-ai-candidate-promote').length,
+            rollbackButtons: document.querySelectorAll('.btn-ai-candidate-rollback').length,
+            enabledPromoteButtons: document.querySelectorAll('.btn-ai-candidate-promote:not(:disabled)').length,
+            enabledRollbackButtons: document.querySelectorAll('.btn-ai-candidate-rollback:not(:disabled)').length,
+            reloadWarningVisible: document.querySelector('#display-reload-warning')?.hidden === false,
+            reloadWarningText: document.querySelector('#display-reload-warning-body')?.textContent || ''
         })"""
     )
 
@@ -156,12 +252,12 @@ def build_report(page: Page) -> dict[str, object]:
         })"""
     )
 
-    page.locator(".ai-candidate-item[aria-disabled='true']").click(force=True)
+    page.locator(".ai-candidate-item[data-selection-disabled='true']").first.click(force=True)
     after_disabled_click = page.evaluate(
         """() => ({
             checkedCount: document.querySelectorAll('.ai-candidate-checkbox:checked').length,
-            disabledCheckedCount: document.querySelectorAll('.ai-candidate-item[aria-disabled="true"] .ai-candidate-checkbox:checked').length,
-            disabledTabIndex: document.querySelector('.ai-candidate-item[aria-disabled="true"]')?.tabIndex
+            disabledCheckedCount: document.querySelectorAll('.ai-candidate-item[data-selection-disabled="true"] .ai-candidate-checkbox:checked').length,
+            disabledTabIndex: document.querySelector('.ai-candidate-item[data-selection-disabled="true"]')?.tabIndex
         })"""
     )
 
@@ -190,9 +286,27 @@ def build_report(page: Page) -> dict[str, object]:
         })"""
     )
 
+    page.locator(".btn-ai-candidate-rollback:not(:disabled)").first.click()
+    page.wait_for_function(
+        """() => {
+            return document.querySelectorAll('.ai-candidate-rolled-back').length >= 1;
+        }""",
+        timeout=10000,
+    )
+    after_rollback = page.evaluate(
+        """() => ({
+            summary: document.querySelector('#ai-candidates-summary')?.textContent || '',
+            rolledBackRows: document.querySelectorAll('.ai-candidate-rolled-back').length,
+            checkedCount: document.querySelectorAll('.ai-candidate-checkbox:checked').length
+        })"""
+    )
+
     checks = {
-        "candidatesRendered": initial["itemCount"] == 3,
-        "disabledCandidateRendered": initial["disabledCount"] == 1,
+        "candidatesRendered": initial["itemCount"] == 4,
+        "disabledCandidateRendered": initial["disabledCount"] == 2,
+        "allCandidateActionsRendered": initial["acceptButtons"] == 4 and initial["rejectButtons"] == 4 and initial["promoteButtons"] == 4 and initial["rollbackButtons"] == 4,
+        "candidateGovernanceActionsEnabled": initial["enabledPromoteButtons"] >= 1 and initial["enabledRollbackButtons"] >= 1,
+        "pendingDisplayReloadWarningRendered": initial["reloadWarningVisible"] is True and "blockingLevel" in initial["reloadWarningText"],
         "rowClickSelectsFirstCandidate": after_row_click["checkedCount"] == 1,
         "rowClickUpdatesAria": after_row_click["firstAriaChecked"] == "true",
         "rowClickUpdatesVisualState": after_row_click["firstSelected"] is True,
@@ -205,6 +319,7 @@ def build_report(page: Page) -> dict[str, object]:
         "selectAllChecksAllCandidates": after_select_all["checkedCount"] == 2,
         "selectAllUpdatesRows": after_select_all["selectedRows"] == 2 and after_select_all["ariaCheckedRows"] == 2,
         "acceptSelectedReviewsCandidates": after_accept["acceptedRows"] == 2,
+        "rollbackActionWorksInSidePanel": after_rollback["rolledBackRows"] >= 1,
     }
 
     return {
@@ -218,6 +333,7 @@ def build_report(page: Page) -> dict[str, object]:
             "afterDisabledClick": after_disabled_click,
             "afterSelectAll": after_select_all,
             "afterAccept": after_accept,
+            "afterRollback": after_rollback,
         },
     }
 
@@ -252,7 +368,9 @@ def main() -> int:
                 args.timeout_ms,
             )
             try:
-                popup_page = open_popup_page(context, extension_id, args.timeout_ms)
+                extension_page = ai_review.open_dashboard_page(context, extension_id, args.timeout_ms)
+                watched_tab_id = seed_pending_display_reload(context, extension_page)
+                popup_page = open_popup_page(context, extension_id, args.timeout_ms, watched_tab_id)
                 report = build_report(popup_page)
                 print(json.dumps({
                     "ok": report["ok"],

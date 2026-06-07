@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const locale = chrome.i18n.getUILanguage?.() || navigator.language || 'en-US';
     const POPUP_AUTO_FIT_KEY = 'popupPlayerAutoFitWindow';
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
+    const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings';
+    const DISPLAY_RELOAD_NOTICE_DISMISSED_KEY = 'displaySettingsReloadNoticeDismissed';
+    const DISPLAY_SETTINGS_PENDING_RELOAD_KEY = 'displaySettingsPendingReload';
     const AI_PROVIDER_ENDPOINTS = {
         openai: 'https://api.openai.com/v1/responses',
         gemini: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
@@ -14,18 +17,32 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome_builtin: ''
     };
     const AI_PROVIDER_TIMEOUTS = {
-        openai: 20000,
-        gemini: 20000,
-        lmstudio: 4000,
-        gateway: 8000,
-        chrome_builtin: 8000
+        openai: 30000,
+        gemini: 30000,
+        lmstudio: 8000,
+        gateway: 15000,
+        chrome_builtin: 10000
     };
     const AI_PROVIDER_COOLDOWNS = {
-        openai: 25000,
-        gemini: 25000,
-        lmstudio: 25000,
-        gateway: 25000,
-        chrome_builtin: 1000
+        openai: 60000,
+        gemini: 60000,
+        lmstudio: 30000,
+        gateway: 30000,
+        chrome_builtin: 5000
+    };
+    const AI_PROVIDER_TEMPERATURES = {
+        openai: 0.1,
+        gemini: 0.1,
+        lmstudio: 0.1,
+        gateway: 0.1,
+        chrome_builtin: 0.2
+    };
+    const AI_PROVIDER_TOP_K = {
+        openai: 40,
+        gemini: 40,
+        lmstudio: 40,
+        gateway: 40,
+        chrome_builtin: 8
     };
 
     // ========== Theme ==========
@@ -58,6 +75,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiStatusDot = document.getElementById('ai-status-dot');
     const aiStatusTitle = document.getElementById('ai-status-title');
     const aiStatusSub = document.getElementById('ai-status-sub');
+    const toggleDisplayAutoReload = document.getElementById('toggle-display-auto-reload');
+    const displayReloadNotice = document.getElementById('display-reload-notice');
+    const displayReloadStatus = document.getElementById('display-reload-status');
+    const btnDismissDisplayReloadNotice = document.getElementById('btn-dismiss-display-reload-notice');
     const aiConfigurePanel = document.getElementById('ai-configure-panel');
     const aiKeyDisplay = document.getElementById('ai-key-display');
     const aiKeyEditRow = document.getElementById('ai-key-edit-row');
@@ -184,6 +205,81 @@ document.addEventListener('DOMContentLoaded', () => {
         return currentWindowTabs
             .filter((tab) => tab?.id && /^https?:\/\//i.test(tab.url || ''))
             .sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0))[0] || null;
+    }
+
+    function setDisplayReloadStatus(message = '') {
+        if (!displayReloadStatus) return;
+        displayReloadStatus.textContent = message;
+    }
+
+    async function clearDisplaySettingsPendingReload() {
+        await chrome.storage.local.set({ [DISPLAY_SETTINGS_PENDING_RELOAD_KEY]: {} });
+    }
+
+    async function markDisplaySettingsPendingReload(settingKeys = [], source = '') {
+        const activeTab = await getActiveTab();
+        const pending = {
+            tabId: Number(activeTab?.id || 0),
+            url: String(activeTab?.url || ''),
+            settingKeys: Array.isArray(settingKeys) ? settingKeys.map((key) => String(key || '')).filter(Boolean) : [],
+            source: String(source || 'dashboard'),
+            changedAt: Date.now()
+        };
+        await chrome.storage.local.set({ [DISPLAY_SETTINGS_PENDING_RELOAD_KEY]: pending });
+        return pending;
+    }
+
+    async function applyDisplaySettingChange(settingKeys = [], source = 'dashboard') {
+        const result = await chrome.storage.local.get([DISPLAY_RELOAD_ON_CHANGE_KEY]);
+        const shouldReload = result[DISPLAY_RELOAD_ON_CHANGE_KEY] !== false;
+        const activeTab = await getActiveTab();
+        const canReload = Boolean(activeTab?.id && /^https?:\/\//i.test(activeTab.url || ''));
+
+        if (shouldReload && canReload) {
+            await chrome.tabs.reload(activeTab.id).catch(() => null);
+            await clearDisplaySettingsPendingReload();
+            setDisplayReloadStatus(t('dashboardDisplayReloadApplied'));
+            return;
+        }
+
+        if (!shouldReload) {
+            await markDisplaySettingsPendingReload(settingKeys, source);
+            setDisplayReloadStatus(t('dashboardDisplayReloadPending'));
+        }
+    }
+
+    async function loadDisplayReloadSettings() {
+        const result = await chrome.storage.local.get([
+            DISPLAY_RELOAD_ON_CHANGE_KEY,
+            DISPLAY_RELOAD_NOTICE_DISMISSED_KEY
+        ]);
+        if (toggleDisplayAutoReload) {
+            toggleDisplayAutoReload.checked = result[DISPLAY_RELOAD_ON_CHANGE_KEY] !== false;
+        }
+        if (displayReloadNotice) {
+            displayReloadNotice.hidden = result[DISPLAY_RELOAD_NOTICE_DISMISSED_KEY] === true;
+        }
+    }
+
+    loadDisplayReloadSettings();
+
+    if (toggleDisplayAutoReload) {
+        toggleDisplayAutoReload.addEventListener('change', async () => {
+            await chrome.storage.local.set({ [DISPLAY_RELOAD_ON_CHANGE_KEY]: toggleDisplayAutoReload.checked });
+            if (toggleDisplayAutoReload.checked) {
+                await clearDisplaySettingsPendingReload();
+                setDisplayReloadStatus(t('dashboardDisplayReloadEnabled'));
+            } else {
+                setDisplayReloadStatus(t('dashboardDisplayReloadDisabled'));
+            }
+        });
+    }
+
+    if (btnDismissDisplayReloadNotice) {
+        btnDismissDisplayReloadNotice.addEventListener('click', async () => {
+            await chrome.storage.local.set({ [DISPLAY_RELOAD_NOTICE_DISMISSED_KEY]: true });
+            if (displayReloadNotice) displayReloadNotice.hidden = true;
+        });
     }
 
     function getHostnameFromUrl(url = '') {
@@ -336,19 +432,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return AI_PROVIDER_COOLDOWNS[provider] || AI_PROVIDER_COOLDOWNS.openai;
     }
 
+    function getProviderDefaultTemperature(provider) {
+        return AI_PROVIDER_TEMPERATURES[provider] ?? AI_PROVIDER_TEMPERATURES.openai;
+    }
+
+    function getProviderDefaultTopK(provider) {
+        return AI_PROVIDER_TOP_K[provider] ?? AI_PROVIDER_TOP_K.openai;
+    }
+
     function getProviderDefaultModel(provider) {
         if (provider === 'openai') return 'gpt-5.4-mini';
         if (provider === 'gemini') return 'gemini-2.5-flash';
         if (provider === 'chrome_builtin') return 'Gemini Nano';
         return '';
-    }
-
-    function getProviderDefaultTemperature(provider) {
-        return provider === 'chrome_builtin' ? 0.2 : 0;
-    }
-
-    function getProviderDefaultTopK(provider) {
-        return provider === 'chrome_builtin' ? 8 : 3;
     }
 
     function setSelectedProviderCard(provider) {
@@ -394,6 +490,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function isChromeBuiltinAttentionState(provider, state, error) {
+        if (provider !== 'chrome_builtin') return false;
+        const statusText = [
+            error,
+            state?.lastService,
+            state?.capabilityStatus,
+            state?.availability
+        ].map((item) => String(item || '').toLowerCase()).join(' ');
+        return (
+            statusText.includes('downloadable') ||
+            statusText.includes('downloading') ||
+            statusText.includes('download_attempted') ||
+            statusText.includes('unavailable') ||
+            statusText.includes('prompt_api_unavailable') ||
+            statusText.includes('unsupported_context')
+        );
+    }
+
     function renderAiStatusCard(settings, state) {
         if (!aiStatusTitle || !aiStatusSub || !aiStatusDot) return;
 
@@ -405,9 +519,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const error = state?.lastError ? String(state.lastError) : '';
         const model = settings?.model || getProviderDefaultModel(provider) || 'runtime default';
 
-        aiStatusDot.classList.remove('online', 'error');
+        const needsAttention = isChromeBuiltinAttentionState(provider, state, error);
+
+        aiStatusDot.classList.remove('online', 'warning', 'error');
         if (enabled && lastHealthOk) {
             aiStatusDot.classList.add('online');
+        } else if (enabled && needsAttention) {
+            aiStatusDot.classList.add('warning');
         } else if (enabled && error) {
             aiStatusDot.classList.add('error');
         }
@@ -420,7 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         aiStatusTitle.textContent = providerLabel;
         aiStatusSub.textContent = error
-            ? `${model} · ${error}`
+            ? `${model} · ${error}${needsAttention ? ' · setup needed' : ''}`
             : `${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
     }
 
@@ -430,10 +548,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const availability = response?.availability ? ` availability=${response.availability}` : '';
         const capabilityStatus = response?.capabilityStatus ? ` capabilityStatus=${response.capabilityStatus}` : '';
         const route = response?.route ? ` route=${response.route}` : '';
+        const downloadAttempt = response?.downloadAttempted
+            ? ` download=${response.downloadStarted ? 'started' : 'attempted'}`
+            : '';
+        const downloadError = response?.downloadError ? ` downloadError=${response.downloadError}` : '';
         const capability = response?.capability && typeof response.capability === 'object'
             ? ` capability=${JSON.stringify(response.capability)}`
             : '';
-        return `${error}${errorType}${availability}${capabilityStatus}${route}${capability}`;
+        return `${error}${errorType}${availability}${capabilityStatus}${route}${downloadAttempt}${downloadError}${capability}`;
     }
 
     function syncProviderDefaults(nextProvider) {
@@ -449,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const currentModel = lmstudioModel.value.trim();
-        const knownDefaults = ['gpt-5.4-mini', 'gemini-2.5-flash', ''];
+        const knownDefaults = ['gpt-5.4-mini', 'gemini-2.5-flash', 'Gemini Nano', ''];
         if (!currentModel || knownDefaults.includes(currentModel)) {
             lmstudioModel.value = getProviderDefaultModel(nextProvider);
         }
@@ -741,15 +863,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadAiProviderSettings(providerOverride = '') {
         const requestRevision = providerSelectionRevision;
+        const requestedProvider = providerOverride || getSelectedProvider();
         const response = await runtimeMessage({
             action: 'getAiProviderSettings',
-            provider: providerOverride || getSelectedProvider()
+            provider: requestedProvider
         });
         if (!response?.success) {
             setLmStudioStatus('Unable to load AI provider settings.', true);
             return;
         }
         if (requestRevision !== providerSelectionRevision) {
+            return;
+        }
+        if (String(response.settings?.provider || '') !== requestedProvider) {
             return;
         }
         hydrateProviderForm(response.settings, response.state);
@@ -781,7 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (!response?.success) {
             setLmStudioStatus(formatAiHealthFailure(providerLabel, response), true);
-            await loadAiProviderSettings();
+            await loadAiProviderSettings(settings.provider);
             return;
         }
         const modelCount = Number(response.modelCount || 0);
@@ -790,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const availability = response.availability ? ` availability=${response.availability}` : '';
         const capabilityStatus = response.capabilityStatus ? ` capabilityStatus=${response.capabilityStatus}` : '';
         setLmStudioStatus(`${providerLabel} ready. models=${modelCount}${resolvedModel}${serviceInfo}${availability}${capabilityStatus}`);
-        await loadAiProviderSettings();
+        await loadAiProviderSettings(settings.provider);
     }
 
     if (aiProvider) {
@@ -965,6 +1091,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!list.includes(normalized)) {
             list.push(normalized);
             await chrome.storage.local.set({ [listType]: list });
+            await applyDisplaySettingChange([listType], `dashboard_${listType}`);
             loadLists();
         }
     }
@@ -974,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = result[listType] || [];
         const filtered = list.filter(d => d !== domain);
         await chrome.storage.local.set({ [listType]: filtered });
+        await applyDisplaySettingChange([listType], `dashboard_${listType}_remove`);
         loadLists();
     }
 
@@ -1028,8 +1156,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSecuritySettings();
 
     if (toggleSandbox) {
-        toggleSandbox.addEventListener('change', () => {
-            chrome.storage.local.set({ sandboxEnabled: toggleSandbox.checked });
+        toggleSandbox.addEventListener('change', async () => {
+            await chrome.storage.local.set({ sandboxEnabled: toggleSandbox.checked });
+            await applyDisplaySettingChange(['sandboxEnabled'], 'dashboard_sandbox');
         });
     }
 
@@ -1196,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index >= 0 && index < elements.length) {
             elements.splice(index, 1);
             await chrome.storage.local.set({ hiddenElements: elements });
+            await applyDisplaySettingChange(['hiddenElements'], 'dashboard_hidden_elements_remove');
             loadHiddenElements();
         }
     }
@@ -1203,6 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function clearAllHiddenElements() {
         if (confirm(t('dashboardConfirmClearElements'))) {
             await chrome.storage.local.set({ hiddenElements: [] });
+            await applyDisplaySettingChange(['hiddenElements'], 'dashboard_hidden_elements_clear');
             loadHiddenElements();
         }
     }
@@ -1358,7 +1489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadPolicyGateOverview();
             }
             if (changes.aiProviderSettings || changes.aiProviderProfiles || changes.aiProviderState || changes.aiProviderAdvisories || changes.aiGeneratedRuleCandidates) {
-                loadAiProviderSettings();
+                loadAiProviderSettings(lastSelectedProvider || getSelectedProvider());
                 loadPolicyGateOverview();
                 loadStatusBar();
             }
@@ -1374,6 +1505,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (changes[POPUP_AI_MONITOR_VISIBILITY_KEY] && togglePopupAiMonitor) {
                 togglePopupAiMonitor.checked = changes[POPUP_AI_MONITOR_VISIBILITY_KEY].newValue === true;
+            }
+            if (changes[DISPLAY_RELOAD_ON_CHANGE_KEY] && toggleDisplayAutoReload) {
+                toggleDisplayAutoReload.checked = changes[DISPLAY_RELOAD_ON_CHANGE_KEY].newValue !== false;
+            }
+            if (changes[DISPLAY_RELOAD_NOTICE_DISMISSED_KEY] && displayReloadNotice) {
+                displayReloadNotice.hidden = changes[DISPLAY_RELOAD_NOTICE_DISMISSED_KEY].newValue === true;
             }
             if (changes.theme) {
                 const newTheme = changes.theme.newValue;
@@ -1460,6 +1597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await chrome.runtime.sendMessage({ action: 'addCustomSite', domain: normalized });
             if (response?.success) {
                 showFeedback(t('dashboardCustomSitesAdded', [normalized]), 'success');
+                await applyDisplaySettingChange(['customSites'], 'dashboard_custom_sites_add');
                 loadCustomSites();
             } else {
                 showFeedback(response?.error || 'Unknown error', 'error');
@@ -1474,6 +1612,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await chrome.runtime.sendMessage({ action: 'removeCustomSite', domain });
             if (response?.success) {
                 showFeedback(t('dashboardCustomSitesRemoved', [domain]), 'success');
+                await applyDisplaySettingChange(['customSites'], 'dashboard_custom_sites_remove');
                 loadCustomSites();
             }
         } catch (err) {
