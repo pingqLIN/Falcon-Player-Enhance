@@ -60,16 +60,17 @@ def build_browser_args(extension_dir: Path) -> list[str]:
     ]
 
 
-def set_site_state(extension_page, whitelist: list[str], whitelist_enhance_only: bool, wait_ms: int) -> None:
+def set_site_state(extension_page, whitelist: list[str], whitelist_enhance_only: bool, media_automation_enabled: bool, wait_ms: int) -> None:
     extension_page.evaluate(
-        """async ({ whitelist, whitelistEnhanceOnly, waitMs }) => {
-            await chrome.storage.local.set({ whitelist, whitelistEnhanceOnly });
+        """async ({ whitelist, whitelistEnhanceOnly, mediaAutomationEnabled, waitMs }) => {
+            await chrome.storage.local.set({ whitelist, whitelistEnhanceOnly, mediaAutomationEnabled });
             await new Promise((resolve) => setTimeout(resolve, waitMs));
             return true;
         }""",
         {
             "whitelist": whitelist,
             "whitelistEnhanceOnly": whitelist_enhance_only,
+            "mediaAutomationEnabled": media_automation_enabled,
             "waitMs": wait_ms,
         },
     )
@@ -151,7 +152,7 @@ def collect_page_state(extension_page, target_url: str, wait_ms: int) -> dict[st
     )
 
 
-def build_report(whitelist_mode: dict[str, object], strict_mode: dict[str, object]) -> dict[str, object]:
+def build_report(whitelist_mode: dict[str, object], strict_opt_out_mode: dict[str, object], strict_opt_in_mode: dict[str, object]) -> dict[str, object]:
     checks = {
         "whitelistHelperPresent": bool(whitelist_mode.get("helperPresent")),
         "whitelistCleanupDisabled": whitelist_mode.get("shouldRunCleanup") is False,
@@ -160,13 +161,14 @@ def build_report(whitelist_mode: dict[str, object], strict_mode: dict[str, objec
         "whitelistNoPopupButtons": int(whitelist_mode.get("popupButtonCount", 0)) == 0,
         "whitelistOverlayVisible": whitelist_mode.get("overlayHidden") is False,
         "whitelistFakeVideoVisible": whitelist_mode.get("fakeVideoHidden") is False,
-        "strictCleanupEnabled": strict_mode.get("shouldRunCleanup") is True,
-        "strictMediaAutomationEnabled": strict_mode.get("shouldRunMediaAutomation") is True,
-        "strictDetectionActivated": int(strict_mode.get("detectedCount", 0)) >= 1 and int(strict_mode.get("enhancedCount", 0)) >= 1,
-        "strictMainVideoEnhanced": strict_mode.get("mainVideoEnhanced") is True and strict_mode.get("mainVideoVisible") is True,
-        "strictPopupButtonsPresent": int(strict_mode.get("popupButtonCount", 0)) >= 1,
-        "strictOverlayHidden": strict_mode.get("overlayHidden") is True,
-        "strictFakeVideoHidden": strict_mode.get("fakeVideoHidden") is True,
+        "strictOptOutCleanupEnabled": strict_opt_out_mode.get("shouldRunCleanup") is True,
+        "strictOptOutMediaAutomationStillDisabled": strict_opt_out_mode.get("shouldRunMediaAutomation") is False,
+        "strictOptOutNoDetection": int(strict_opt_out_mode.get("detectedCount", 0)) == 0 and int(strict_opt_out_mode.get("enhancedCount", 0)) == 0,
+        "strictOptInMediaAutomationEnabled": strict_opt_in_mode.get("shouldRunMediaAutomation") is True,
+        "strictOptInDetectionActivated": int(strict_opt_in_mode.get("detectedCount", 0)) >= 1 and int(strict_opt_in_mode.get("enhancedCount", 0)) >= 1,
+        "strictOptInMainVideoEnhanced": strict_opt_in_mode.get("mainVideoEnhanced") is True and strict_opt_in_mode.get("mainVideoVisible") is True,
+        "strictOptInPopupButtonsPresent": int(strict_opt_in_mode.get("popupButtonCount", 0)) >= 1,
+        "strictOptInFakeVideoHidden": strict_opt_in_mode.get("fakeVideoHidden") is True,
     }
 
     return {
@@ -174,7 +176,8 @@ def build_report(whitelist_mode: dict[str, object], strict_mode: dict[str, objec
         "checks": checks,
         "samples": {
             "whitelistMode": whitelist_mode,
-            "strictMode": strict_mode,
+            "strictOptOutMode": strict_opt_out_mode,
+            "strictOptInMode": strict_opt_in_mode,
         },
     }
 
@@ -208,15 +211,17 @@ def main() -> int:
                 )
                 extension_page.wait_for_timeout(1200)
 
-                set_site_state(extension_page, ["falcon-whitelist.test"], True, args.wait_ms)
+                set_site_state(extension_page, ["falcon-whitelist.test"], True, False, args.wait_ms)
                 target_page = context.new_page()
                 target_page.goto(target_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
                 target_page.wait_for_timeout(1500)
                 whitelist_mode = collect_page_state(extension_page, target_url, args.wait_ms)
 
-                set_site_state(extension_page, ["falcon-whitelist.test"], False, args.wait_ms)
-                strict_mode = collect_page_state(extension_page, target_url, args.wait_ms)
-                report = build_report(whitelist_mode, strict_mode)
+                set_site_state(extension_page, ["falcon-whitelist.test"], False, False, args.wait_ms)
+                strict_opt_out_mode = collect_page_state(extension_page, target_url, args.wait_ms)
+                set_site_state(extension_page, ["falcon-whitelist.test"], False, True, args.wait_ms)
+                strict_opt_in_mode = collect_page_state(extension_page, target_url, args.wait_ms)
+                report = build_report(whitelist_mode, strict_opt_out_mode, strict_opt_in_mode)
 
                 print(json.dumps({
                     "ok": report["ok"],

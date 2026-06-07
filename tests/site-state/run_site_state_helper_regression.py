@@ -134,6 +134,7 @@ def build_report(initial_state: dict[str, object], whitelist_mode: dict[str, obj
     checks = {
         "helperPresentInitially": bool(initial_state.get("helperPresent")),
         "initialCleanupEnabled": initial_state.get("shouldRunCleanup") is True and initial_domains == [],
+        "initialMediaAutomationOptInDefaultOff": initial_state.get("state", {}).get("mediaAutomationEnabled") is False,
         "initialMediaAutomationDisabledWithoutMedia": initial_state.get("shouldRunMediaAutomation") is False,
         "whitelistEnhanceOnlyDisablesCleanup": whitelist_mode.get("shouldRunCleanup") is False and "falcon-whitelist.test" in whitelist_domains,
         "whitelistEnhanceOnlyDisablesMediaAutomation": whitelist_mode.get("shouldRunMediaAutomation") is False and "falcon-whitelist.test" in whitelist_domains,

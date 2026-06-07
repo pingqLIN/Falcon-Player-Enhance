@@ -364,6 +364,7 @@ const AI_POLICY_VERSION = 2;
 const AI_POLICY_GATE_VERSION = 1;
 const AI_PROVIDER_VERSION = 2;
 const AI_PROVIDER_TYPES = ['openai', 'gemini', 'lmstudio', 'gateway', 'chrome_builtin'];
+const MEDIA_AUTOMATION_ENABLED_KEY = 'mediaAutomationEnabled';
 const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings';
 const DISPLAY_RELOAD_NOTICE_DISMISSED_KEY = 'displaySettingsReloadNoticeDismissed';
 const DISPLAY_SETTINGS_PENDING_RELOAD_KEY = 'displaySettingsPendingReload';
@@ -588,6 +589,7 @@ async function initStorage(reason = 'update') {
     'popupGuardEnabled',
     'sameTabRedirectGuardEnabled',
     'pinnedPopupPlayers',
+    MEDIA_AUTOMATION_ENABLED_KEY,
     'aiMonitorEnabled',
     'aiProfiles',
     'aiTelemetryLog',
@@ -676,6 +678,10 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.pinnedPopupPlayers !== 'object' || result.pinnedPopupPlayers === null) {
     patch.pinnedPopupPlayers = {};
+  }
+
+  if (typeof result[MEDIA_AUTOMATION_ENABLED_KEY] !== 'boolean') {
+    patch[MEDIA_AUTOMATION_ENABLED_KEY] = false;
   }
 
   if (typeof result.aiMonitorEnabled !== 'boolean') {

@@ -155,6 +155,7 @@ body::-webkit-scrollbar {
 }
 
 .theme-toggle:focus-visible,
+.media-detection-toggle:focus-visible,
 .pin-popup-btn:focus-visible,
 .footer-small-btn:focus-visible,
 .pinned-toolbar-btn:focus-visible,
@@ -244,6 +245,39 @@ input:checked + .slider:before {
     font-size: 14px;
     transition: opacity 0.15s, background-color 0.15s;
     padding: 0;
+}
+
+.media-detection-toggle {
+    background: transparent;
+    border: 1px solid var(--separator);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    transition: opacity 0.15s, background-color 0.15s, border-color 0.15s;
+    padding: 0;
+    filter: grayscale(1);
+}
+
+.media-detection-toggle:hover {
+    opacity: 0.85;
+}
+
+.media-detection-toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.media-detection-toggle.active {
+    background: var(--toggle-on);
+    border-color: var(--toggle-on);
+    color: var(--bg-card);
+    filter: none;
 }
 
 .pin-popup-btn:hover {

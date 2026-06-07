@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPinPopup = document.getElementById('btn-pin-popup');
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
+    const mediaDetectionToggle = document.getElementById('media-detection-toggle');
     const flowIndicator = document.getElementById('flow-indicator');
     const flowStatus = document.getElementById('flow-status');
     const flowNodes = document.querySelectorAll('.flow-node');
@@ -82,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let shortcutsShowTimer = null;
     let shortcutsHideTimer = null;
     let aiMonitorEnabled = true;
+    let mediaAutomationEnabled = false;
     let selectedPlayerId = null;
     let playerMetaById = new Map();
     let currentPlayers = [];
@@ -94,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPinnedWindowMode = urlParams.get('pinned') === '1';
     const pinnedTabId = Number(urlParams.get('tabId') || 0);
     const POPUP_AI_MONITOR_VISIBILITY_KEY = 'popupAiMonitorVisible';
+    const MEDIA_AUTOMATION_ENABLED_KEY = 'mediaAutomationEnabled';
     const DISPLAY_RELOAD_ON_CHANGE_KEY = 'autoReloadDisplaySettings';
     const DISPLAY_SETTINGS_PENDING_RELOAD_KEY = 'displaySettingsPendingReload';
     const POPUP_SCAN_INTERVAL_MS = 1000;
@@ -140,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function startAutoScan(options = {}) {
         const { immediate = true } = options;
         stopAutoScan();
+        if (mediaAutomationEnabled !== true) return;
         if (isLockMode || !currentTabId) return;
         if (immediate) {
             loadPlayerInfo();
@@ -382,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'whitelistEnhanceOnly',
             'popupGuardEnabled',
             'sameTabRedirectGuardEnabled',
+            MEDIA_AUTOMATION_ENABLED_KEY,
             POPUP_AI_MONITOR_VISIBILITY_KEY
         ]);
         const levelResponse = await runtimeMessage({ action: 'getBlockingLevel' });
@@ -398,7 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const enabled = blockingLevel > 0;
         aiMonitorEnabled = result.aiMonitorEnabled !== false;
+        mediaAutomationEnabled = result[MEDIA_AUTOMATION_ENABLED_KEY] === true;
         masterToggle.checked = enabled;
+        updateMediaDetectionToggleState();
         if (blockingLevelSelect) {
             blockingLevelSelect.value = String(blockingLevel);
         }
@@ -426,6 +433,35 @@ document.addEventListener('DOMContentLoaded', () => {
         setAiPanelExpanded(isPinnedWindowMode);
         setShortcutsExpanded(isPinnedWindowMode);
         updateDisabledState(!enabled);
+    }
+
+    function updateMediaDetectionToggleState() {
+        if (!mediaDetectionToggle) return;
+        mediaDetectionToggle.classList.toggle('active', mediaAutomationEnabled === true);
+        const title = mediaAutomationEnabled === true
+            ? t('popupMediaDetectionOnTitle')
+            : t('popupMediaDetectionOffTitle');
+        mediaDetectionToggle.title = title;
+        mediaDetectionToggle.setAttribute('aria-label', title);
+        mediaDetectionToggle.setAttribute('aria-pressed', String(mediaAutomationEnabled === true));
+        mediaDetectionToggle.textContent = mediaAutomationEnabled === true ? '🎞' : '🎬';
+    }
+
+    async function setMediaAutomationEnabled(enabled) {
+        mediaAutomationEnabled = enabled === true;
+        updateMediaDetectionToggleState();
+        await chrome.storage.local.set({ [MEDIA_AUTOMATION_ENABLED_KEY]: mediaAutomationEnabled });
+        if (!mediaAutomationEnabled) {
+            selectedPlayerId = null;
+            currentPlayers = [];
+            renderPlayerChips([]);
+            showPlaybackControls(false);
+            stopAutoScan();
+            updateFlowStatus(0, t('popupFlowStatusVideoDetectionOff'));
+            return;
+        }
+        updateFlowStatus(1, t('popupFlowStatusDetecting'));
+        await triggerForceDetect();
     }
 
     function updatePinPopupButtonState() {
@@ -682,6 +718,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadPlayerInfo() {
         if (!currentTabId) return;
+        if (mediaAutomationEnabled !== true) {
+            currentPlayers = [];
+            renderPlayerChips([]);
+            updateFlowStatus(0, t('popupFlowStatusVideoDetectionOff'));
+            setFlowGuideCollapsed(false);
+            showPlaybackControls(false);
+            return;
+        }
 
         try {
             return await new Promise((resolve) => {
@@ -777,18 +821,28 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedPlayerId = null;
             const empty = document.createElement('div');
             empty.className = 'player-empty-state';
+            const titleKey = mediaAutomationEnabled === true
+                ? 'popupPlayerEmptyTitle'
+                : 'popupMediaDetectionOffEmptyTitle';
+            const hintKey = mediaAutomationEnabled === true
+                ? 'popupPlayerEmptyHint'
+                : 'popupMediaDetectionOffEmptyHint';
             empty.innerHTML = `
-                <div class="player-empty-title">${escapeHtml(t('popupPlayerEmptyTitle'))}</div>
-                <div class="player-empty-hint">${escapeHtml(t('popupPlayerEmptyHint'))}</div>
+                <div class="player-empty-title">${escapeHtml(t(titleKey))}</div>
+                <div class="player-empty-hint">${escapeHtml(t(hintKey))}</div>
             `;
             const action = document.createElement('button');
             action.type = 'button';
             action.className = 'rescan-btn player-empty-action';
-            action.textContent = 'DETECT';
-            action.setAttribute('title', t('popupRescanTitle'));
-            action.setAttribute('aria-label', t('popupRescanTitle'));
+            action.textContent = mediaAutomationEnabled === true ? 'DETECT' : '🎬';
+            action.setAttribute('title', mediaAutomationEnabled === true ? t('popupRescanTitle') : t('popupMediaDetectionOffTitle'));
+            action.setAttribute('aria-label', mediaAutomationEnabled === true ? t('popupRescanTitle') : t('popupMediaDetectionOffTitle'));
             action.addEventListener('click', () => {
-                triggerForceDetect();
+                if (mediaAutomationEnabled === true) {
+                    triggerForceDetect();
+                    return;
+                }
+                setMediaAutomationEnabled(true);
             });
             empty.appendChild(action);
             playerChipList.appendChild(empty);
@@ -1819,6 +1873,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function triggerForceDetect() {
         if (!currentTabId) return;
+        if (mediaAutomationEnabled !== true) {
+            updateFlowStatus(0, t('popupFlowStatusVideoDetectionOff'));
+            setFlowGuideCollapsed(false);
+            showPlaybackControls(false);
+            return;
+        }
         selectedPlayerId = null;
         setLockMode(false);
         updateFlowStatus(1, t('popupFlowStatusDetecting'));
@@ -1906,6 +1966,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnPinPopup) {
         btnPinPopup.addEventListener('click', async () => {
             await togglePinnedPopupWindow();
+        });
+    }
+
+    if (mediaDetectionToggle) {
+        mediaDetectionToggle.addEventListener('click', async () => {
+            if (masterToggle.checked === false) {
+                updateFlowStatus(0, t('popupPickElementDisabled'));
+                return;
+            }
+            await setMediaAutomationEnabled(mediaAutomationEnabled !== true);
         });
     }
 
@@ -2109,6 +2179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pinnedPick = document.getElementById('pinned-pick-element');
         if (pinnedPick) pinnedPick.disabled = disabled;
         if (btnRescan) btnRescan.disabled = disabled;
+        if (mediaDetectionToggle) mediaDetectionToggle.disabled = disabled;
         const aiDisabled = disabled || aiMonitorEnabled === false;
         if (aiMonitorToggle) aiMonitorToggle.disabled = aiDisabled;
         if (btnExportAi) btnExportAi.disabled = aiDisabled;
@@ -2133,7 +2204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showPlaybackControls(false);
         } else {
             updateTargetStatus();
-            if (!isLockMode) {
+            if (!isLockMode && mediaAutomationEnabled === true) {
                 startAutoScan({ immediate: false });
             }
         }
@@ -2185,6 +2256,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (changes[POPUP_AI_MONITOR_VISIBILITY_KEY]) {
             updateAiMonitorVisibility(changes[POPUP_AI_MONITOR_VISIBILITY_KEY].newValue === true);
+        }
+        if (changes[MEDIA_AUTOMATION_ENABLED_KEY]) {
+            mediaAutomationEnabled = changes[MEDIA_AUTOMATION_ENABLED_KEY].newValue === true;
+            updateMediaDetectionToggleState();
+            if (mediaAutomationEnabled) {
+                restartAutoScanForModeChange();
+            } else {
+                stopAutoScan();
+                currentPlayers = [];
+                renderPlayerChips([]);
+                showPlaybackControls(false);
+                updateFlowStatus(0, t('popupFlowStatusVideoDetectionOff'));
+            }
         }
         if (changes.popupGuardEnabled && popupGuardToggle) {
             popupGuardToggle.checked = changes.popupGuardEnabled.newValue !== false;

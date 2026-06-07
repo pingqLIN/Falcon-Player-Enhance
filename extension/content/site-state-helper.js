@@ -30,6 +30,7 @@
     const DEFAULT_STATE = Object.freeze({
         whitelistDomains: [],
         whitelistEnhanceOnly: true,
+        mediaAutomationEnabled: false,
         mediaAutomationExcludedDomains: [],
         interactionSafety: DEFAULT_INTERACTION_SAFETY
     });
@@ -37,6 +38,7 @@
     let state = {
         whitelistDomains: [],
         whitelistEnhanceOnly: true,
+        mediaAutomationEnabled: false,
         mediaAutomationExcludedDomains: [],
         interactionSafety: { ...DEFAULT_INTERACTION_SAFETY }
     };
@@ -75,6 +77,7 @@
         return {
             whitelistDomains: [...state.whitelistDomains],
             whitelistEnhanceOnly: state.whitelistEnhanceOnly !== false,
+            mediaAutomationEnabled: state.mediaAutomationEnabled === true,
             mediaAutomationExcludedDomains: [...state.mediaAutomationExcludedDomains],
             interactionSafety: normalizeInteractionSafety(state.interactionSafety)
         };
@@ -172,6 +175,7 @@
         state = {
             whitelistDomains: normalizeDomainList(nextState.whitelistDomains),
             whitelistEnhanceOnly: nextState.whitelistEnhanceOnly !== false,
+            mediaAutomationEnabled: nextState.mediaAutomationEnabled === true,
             mediaAutomationExcludedDomains: normalizeDomainList(nextState.mediaAutomationExcludedDomains),
             interactionSafety: normalizeInteractionSafety(nextState.interactionSafety || state.interactionSafety)
         };
@@ -211,10 +215,11 @@
 
     function readStateFromStorage() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly'], (result) => {
+            chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', 'mediaAutomationEnabled'], (result) => {
                 applyState({
                     whitelistDomains: result.whitelist,
                     whitelistEnhanceOnly: result.whitelistEnhanceOnly,
+                    mediaAutomationEnabled: result.mediaAutomationEnabled === true,
                     mediaAutomationExcludedDomains: state.mediaAutomationExcludedDomains,
                     interactionSafety: collectInteractionSafety()
                 });
@@ -237,6 +242,7 @@
                     applyState({
                         whitelistDomains: state.whitelistDomains,
                         whitelistEnhanceOnly: state.whitelistEnhanceOnly,
+                        mediaAutomationEnabled: state.mediaAutomationEnabled,
                         mediaAutomationExcludedDomains: response?.profiles?.mediaAutomationExcludedDomains,
                         interactionSafety: state.interactionSafety
                     });
@@ -275,6 +281,7 @@
     }
 
     function shouldRunMediaAutomation(hostname = window.location.hostname) {
+        if (state.mediaAutomationEnabled !== true) return false;
         if (isMediaAutomationExcludedHost(hostname)) return false;
         if (!shouldRunCleanup(hostname)) return false;
         const safety = normalizeInteractionSafety(state.interactionSafety);
@@ -296,7 +303,7 @@
         if (!chrome.storage?.onChanged?.addListener) return;
         chrome.storage.onChanged.addListener((changes, areaName) => {
             if (areaName !== 'local') return;
-            if (!changes.whitelist && !changes.whitelistEnhanceOnly) return;
+            if (!changes.whitelist && !changes.whitelistEnhanceOnly && !changes.mediaAutomationEnabled) return;
 
             const nextWhitelist = changes.whitelist
                 ? changes.whitelist.newValue
@@ -304,10 +311,15 @@
             const nextWhitelistEnhanceOnly = changes.whitelistEnhanceOnly
                 ? changes.whitelistEnhanceOnly.newValue
                 : state.whitelistEnhanceOnly;
+            const nextMediaAutomationEnabled = changes.mediaAutomationEnabled
+                ? changes.mediaAutomationEnabled.newValue === true
+                : state.mediaAutomationEnabled;
 
             applyState({
                 whitelistDomains: nextWhitelist,
                 whitelistEnhanceOnly: nextWhitelistEnhanceOnly,
+                mediaAutomationEnabled: nextMediaAutomationEnabled,
+                mediaAutomationExcludedDomains: state.mediaAutomationExcludedDomains,
                 interactionSafety: collectInteractionSafety()
             });
             emitStateChange();
