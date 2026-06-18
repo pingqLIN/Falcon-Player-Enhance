@@ -677,6 +677,22 @@ def reset_extension_stats(context: BrowserContext, timeout_ms: int) -> None:
     time.sleep(min(timeout_ms, 1500) / 1000)
 
 
+def enable_media_automation(context: BrowserContext, wait_ms: int = 250) -> dict[str, Any]:
+    worker = get_extension_worker(context)
+    return dict(worker.evaluate(
+        """async ({ waitMs }) => {
+            await chrome.storage.local.set({
+                whitelist: [],
+                whitelistEnhanceOnly: false,
+                mediaAutomationEnabled: true
+            });
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            return await chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', 'mediaAutomationEnabled']);
+        }""",
+        {"waitMs": wait_ms},
+    ))
+
+
 def read_extension_stats(context: BrowserContext) -> dict[str, Any]:
     worker = get_extension_worker(context)
     return worker.evaluate(
@@ -1102,6 +1118,7 @@ def main() -> int:
                 try:
                     registered_scripts = wait_for_extension_ready(context, args.timeout_ms)
                     extension_id = wait_for_extension_id(context, args.timeout_ms)
+                    seeded_state = enable_media_automation(context)
 
                     result = run_case(
                         case_name,
@@ -1113,6 +1130,7 @@ def main() -> int:
                     )
                     result["extensionId"] = extension_id
                     result["registeredScripts"] = registered_scripts
+                    result["seededState"] = seeded_state
                     results.append(result)
                     status = "PASS" if result.get("ok") else "FAIL"
                     print(f"[{status}] {case_name}")
