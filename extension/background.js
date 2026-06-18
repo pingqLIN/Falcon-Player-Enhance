@@ -372,6 +372,11 @@ const AI_MAX_TELEMETRY = 1500;
 const AI_DECAY_PER_MINUTE = 0.96;
 const AI_HOST_FALLBACK_DURATION_MS = 8 * 60 * 1000;
 const AI_HOST_FALLBACK_COOLDOWN_MS = 2 * 60 * 1000;
+const AI_PROVIDER_ADVISORY_CACHE_MAX_ENTRIES = 120;
+const AI_PROVIDER_ADVISORY_DIAGNOSTIC_MAX_ENTRIES = 20;
+const AI_PROVIDER_ADVISORY_MIN_TTL_MS = 30 * 1000;
+const AI_PROVIDER_ADVISORY_DEFAULT_TTL_MS = 5 * 60 * 1000;
+const AI_PROVIDER_ADVISORY_MAX_TTL_MS = AI_HOST_FALLBACK_DURATION_MS;
 const LM_STUDIO_DEFAULT_ENDPOINT = 'http://127.0.0.1:1234/v1/chat/completions';
 const LM_STUDIO_DEFAULT_MODEL = '';
 const LM_STUDIO_DEFAULT_TIMEOUT_MS = 8000;
@@ -398,7 +403,7 @@ const GATEWAY_DEFAULT_TEMPERATURE = 0.1;
 const GATEWAY_DEFAULT_TOP_K = 40;
 const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
 const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 10000;
-const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 5000;
+const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 30000;
 const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0.2;
 const CHROME_BUILTIN_DEFAULT_TOP_K = 8;
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
@@ -518,6 +523,7 @@ let aiState = {
   providerSecrets: {},
   providerState: null,
   providerAdvisories: {},
+  providerAdvisoryCache: {},
   generatedRuleCandidates: {},
   elementClassificationCache: {},
   candidateReviewLog: [],
@@ -528,6 +534,7 @@ let aiState = {
 
 let aiPersistTimer = null;
 let contentScriptSyncQueue = Promise.resolve();
+let aiProviderAdvisoryInflight = new Map();
 
 function normalizeStats(source) {
   return {
@@ -600,6 +607,7 @@ async function initStorage(reason = 'update') {
     AI_PROVIDER_PROFILES_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
+    'aiProviderAdvisoryCache',
     'aiGeneratedRuleCandidates',
     'aiElementClassificationCache',
     'aiCandidateReviewLog',
@@ -737,6 +745,10 @@ async function initStorage(reason = 'update') {
 
   if (typeof result.aiProviderAdvisories !== 'object' || result.aiProviderAdvisories === null) {
     patch.aiProviderAdvisories = {};
+  }
+
+  if (typeof result.aiProviderAdvisoryCache !== 'object' || result.aiProviderAdvisoryCache === null) {
+    patch.aiProviderAdvisoryCache = {};
   }
 
   if (typeof result.aiGeneratedRuleCandidates !== 'object' || result.aiGeneratedRuleCandidates === null) {
@@ -1940,6 +1952,7 @@ async function loadAiState() {
     AI_PROVIDER_PROFILES_STORAGE_KEY,
     'aiProviderState',
     'aiProviderAdvisories',
+    'aiProviderAdvisoryCache',
     'aiGeneratedRuleCandidates',
     'aiElementClassificationCache',
     'aiCandidateReviewLog',
@@ -1981,6 +1994,11 @@ async function loadAiState() {
     result.aiProviderAdvisories && typeof result.aiProviderAdvisories === 'object'
       ? result.aiProviderAdvisories
       : {};
+  aiState.providerAdvisoryCache =
+    result.aiProviderAdvisoryCache && typeof result.aiProviderAdvisoryCache === 'object'
+      ? result.aiProviderAdvisoryCache
+      : {};
+  pruneProviderAdvisoryCache();
   aiState.generatedRuleCandidates = normalizeGeneratedRuleCandidates(result.aiGeneratedRuleCandidates || {});
   aiState.elementClassificationCache =
     result.aiElementClassificationCache && typeof result.aiElementClassificationCache === 'object'
@@ -2009,6 +2027,7 @@ function scheduleAiPersist() {
 }
 
 async function persistAiState() {
+  pruneProviderAdvisoryCache();
   pruneElementClassificationCache();
   await chrome.storage.local.set({
     aiMonitorEnabled: aiState.enabled,
@@ -2021,6 +2040,7 @@ async function persistAiState() {
     [AI_PROVIDER_PROFILES_STORAGE_KEY]: normalizeAiProviderProfiles(aiState.providerProfiles || {}, aiState.providerSettings || {}),
     aiProviderState: normalizeAiProviderState(aiState.providerState || {}),
     aiProviderAdvisories: aiState.providerAdvisories || {},
+    aiProviderAdvisoryCache: aiState.providerAdvisoryCache || {},
     aiGeneratedRuleCandidates: normalizeGeneratedRuleCandidates(aiState.generatedRuleCandidates || {}),
     aiElementClassificationCache: aiState.elementClassificationCache || {},
     aiCandidateReviewLog: normalizeCandidateReviewLog(aiState.candidateReviewLog || []),
@@ -2811,6 +2831,8 @@ function buildDefaultAiProviderState() {
     lastProvider: '',
     lastService: '',
     lastRulePreviewAt: 0,
+    lastDiagnosticAt: 0,
+    recentRequests: [],
     perHostLastRun: {}
   };
 }
@@ -2884,12 +2906,55 @@ function redactAiProviderSettings(input = {}, secret = '') {
 
 function normalizeAiProviderState(input = {}) {
   const defaults = buildDefaultAiProviderState();
+  const recentRequests = Array.isArray(input.recentRequests)
+    ? input.recentRequests
+      .map((entry) => ({
+        ts: Number(entry?.ts || 0),
+        type: String(entry?.type || '').trim().slice(0, 48),
+        provider: String(entry?.provider || '').trim().slice(0, 48),
+        hostname: String(entry?.hostname || '').trim().slice(0, 180),
+        cacheKey: String(entry?.cacheKey || '').trim().slice(0, 80),
+        reason: String(entry?.reason || '').trim().slice(0, 96),
+        latencyMs: Number(entry?.latencyMs || 0),
+        promptChars: Number(entry?.promptChars || 0),
+        errorType: String(entry?.errorType || '').trim().slice(0, 48)
+      }))
+      .filter((entry) => entry.ts > 0 && entry.type)
+      .slice(0, AI_PROVIDER_ADVISORY_DIAGNOSTIC_MAX_ENTRIES)
+    : [];
   return {
     ...defaults,
     ...input,
+    recentRequests,
     perHostLastRun:
       input.perHostLastRun && typeof input.perHostLastRun === 'object' ? input.perHostLastRun : {}
   };
+}
+
+function recordAiProviderDiagnostic(type, detail = {}) {
+  const nowTs = getNow();
+  const entry = {
+    ts: nowTs,
+    type: String(type || '').trim().slice(0, 48),
+    provider: String(detail.provider || '').trim().slice(0, 48),
+    hostname: getHostname(detail.hostname) || String(detail.hostname || '').trim().slice(0, 180),
+    cacheKey: String(detail.cacheKey || '').trim().slice(0, 80),
+    reason: String(detail.reason || '').trim().slice(0, 96),
+    latencyMs: Number(detail.latencyMs || 0),
+    promptChars: Number(detail.promptChars || 0),
+    errorType: String(detail.errorType || '').trim().slice(0, 48)
+  };
+  if (!entry.type) return;
+
+  aiState.providerState = normalizeAiProviderState({
+    ...aiState.providerState,
+    lastDiagnosticAt: nowTs,
+    recentRequests: [
+      entry,
+      ...(Array.isArray(aiState.providerState?.recentRequests) ? aiState.providerState.recentRequests : [])
+    ].slice(0, AI_PROVIDER_ADVISORY_DIAGNOSTIC_MAX_ENTRIES)
+  });
+  scheduleAiPersist();
 }
 
 function classifyAiProviderError(error) {
@@ -4452,11 +4517,38 @@ function buildGeminiGenerateContentBody(hostname, context, policy, recentEvents,
   };
 }
 
+function buildChromeBuiltinPolicyPromptInput(hostname, context, policy, recentEvents, settings) {
+  const request = buildGatewayPolicyRequest(hostname, context, policy, recentEvents, settings);
+  return {
+    task: request.task || 'compile_browser_ad_policy',
+    host: request.hostContext.hostname,
+    url: request.hostContext.url,
+    topFrame: request.hostContext.topFrame,
+    trigger: request.trigger.type,
+    risk: {
+      tier: String(policy?.riskTier || 'low'),
+      score: Number(policy?.riskScore || 0)
+    },
+    eventCounts: request.features.eventCounts,
+    currentActions: request.features.currentActions,
+    recentEvents: request.features.recentEvents.map((event) => ({
+      type: String(event?.type || ''),
+      severity: Number(event?.severity || 0),
+      confidence: Number(event?.confidence || 0),
+      source: String(event?.source || '')
+    }))
+  };
+}
+
 function buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings) {
   return [
-    buildOpenAiInstructions(),
-    '',
-    buildOpenAiInput(hostname, context, policy, recentEvents, settings)
+    'Falcon-Player-Enhance policy advisory. Return one compact JSON object only.',
+    'Shape: summary, confidence, recommendedActions, candidateSelectors, candidateDomains, policy.',
+    'Policy keys: schemaVersion, policyVersion, source, generatedAt, ttlMs, scope, risk, actions.',
+    'Enums: recommendedActions=tighten_popup_guard|tune_overlay_scan|guard_external_navigation|apply_extra_blocked_domains; frame=top|all; risk=low|medium|high|critical.',
+    'Limits: ttlMs 30000-480000; selectors 0-8; extraBlockedDomains 0-12; reasonCodes 0-8. Use [] when none.',
+    'Prefer reversible host-scoped mitigations and avoid over-blocking.',
+    `Context: ${JSON.stringify(buildChromeBuiltinPolicyPromptInput(hostname, context, policy, recentEvents, settings))}`
   ].join('\n');
 }
 
@@ -5059,6 +5151,7 @@ function normalizeProviderAdvisory(hostname, raw, meta = {}) {
     provider: String(meta.provider || raw.provider || 'lmstudio'),
     model: String(meta.model || ''),
     generatedAt: Number(meta.generatedAt || getNow()),
+    ttlMs: getProviderAdvisoryCacheTtlMs(raw),
     summary: String(raw.summary || '').trim(),
     confidence: clamp(Number(raw.confidence || 0.65), 0.1, 1),
     riskScoreDelta: clamp(Number(raw.riskScoreDelta || 0), -6, 12),
@@ -5321,6 +5414,141 @@ function buildGatewayPolicyRequest(hostname, context, policy, recentEvents, sett
   };
 }
 
+function buildProviderAdvisoryEventCounts(recentEvents = []) {
+  return recentEvents.reduce((result, event) => {
+    const key = String(event?.type || '').trim();
+    if (!key) return result;
+    result[key] = Number(result[key] || 0) + 1;
+    return result;
+  }, {});
+}
+
+function buildProviderAdvisoryRequestDescriptor(hostname, context, policy, recentEvents = [], settings = {}) {
+  const normalizedHost = getHostname(hostname) || 'unknown-host';
+  const normalizedSettings = resolveAiProviderSettings(settings || {}, getAiProviderSecret(settings?.provider));
+  const eventCounts = buildProviderAdvisoryEventCounts(recentEvents);
+  const riskScore = Number(policy?.riskScore || 0);
+  const payload = {
+    host: normalizedHost,
+    provider: normalizedSettings.provider,
+    providerSettingsVersion: getAiProviderSettingsSignature(normalizedSettings),
+    policyVersion: Number(policy?.policyVersion || policy?.version || AI_POLICY_VERSION),
+    riskTier: String(policy?.riskTier || 'low'),
+    riskScoreBucket: Math.round(Number.isFinite(riskScore) ? riskScore : 0),
+    fallbackActive: Boolean(policy?.fallbackActive),
+    topFrame: context?.frame !== 'sub_frame',
+    triggerType: String(recentEvents[recentEvents.length - 1]?.type || 'telemetry_update'),
+    eventCounts,
+    currentActions: {
+      popupStrictMode: Boolean(policy?.popupStrictMode),
+      guardExternalNavigation: Boolean(policy?.guardExternalNavigation),
+      overlayScanMs: Number(policy?.overlayScanMs || 3000),
+      sensitivityBoost: Number(policy?.sensitivityBoost || 0),
+      forceSandbox: Boolean(policy?.forceSandbox),
+      extraBlockedDomains: Array.isArray(policy?.extraBlockedDomains) ? policy.extraBlockedDomains.slice(0, 12) : []
+    }
+  };
+  const evidenceSignature = JSON.stringify(payload);
+  const signatureHash = fnv1aHash(evidenceSignature);
+  return {
+    key: `${normalizedHost}:${normalizedSettings.provider}:${signatureHash}`,
+    host: normalizedHost,
+    provider: normalizedSettings.provider,
+    signatureHash,
+    evidenceSignature,
+    payload
+  };
+}
+
+function getProviderAdvisoryCacheTtlMs(advisory = {}) {
+  return Math.round(clamp(
+    Number(advisory.ttlMs || AI_PROVIDER_ADVISORY_DEFAULT_TTL_MS),
+    AI_PROVIDER_ADVISORY_MIN_TTL_MS,
+    AI_PROVIDER_ADVISORY_MAX_TTL_MS
+  ));
+}
+
+function isProviderAdvisoryFresh(advisory = {}, nowTs = getNow()) {
+  if (!advisory || typeof advisory !== 'object') return false;
+  const expiresAt = Number(advisory.expiresAt || 0);
+  if (expiresAt > 0) return expiresAt > nowTs;
+
+  const generatedAt = Number(advisory.generatedAt || 0);
+  const ttlMs = Number(advisory.ttlMs || 0);
+  if (generatedAt > 0 && ttlMs > 0) {
+    return generatedAt + ttlMs > nowTs;
+  }
+
+  return true;
+}
+
+function getCachedProviderAdvisory(cacheKey, evidenceSignature = '') {
+  const entry = aiState.providerAdvisoryCache?.[cacheKey];
+  if (!entry) return null;
+
+  const nowTs = getNow();
+  if (Number(entry.expiresAt || 0) <= nowTs) {
+    delete aiState.providerAdvisoryCache[cacheKey];
+    return null;
+  }
+  if (entry.evidenceSignature && evidenceSignature && entry.evidenceSignature !== evidenceSignature) {
+    return null;
+  }
+
+  entry.lastAccessed = nowTs;
+  return {
+    ...(entry.advisory || {}),
+    cacheHit: true
+  };
+}
+
+function pruneProviderAdvisoryCache() {
+  const cache = aiState.providerAdvisoryCache || {};
+  const nowTs = getNow();
+  Object.entries(cache).forEach(([key, entry]) => {
+    if (!entry || typeof entry !== 'object' || Number(entry.expiresAt || 0) <= nowTs) {
+      delete cache[key];
+    }
+  });
+
+  const entries = Object.entries(cache).sort((a, b) => Number(a[1]?.lastAccessed || 0) - Number(b[1]?.lastAccessed || 0));
+  while (entries.length > AI_PROVIDER_ADVISORY_CACHE_MAX_ENTRIES) {
+    const [key] = entries.shift();
+    delete cache[key];
+  }
+}
+
+function rememberProviderAdvisory(cacheKey, hostname, advisory = {}, descriptor = null) {
+  if (!cacheKey || !advisory || typeof advisory !== 'object') return null;
+
+  const nowTs = getNow();
+  const ttlMs = getProviderAdvisoryCacheTtlMs(advisory);
+  const expiresAt = nowTs + ttlMs;
+  const cachedAdvisory = {
+    ...advisory,
+    ttlMs,
+    expiresAt,
+    cacheKey,
+    cacheSignature: descriptor?.signatureHash || ''
+  };
+
+  aiState.providerAdvisoryCache = aiState.providerAdvisoryCache || {};
+  aiState.providerAdvisoryCache[cacheKey] = {
+    hostname: getHostname(hostname) || 'unknown-host',
+    provider: String(advisory.provider || descriptor?.provider || ''),
+    advisory: cachedAdvisory,
+    ttlMs,
+    evidenceSignature: descriptor?.evidenceSignature || '',
+    signatureHash: descriptor?.signatureHash || '',
+    createdAt: nowTs,
+    lastAccessed: nowTs,
+    expiresAt
+  };
+  pruneProviderAdvisoryCache();
+  scheduleAiPersist();
+  return cachedAdvisory;
+}
+
 function normalizeGatewayAdvisory(hostname, payload, policy, settings) {
   const responsePolicy = payload?.policy;
   if (!responsePolicy || typeof responsePolicy !== 'object') return null;
@@ -5341,6 +5569,7 @@ function normalizeGatewayAdvisory(hostname, payload, policy, settings) {
       summary,
       confidence: Number(payload?.confidence || (payload?.audit?.compiled === true ? 0.9 : 0.75)),
       riskScoreDelta: Number(responsePolicy?.risk?.score || policy?.riskScore || 0) - Number(policy?.riskScore || 0),
+      ttlMs: responsePolicy?.ttlMs,
       popupStrictMode: actions.popupStrictMode === true,
       guardExternalNavigation: actions.guardExternalNavigation === true,
       overlayScanMs: actions.overlayScanMs,
@@ -5780,6 +6009,7 @@ function shouldQueryAiProvider(hostname, policy, events = []) {
 
   const nowTs = getNow();
   const normalized = getHostname(hostname);
+  if (!normalized) return false;
   const lastRun = Number(aiState.providerState?.perHostLastRun?.[normalized] || 0);
   const hasPriorityEvent = events.some((event) =>
     ['blocked_malicious_navigation', 'clickjacking_detected', 'blocked_popup'].includes(event.type)
@@ -5789,7 +6019,17 @@ function shouldQueryAiProvider(hostname, policy, events = []) {
     return false;
   }
 
-  return nowTs - lastRun >= Number(settings.cooldownMs || LM_STUDIO_DEFAULT_COOLDOWN_MS);
+  const cooldownMs = Number(settings.cooldownMs || LM_STUDIO_DEFAULT_COOLDOWN_MS);
+  if (nowTs - lastRun < cooldownMs) {
+    recordAiProviderDiagnostic('skipped_cooldown', {
+      provider: settings.provider,
+      hostname: normalized,
+      reason: `${Math.max(0, Math.round(cooldownMs - (nowTs - lastRun)))}ms_remaining`
+    });
+    return false;
+  }
+
+  return true;
 }
 
 async function requestLmStudioAdvisory(hostname, context, policy) {
@@ -6096,7 +6336,13 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
       ...sessionConfig.options,
       signal: timeout.signal
     });
-    const rawText = await session.prompt(buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings));
+    const prompt = buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings);
+    const rawText = await promptChromeBuiltinSession(
+      session,
+      prompt,
+      {},
+      settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+    );
     const parsed = extractJsonObjectFromText(rawText);
     const advisory = normalizeOpenAiAdvisory(
       hostname,
@@ -6116,6 +6362,7 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
 
     advisory.provider = 'chrome_builtin';
     advisory.model = CHROME_BUILTIN_DEFAULT_MODEL;
+    advisory.promptChars = prompt.length;
 
     const normalizedHost = getHostname(hostname) || 'unknown-host';
     aiState.providerState = normalizeAiProviderState({
@@ -6155,7 +6402,7 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
   }
 }
 
-async function requestAiProviderAdvisory(hostname, context, policy) {
+async function requestAiProviderAdvisoryUncached(hostname, context, policy) {
   const settings = getPersistableAiProviderSettings(aiState.providerSettings || {});
   if (settings.provider === 'openai') {
     return requestOpenAiAdvisory(hostname, context, policy);
@@ -6170,6 +6417,78 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
     return requestChromeBuiltinAdvisory(hostname, context, policy);
   }
   return requestLmStudioAdvisory(hostname, context, policy);
+}
+
+async function requestAiProviderAdvisory(hostname, context, policy) {
+  const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
+  const recentEvents = getRecentTelemetryForHost(hostname, settings.maxRecentEvents);
+  const descriptor = buildProviderAdvisoryRequestDescriptor(hostname, context, policy, recentEvents, settings);
+  const normalizedHost = descriptor.host || getHostname(hostname) || 'unknown-host';
+  const cached = getCachedProviderAdvisory(descriptor.key, descriptor.evidenceSignature);
+  if (cached && isProviderAdvisoryFresh(cached)) {
+    aiState.providerAdvisories[normalizedHost] = cached;
+    recordAiProviderDiagnostic('cache_hit', {
+      provider: descriptor.provider,
+      hostname: normalizedHost,
+      cacheKey: descriptor.signatureHash
+    });
+    return cached;
+  }
+
+  const existing = aiProviderAdvisoryInflight.get(descriptor.key);
+  if (existing) {
+    recordAiProviderDiagnostic('joined_inflight', {
+      provider: descriptor.provider,
+      hostname: normalizedHost,
+      cacheKey: descriptor.signatureHash
+    });
+    return existing;
+  }
+
+  const startedAt = getNow();
+  const promise = (async () => {
+    aiState.providerState = normalizeAiProviderState({
+      ...aiState.providerState,
+      lastProvider: descriptor.provider,
+      perHostLastRun: {
+        ...(aiState.providerState?.perHostLastRun || {}),
+        [normalizedHost]: startedAt
+      }
+    });
+    recordAiProviderDiagnostic('started', {
+      provider: descriptor.provider,
+      hostname: normalizedHost,
+      cacheKey: descriptor.signatureHash
+    });
+
+    try {
+      const advisory = await requestAiProviderAdvisoryUncached(hostname, context, policy);
+      const cachedAdvisory = rememberProviderAdvisory(descriptor.key, normalizedHost, advisory, descriptor) || advisory;
+      aiState.providerAdvisories[normalizedHost] = cachedAdvisory;
+      recordAiProviderDiagnostic('completed', {
+        provider: descriptor.provider,
+        hostname: normalizedHost,
+        cacheKey: descriptor.signatureHash,
+        latencyMs: getNow() - startedAt,
+        promptChars: Number(cachedAdvisory.promptChars || 0)
+      });
+      return cachedAdvisory;
+    } catch (error) {
+      recordAiProviderDiagnostic('failed', {
+        provider: descriptor.provider,
+        hostname: normalizedHost,
+        cacheKey: descriptor.signatureHash,
+        latencyMs: getNow() - startedAt,
+        errorType: classifyAiProviderError(error)
+      });
+      throw error;
+    } finally {
+      aiProviderAdvisoryInflight.delete(descriptor.key);
+    }
+  })();
+
+  aiProviderAdvisoryInflight.set(descriptor.key, promise);
+  return promise;
 }
 
 async function requestAiElementClassification(hostname, features = {}) {
@@ -6509,7 +6828,7 @@ function buildResolvedPolicy(hostname, profile, previousPolicy, options = {}) {
   const normalizedHost = getHostname(hostname) || 'unknown-host';
   const advisory = aiState.providerAdvisories?.[normalizedHost] || null;
   const providerSettings = normalizeAiProviderSettings(aiState.providerSettings || {});
-  if (advisory && providerSettings.enabled === true && providerSettings.mode !== 'off') {
+  if (advisory && isProviderAdvisoryFresh(advisory, nowTs) && providerSettings.enabled === true && providerSettings.mode !== 'off') {
     policy = mergePolicyWithProviderAdvisory(policy, advisory, {
       mode: providerSettings.mode
     });
@@ -6841,6 +7160,8 @@ function buildAiInsightsSnapshot() {
       settings: providerSettings,
       state: providerState,
       advisoryHosts,
+      advisoryCacheSize: Object.keys(aiState.providerAdvisoryCache || {}).length,
+      recentRequests: providerState.recentRequests,
       generatedRuleCandidates: governance.generatedRuleCandidates,
       candidateGovernanceChains: governance.governanceChains,
       candidateReviewSummary: {
@@ -7102,6 +7423,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         delete nextSecrets[nextSettings.provider];
         aiState.providerSecrets = normalizeAiProviderSecrets(nextSecrets);
       }
+      aiState.providerAdvisories = {};
+      aiState.providerAdvisoryCache = {};
+      aiProviderAdvisoryInflight.clear();
       aiState.elementClassificationCache = {};
       scheduleAiPersist();
       sendResponse({
@@ -7138,6 +7462,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     aiState.hostMetrics = {};
     aiState.hostFallbacks = {};
     aiState.providerAdvisories = {};
+    aiState.providerAdvisoryCache = {};
+    aiProviderAdvisoryInflight.clear();
     aiState.generatedRuleCandidates = {};
     aiState.elementClassificationCache = {};
     aiState.candidateReviewLog = [];

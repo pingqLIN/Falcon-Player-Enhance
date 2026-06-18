@@ -138,6 +138,24 @@ def verify_linked_preview_card_click(page) -> dict:
     }
 
 
+def enable_media_automation(context, wait_ms: int = 250) -> dict:
+    worker = smoke.get_extension_worker(context)
+    return worker.evaluate(
+        """async ({ waitMs }) => {
+            await chrome.storage.local.set({
+                whitelist: [],
+                whitelistEnhanceOnly: false,
+                mediaAutomationEnabled: true
+            });
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            return await chrome.storage.local.get(['whitelist', 'whitelistEnhanceOnly', 'mediaAutomationEnabled']);
+        }""",
+        {
+            "waitMs": wait_ms,
+        },
+    )
+
+
 def main() -> int:
     args = parse_args()
     extension_dir = Path(args.extension_dir).resolve()
@@ -157,6 +175,7 @@ def main() -> int:
                 try:
                     extension_id = smoke.wait_for_extension_id(context, args.timeout_ms)
                     registered_scripts = smoke.wait_for_extension_ready(context, args.timeout_ms)
+                    seeded_state = enable_media_automation(context)
                     page = context.new_page()
                     page.goto(
                         f"{server.base_url}/test-player-detection-regression.html",
@@ -190,6 +209,7 @@ def main() -> int:
                         "ok": ok,
                         "extensionId": extension_id,
                         "registeredScripts": registered_scripts,
+                        "seededState": seeded_state,
                         "report": report,
                         "interactionSmoke": interaction_smoke,
                         "linkedPreviewSmoke": linked_preview_smoke,
