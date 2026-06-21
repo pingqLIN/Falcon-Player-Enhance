@@ -241,6 +241,11 @@ function setProtectionLevel(level) {
     try {
         window.__shieldProtectionLevel = protectionLevel;
     } catch (e) {}
+    if (isAdvancedPlayerProtectionEnabled()) {
+        recoverMediaResumeDialogInteractions();
+        setTimeout(recoverMediaResumeDialogInteractions, 250);
+        setTimeout(recoverMediaResumeDialogInteractions, 1000);
+    }
 }
 
 function isLevelAtLeast(level) {
@@ -492,6 +497,64 @@ function isMediaResumeDialog(element) {
         '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
     ));
     return hasInteraction && textSignals.some(signal => text.includes(signal));
+}
+
+function isMediaResumeDialogContainer(element) {
+    if (!element) return false;
+
+    const classSignals = [
+        'checkresume', 'resume-dialog', 'resume-modal', 'resume-overlay',
+        'playback-resume', 'restore-playback'
+    ];
+    const className = (element.className?.toString() || '').toLowerCase();
+    const id = (element.id || '').toLowerCase();
+    const combined = `${className} ${id}`;
+
+    return classSignals.some((signal) => combined.includes(signal));
+}
+
+function isVisibleElement(element) {
+    if (!element) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 1 && rect.height > 1;
+}
+
+function shouldRecoverMediaResumeDialog(element) {
+    if (!isMediaResumeDialogContainer(element)) return false;
+    if (!isMediaResumeDialog(element)) return false;
+    if (!isVisibleElement(element)) return false;
+    return containsProtectedMedia(element);
+}
+
+function recoverMediaResumeDialogInteractions() {
+    const candidateSelectors = [
+        '#resume-dialog',
+        '[class*="resume-dialog"]',
+        '[class*="resume-modal"]',
+        '[class*="resume-overlay"]',
+        '[class*="checkresume"]',
+        '[class*="playback-resume"]',
+        '[class*="restore-playback"]'
+    ];
+
+    document.querySelectorAll(candidateSelectors.join(',')).forEach((dialog) => {
+        if (!shouldRecoverMediaResumeDialog(dialog)) return;
+
+        const style = window.getComputedStyle(dialog);
+        if (style.pointerEvents === 'none') {
+            dialog.style.setProperty('pointer-events', 'auto', 'important');
+        }
+
+        dialog.querySelectorAll(
+            '#yesplease, #no_thanks, button, a[href], [role="button"], input[type="button"], input[type="submit"]'
+        ).forEach((control) => {
+            if (window.getComputedStyle(control).pointerEvents === 'none') {
+                control.style.setProperty('pointer-events', 'auto', 'important');
+            }
+        });
+    });
 }
 
 // 檢查是否為擴充功能內部元素

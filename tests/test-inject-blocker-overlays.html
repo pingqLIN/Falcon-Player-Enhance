@@ -51,6 +51,10 @@
       padding: 8px 12px;
       pointer-events: none;
     }
+
+    .continue-watching-rail button {
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -58,9 +62,15 @@
     <div id="known-global-overlay" class="card player-overlay-ad">global overlay candidate</div>
     <div id="known-javboys-overlay" class="card cvpboxOverlay">javboys overlay candidate</div>
     <div id="safe-content" class="card content-card">safe content should remain visible</div>
+    <div id="continue-watching-rail" class="card continue-watching-rail">
+      <button id="continue-watching-rail-button" type="button">Continue watching list item</button>
+    </div>
     <p id="resume-status">resume-ready</p>
     <div class="player-stage shield-detected-player">
       <video id="fixture-player" muted playsinline></video>
+      <div id="protected-continue-watching-rail" class="continue-watching-rail">
+        <button id="protected-continue-watching-rail-button" type="button">Protected rail item</button>
+      </div>
       <div id="resume-dialog" class="checkresume clear">
         <strong>Resume playing?</strong>
         <span>Welcome back. You left off at 0:00:10. Would you like to resume watching where you left off?</span>

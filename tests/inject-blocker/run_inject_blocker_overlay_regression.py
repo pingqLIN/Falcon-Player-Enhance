@@ -101,7 +101,17 @@ def inspect_page(page: Page, url: str, timeout_ms: int, wait_ms: int) -> dict[st
 
     before_click = page.evaluate(
         """() => {
-            const ids = ['known-global-overlay', 'known-javboys-overlay', 'safe-content', 'resume-dialog', 'no_thanks'];
+            const ids = [
+                'known-global-overlay',
+                'known-javboys-overlay',
+                'safe-content',
+                'continue-watching-rail',
+                'continue-watching-rail-button',
+                'protected-continue-watching-rail',
+                'protected-continue-watching-rail-button',
+                'resume-dialog',
+                'no_thanks'
+            ];
             const elements = Object.fromEntries(ids.map((id) => {
                 const element = document.getElementById(id);
                 const style = element ? window.getComputedStyle(element) : null;
@@ -157,6 +167,14 @@ def build_report(base_url: str, page: Page, timeout_ms: int, wait_ms: int) -> di
         "resumeButtonClickable": javboys["resumeClickError"] == ""
         and javboys["afterResumeClick"]["resumeStatus"] == "resume-dismissed"
         and javboys["afterResumeClick"]["resumeDialogExists"] is False,
+        "continueWatchingRailNotForcedClickable": javboys["elements"]["continue-watching-rail"]["exists"] is True
+        and javboys["elements"]["continue-watching-rail"]["display"] != "none"
+        and javboys["elements"]["continue-watching-rail-button"]["exists"] is True
+        and javboys["elements"]["continue-watching-rail-button"]["pointerEvents"] == "none",
+        "protectedContinueWatchingRailNotForcedClickable": javboys["elements"]["protected-continue-watching-rail"]["exists"] is True
+        and javboys["elements"]["protected-continue-watching-rail"]["display"] != "none"
+        and javboys["elements"]["protected-continue-watching-rail-button"]["exists"] is True
+        and javboys["elements"]["protected-continue-watching-rail-button"]["pointerEvents"] == "none",
     }
     return {
         "ok": all(checks.values()),
