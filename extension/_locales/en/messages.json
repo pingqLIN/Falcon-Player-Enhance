@@ -1,321 +1,995 @@
 {
-  "langCode": { "message": "en" },
-  "extName": { "message": "Falcon-Player-Enhance" },
-  "extDescription": { "message": "AI-assisted player protection for overlays, popups, redirects, fake players, click traps, and reversible rescue." },
-  "actionTitle": { "message": "Open Falcon-Player-Enhance control panel" },
-
-  "popupPageTitle": { "message": "Falcon-Player-Enhance" },
-  "popupTagline": { "message": "Clean video. No interference." },
-  "popupPinTitle": { "message": "Pin current control panel window" },
-  "popupThemeToggleTitle": { "message": "Toggle theme" },
-  "popupMediaDetectionOnTitle": { "message": "Video detection is on. Click to turn it off." },
-  "popupMediaDetectionOffTitle": { "message": "Video detection is off. Click to enable detection for this page." },
-  "popupMasterToggleTitle": { "message": "Enable/disable protection" },
-  "popupFlowStatusClickLock": { "message": "Click target player to lock" },
-  "popupFlowStatusVideoDetectionOff": { "message": "Video detection is off. Use the 🎬 icon to enable it." },
-  "popupBlockingLevelLabel": { "message": "Blocking level" },
-  "popupBlockingLevelTitle": { "message": "0=OFF, 1=Basic player guard, 2=Standard, 3=Enhanced redirect guard" },
-  "popupBlockingLevelOption0": { "message": "0 - OFF" },
-  "popupBlockingLevelOption1": { "message": "1 - Basic" },
-  "popupBlockingLevelOption2": { "message": "2 - Standard" },
-  "popupBlockingLevelOption3": { "message": "3 - Enhanced" },
-  "popupBlockingHintL0": { "message": "L0 OFF: disable all blocking features" },
-  "popupBlockingHintL1": { "message": "L1 Basic: keep only player protection and controls" },
-  "popupBlockingHintL2": { "message": "L2 Standard: block popups and malicious redirects" },
-  "popupBlockingHintL3": { "message": "L3 Enhanced: includes enhanced redirect protection" },
-  "popupWhitelistEnhanceOnlyLabel": { "message": "Whitelist-only mode" },
-  "popupWhitelistEnhanceOnlyTitle": { "message": "Whitelist sites only get player enhancement without page cleanup" },
-  "popupWhitelistEnhanceOnlyAriaEnabled": { "message": "Whitelist-only mode: Enabled" },
-  "popupWhitelistEnhanceOnlyAriaDisabled": { "message": "Whitelist-only mode: Disabled" },
-  "popupPopupGuardLabel": { "message": "Popup guard" },
-  "popupPopupGuardTitle": { "message": "Close suspicious spawned popup tabs from managed player sites" },
-  "popupPopupGuardAriaLabel": { "message": "Enable or disable suspicious popup guard" },
-  "popupSameTabRedirectGuardLabel": { "message": "Same-tab redirect guard" },
-  "popupSameTabRedirectGuardTitle": { "message": "Recover suspicious same-tab external redirects on managed player sites" },
-  "popupSameTabRedirectGuardAriaLabel": { "message": "Enable or disable suspicious same-tab redirect guard" },
-  "popupMainControlsTitle": { "message": "Main playback controls" },
-  "popupRescanTitle": { "message": "Re-detect players" },
-  "popupTargetUnlocked": { "message": "Unlocked" },
-  "popupTargetLocked": { "message": "Locked" },
-  "popupTargetDetailSelect": { "message": "Select a target player below first" },
-  "popupEmptyNoPlayer": { "message": "No player detected yet" },
-  "popupSeekBackTitle": { "message": "Seek back 5s" },
-  "popupPlayPauseTitle": { "message": "Play/Pause" },
-  "popupSeekForwardTitle": { "message": "Seek forward 5s" },
-  "popupMuteTitle": { "message": "Toggle mute" },
-  "popupStatsOverlays": { "message": "Overlays" },
-  "popupStatsPopups": { "message": "Popups" },
-  "popupStatsFakeVideos": { "message": "Fake videos" },
-  "popupStatsProtected": { "message": "Protected" },
-  "popupStatsEmptyFirstUse": { "message": "Visit a video site to start protecting your player." },
-  "popupStatsEmptyActive": { "message": "Protection is active. Counters will update when something is blocked." },
-  "popupStatsEmptyDisabled": { "message": "Protection is off. Turn it back on to track protection events." },
-  "popupAiMonitorTitle": { "message": "AI always-on monitor" },
-  "popupDevTag": { "message": "(In development)" },
-  "popupAiMonitorToggleTitle": { "message": "Enable/disable AI monitoring" },
-  "popupAiRiskScoreLabel": { "message": "Risk score" },
-  "popupAiHighRiskSites": { "message": "High-risk sites" },
-  "popupAiTelemetryEvents": { "message": "Telemetry events" },
-  "popupAiPolicyRecent": { "message": "Last applied" },
-  "popupAiProviderLabel": { "message": "Provider" },
-  "popupAiProviderModelLabel": { "message": "Model" },
-  "popupAiProviderStatusOnline": { "message": "online" },
-  "popupAiProviderStatusOffline": { "message": "offline" },
-  "popupAiPolicyGateLabel": { "message": "Policy gate" },
-  "popupAiPolicyModeLabel": { "message": "Mode" },
-  "popupAiPolicyReasonLabel": { "message": "Reason" },
-  "popupAiNoReversibleActions": { "message": "No reversible actions" },
-  "popupAiEvidenceLabel": { "message": "Evidence" },
-  "popupAiEvidenceClean": { "message": "This site looks clean so far." },
-  "popupAiEvidenceFallback": { "message": "Fallback: $1" },
-  "popupAiExportTitle": { "message": "Export AI training data" },
-  "popupAiExportData": { "message": "Export data" },
-  "popupAiResetTitle": { "message": "Reset AI learning records" },
-  "popupAiResetLearning": { "message": "Reset learning" },
-  "popupAiDowngradeTitle": { "message": "Temporarily downgrade this site's policy" },
-  "popupAiDowngradeAction": { "message": "Temporarily downgrade this site policy" },
-  "popupFalsePositiveRescueTitle": { "message": "False positive rescue" },
-  "popupFalsePositiveScanPage": { "message": "Scan page" },
-  "popupFalsePositiveScanPageTitle": { "message": "Scan the current page for reversible blocking actions" },
-  "popupFalsePositiveRescueEmpty": { "message": "Scan the current page to find reversible blocking actions." },
-  "popupFalsePositiveScanning": { "message": "Scanning current page..." },
-  "popupFalsePositiveNoActions": { "message": "No reversible blocking actions found on this page." },
-  "popupFalsePositiveActionCount": { "message": "$1 reversible action(s) found." },
-  "popupFalsePositiveActionCountDetailed": { "message": "$1 reversible action(s) found: hidden $2, click-blocked $3." },
-  "popupFalsePositiveTypeHidden": { "message": "Element hidden" },
-  "popupFalsePositiveTypeClickBlocked": { "message": "Visible but not clickable" },
-  "popupFalsePositiveRestoreOnce": { "message": "Restore once" },
-  "popupFalsePositiveRestoreVisibility": { "message": "Restore element" },
-  "popupFalsePositiveRestoreClickability": { "message": "Restore clickability" },
-  "popupFalsePositivePreviewToggle": { "message": "Preview" },
-  "popupFalsePositivePreviewTitle": { "message": "Preview restored elements temporarily" },
-  "popupFalsePositivePreviewAction": { "message": "Preview" },
-  "popupFalsePositivePreviewVisibility": { "message": "Show for 7s" },
-  "popupFalsePositivePreviewClickability": { "message": "Unblock for 7s" },
-  "popupFalsePositiveReport": { "message": "Report false positive" },
-  "popupFalsePositiveReported": { "message": "False positive observation recorded." },
-  "popupFalsePositiveUpdateFailed": { "message": "Failed to update the rescue record." },
-  "popupAiCandidatesHeader": { "message": "Generated candidates" },
-  "popupAiCandidatesEmpty": { "message": "No generated candidates yet." },
-  "popupAiCandidatesSummary": { "message": "$1 candidate set(s). Accepted $2, rejected $3, active promotions $4." },
-  "popupAiCandidatesNoSummary": { "message": "No summary" },
-  "popupAiCandidatesSelectAll": { "message": "Select all" },
-  "popupAiCandidatesAcceptSelected": { "message": "Accept selected" },
-  "popupAiCandidatesAccepting": { "message": "Accepting $1 selected candidate(s)..." },
-  "popupAiCandidatesAccepted": { "message": "Accepted $1 selected candidate(s)." },
-  "popupAiCandidatesAcceptPartial": { "message": "Accepted $1 candidate(s), $2 failed." },
-  "popupAiCandidateAccept": { "message": "Accept" },
-  "popupAiCandidateReject": { "message": "Reject" },
-  "popupAiCandidatePromote": { "message": "Promote" },
-  "popupAiCandidateRollback": { "message": "Rollback" },
-  "popupAiCandidateActionDone": { "message": "$1 complete." },
-  "popupAiCandidateActionFailed": { "message": "Candidate action failed." },
-  "popupDisplayReloadWarningTitle": { "message": "Page settings may not be applied yet" },
-  "popupDisplayReloadWarningBody": { "message": "Display-related settings changed while auto reload is off. The page you are watching may still be using the previous cleanup and blocking rules." },
-  "popupDisplayReloadWarningBodyWithKeys": { "message": "Changed settings: $1. This page may still be using the previous cleanup and blocking rules." },
-  "popupDisplayReloadNow": { "message": "Reload now" },
-  "popupDisplayReloadNowTitle": { "message": "Reload the current page now" },
-  "popupPickElementTitle": { "message": "Enable element blocking mode" },
-  "popupShortcutsTitle": { "message": "Shortcuts and controls overview" },
-  "popupShortcutPlayPause": { "message": "Play/Pause" },
-  "popupShortcutSeek5": { "message": "±5 seconds" },
-  "popupShortcutVolume": { "message": "Volume" },
-  "popupShortcutHoverHint": { "message": "Hover for full list" },
-  "popupShortcutFocusHint": { "message": "Click or focus for full list" },
-  "popupShortcutsToggleLabel": { "message": "Open shortcuts and controls overview" },
-  "popupShortcutPanelTitle": { "message": "Shortcuts and controls overview" },
-  "popupShortcutQuickActions": { "message": "Quick actions" },
-  "popupShortcutActionChip": { "message": "Click player chip" },
-  "popupShortcutActionChipDesc": { "message": "Lock control target" },
-  "popupShortcutActionPick": { "message": "Click 🚫" },
-  "popupShortcutActionPickDesc": { "message": "Enable element blocking mode" },
-  "popupShortcutActionPin": { "message": "Click 📌/📍" },
-  "popupShortcutActionPinDesc": { "message": "Toggle sidecar pin" },
-  "popupShortcutActionDowngrade": { "message": "Temporarily downgrade site policy" },
-  "popupShortcutActionDowngradeDesc": { "message": "Quick rollback for false positives" },
-  "popupShortcutPlayback": { "message": "Playback" },
-  "popupShortcutPlayPauseDesc": { "message": "Play/Pause" },
-  "popupShortcutSeek5Desc": { "message": "Seek ±5 seconds" },
-  "popupShortcutSeek10Desc": { "message": "Seek ±10 seconds" },
-  "popupShortcutHomeEndDesc": { "message": "Start/End" },
-  "popupShortcutJump90Desc": { "message": "Jump 0%-90%" },
-  "popupShortcutJump99Desc": { "message": "Precise jump 0%-99%" },
-  "popupShortcutVolumeSpeed": { "message": "Volume and speed" },
-  "popupShortcutVolumeDesc": { "message": "Volume ±10%" },
-  "popupShortcutMuteDesc": { "message": "Toggle mute" },
-  "popupShortcutSpeedDownDesc": { "message": "Decrease speed" },
-  "popupShortcutSpeedUpDesc": { "message": "Increase speed" },
-  "popupShortcutFullscreenDesc": { "message": "Fullscreen" },
-  "popupShortcutScreenshotDesc": { "message": "Screenshot" },
-  "popupOpenDashboardTitle": { "message": "Settings and management" },
-  "popupPinTitlePinned": { "message": "Pinned in side panel, click to unpin" },
-  "popupPinTitleUnpinned": { "message": "Pin to side panel for persistent display" },
-  "popupTargetDetailNeedSelect": { "message": "Select target player before controlling" },
-  "popupTargetDetailNoPlayer": { "message": "No player detected on current page" },
-  "popupTargetDetailUnsupported": { "message": "$1 is not directly controllable. Select another controllable player." },
-  "popupTargetDetailLocked": { "message": "$1 locked and ready to control" },
-  "popupPlayerEmptyTitle": { "message": "No players detected on this page" },
-  "popupPlayerEmptyHint": { "message": "Run DETECT again after the page finishes loading, or switch to a page with a real video player." },
-  "popupMediaDetectionOffEmptyTitle": { "message": "Video detection is off" },
-  "popupMediaDetectionOffEmptyHint": { "message": "Use the 🎬 icon in the top-right corner when you want Falcon to scan this page for players." },
-  "popupFlowStatusDetectRetry": { "message": "Detect failed. Try DETECT again." },
-  "popupFlowStatusLocked": { "message": "Locked: $1" },
-  "popupFlowStatusPlayersDetected": { "message": "Click target player ($1 detected)" },
-  "popupFlowStatusNoPlayer": { "message": "Detect completed: no player found" },
-  "popupFlowStatusThreatsBlocked": { "message": "$1 threat(s) blocked" },
-  "popupFlowStatusDetecting": { "message": "Detecting players..." },
-  "popupConfirmResetAi": { "message": "Reset AI learning data? This action cannot be undone." },
-  "popupPickElementTitleActive": { "message": "Exit element blocking mode" },
-  "popupPickElementTitleInactive": { "message": "Enable element blocking mode" },
-  "popupAddCurrentSiteTitle": { "message": "Promote current site to enhanced Falcon-Player-Enhance protection" },
-  "popupToolbarAddSite": { "message": "Enhance site" },
-
-  "dashboardPageTitle": { "message": "Falcon-Player-Enhance Settings" },
-  "dashboardMenuPlayer": { "message": "Player settings" },
-  "dashboardMenuDomains": { "message": "My lists" },
-  "dashboardMenuCustomSites": { "message": "Enhanced protection" },
-  "dashboardMenuElements": { "message": "Blocked elements" },
-  "dashboardMenuSecurity": { "message": "Security settings" },
-  "dashboardThemeToggleTitle": { "message": "Toggle theme" },
-  "dashboardThemeLight": { "message": "Light mode" },
-  "dashboardThemeDark": { "message": "Dark mode" },
-  "dashboardPlayerHeading": { "message": "Player settings" },
-  "dashboardStatOverlays": { "message": "Overlay removals" },
-  "dashboardStatPopups": { "message": "Popup blocks" },
-  "dashboardStatPlayers": { "message": "Players protected" },
-  "dashboardProtectionFeatures": { "message": "Protection features" },
-  "dashboardFeatureOverlayTitle": { "message": "Auto overlay removal" },
-  "dashboardFeatureOverlayDesc": { "message": "Automatically detect and remove ad overlays above players" },
-  "dashboardFeaturePopupTitle": { "message": "Popup blocking" },
-  "dashboardFeaturePopupDesc": { "message": "Block malicious popups and redirects triggered by clicks" },
-  "dashboardFeatureFakeVideoTitle": { "message": "Fake video removal" },
-  "dashboardFeatureFakeVideoDesc": { "message": "Automatically remove fake videos" },
-  "dashboardFeatureSyncTitle": { "message": "Playback progress sync" },
-  "dashboardFeatureSyncDesc": { "message": "Remember your watch progress" },
-  "dashboardDisplayApplyHeader": { "message": "Page display updates" },
-  "dashboardDisplayAutoReloadTitle": { "message": "Reload page after display-related settings" },
-  "dashboardDisplayAutoReloadDesc": { "message": "Settings that change page cleanup, blocking, hidden elements, or site lists reload the active page by default so the current view is updated." },
-  "dashboardDisplayReloadNotice": { "message": "Falcon classifies page cleanup, protection level, navigation guards, hidden-element rules, and site lists as display-related. Changes reload the active page automatically unless you turn this off." },
-  "dashboardDisplayReloadNoticeDismiss": { "message": "Got it" },
-  "dashboardDisplayReloadApplied": { "message": "Display-related settings saved. Active page reloaded." },
-  "dashboardDisplayReloadPending": { "message": "Display-related settings saved. Auto reload is off, so the side panel will warn that the current page may not be updated." },
-  "dashboardDisplayReloadEnabled": { "message": "Auto reload is enabled for display-related settings." },
-  "dashboardDisplayReloadDisabled": { "message": "Auto reload is disabled. The side panel will warn when a watched page may still need reload." },
-  "dashboardPopupAutoFitTitle": { "message": "Auto-fit popup player" },
-  "dashboardPopupAutoFitDesc": { "message": "Make distraction-free playback automatically fill the available popup window space" },
-  "dashboardPopupAiMonitorTitle": { "message": "Show AI monitor in popup" },
-  "dashboardPopupAiMonitorDesc": { "message": "Keep advanced AI policy details hidden by default unless you want to inspect them in the popup." },
-  "dashboardEnabled": { "message": "Enabled" },
-  "dashboardHotkeysRef": { "message": "Hotkey reference" },
-  "dashboardHotkeysPlayback": { "message": "Playback" },
-  "dashboardHotkeysPlayPause": { "message": "Play/Pause" },
-  "dashboardHotkeysSeek5": { "message": "Seek ±5 seconds" },
-  "dashboardHotkeysSeek10": { "message": "Seek ±10 seconds" },
-  "dashboardHotkeysHomeEnd": { "message": "Jump to start/end" },
-  "dashboardHotkeysJump90": { "message": "Jump 0%-90%" },
-  "dashboardHotkeysJump99": { "message": "Double-tap two digits within 500ms: precise jump 0%-99%" },
-  "dashboardHotkeysVolumeSpeed": { "message": "Volume and speed" },
-  "dashboardHotkeysVolume": { "message": "Volume ±10%" },
-  "dashboardHotkeysMute": { "message": "Toggle mute" },
-  "dashboardHotkeysSpeedDown": { "message": "Decrease speed" },
-  "dashboardHotkeysSpeedUp": { "message": "Increase speed" },
-  "dashboardHotkeysOther": { "message": "Other" },
-  "dashboardHotkeysFullscreen": { "message": "Fullscreen" },
-  "dashboardHotkeysScreenshot": { "message": "Screenshot" },
-  "dashboardDomainsHeading": { "message": "Domain list" },
-  "dashboardWhitelistHeader": { "message": "Whitelist (no rules applied)" },
-  "dashboardWhitelistPlaceholder": { "message": "Enter domain (e.g., example.com)" },
-  "dashboardAdd": { "message": "Add" },
-  "dashboardBlacklistHeader": { "message": "Blacklist (strict protection)" },
-  "dashboardBlacklistPlaceholder": { "message": "Enter domain" },
-  "dashboardElementsHeading": { "message": "Blocked elements" },
-  "dashboardBlockedElementsHeader": { "message": "Blocked page elements" },
-  "dashboardBlockedElementsEmpty": { "message": "No blocked-element rules yet." },
-  "dashboardBlockedElementsCount": { "message": "$1 blocked-element rule(s) saved." },
-  "dashboardBlockedElementsPreview": { "message": "Preview on page" },
-  "dashboardBlockedElementsPreviewTitle": { "message": "Temporarily preview this blocked-element rule on the current page" },
-  "dashboardBlockedElementsPreviewNoTab": { "message": "No previewable tab is available right now." },
-  "dashboardBlockedElementsPreviewHostMismatch": { "message": "Open a page on $1 to preview this rule." },
-  "dashboardBlockedElementsPreviewNoMatch": { "message": "This rule does not match any element on the current page." },
-  "dashboardBlockedElementsPreviewMatched": { "message": "Previewed $1 matched element(s) on the current page." },
-  "dashboardLoading": { "message": "Loading..." },
-  "dashboardClearAllRules": { "message": "Clear all rules" },
-  "dashboardSecurityHeading": { "message": "Security settings" },
-  "dashboardSandboxTitle": { "message": "Sandbox protection" },
-  "dashboardSandboxDesc": { "message": "Open suspicious sites in a restricted environment to prevent sensitive data access." },
-  "dashboardAboutSandbox": { "message": "About sandbox" },
-  "dashboardAboutSandboxText": { "message": "Sandbox mode limits site permissions, including blocking popups, downloads, and cookie access. It is the strongest defense against malicious sites." },
-  "dashboardDataManagement": { "message": "Data management" },
-  "dashboardResetStatsTitle": { "message": "Reset statistics" },
-  "dashboardResetStatsDesc": { "message": "Clear all counters and keep settings." },
-  "dashboardReset": { "message": "Reset" },
-  "dashboardEmptyNoItems": { "message": "No items yet" },
-  "dashboardConfirmResetStats": { "message": "Reset all statistics?" },
-  "dashboardJustNow": { "message": "Just now" },
-  "dashboardMinutesAgo": { "message": "$1 minute(s) ago" },
-  "dashboardHoursAgo": { "message": "$1 hour(s) ago" },
-  "dashboardDaysAgo": { "message": "$1 day(s) ago" },
-  "dashboardEmptyNoBlockedElements": { "message": "No blocked elements yet" },
-  "dashboardUnknownHost": { "message": "Unknown host" },
-  "dashboardItemsCount": { "message": "$1 item(s)" },
-  "dashboardAddedAt": { "message": "Added at $1" },
-  "dashboardRemoveRuleTitle": { "message": "Delete this rule" },
-  "dashboardConfirmClearElements": { "message": "Clear all blocked element rules?\nThis will restore all blocked elements." },
-  "dashboardFalsePositiveRescueHeader": { "message": "False positive rescue" },
-  "dashboardFalsePositiveRescueEmpty": { "message": "Scan the current page to find reversible blocking actions." },
-  "dashboardFalsePositiveRescueNoActions": { "message": "No reversible blocking actions found on the current page." },
-  "dashboardFalsePositiveRescueCount": { "message": "$1 reversible action(s) found on the current page." },
-  "dashboardFalsePositiveRescueCountDetailed": { "message": "$1 reversible action(s) found on the current page: hidden $2, click-blocked $3." },
-  "dashboardFalsePositiveRescueRefresh": { "message": "Scan current page" },
-  "dashboardFalsePositiveRescueRestore": { "message": "Restore once" },
-  "dashboardFalsePositiveRescueRestoreVisibility": { "message": "Restore element" },
-  "dashboardFalsePositiveRescueRestoreClickability": { "message": "Restore clickability" },
-  "dashboardFalsePositiveRescuePreviewVisibility": { "message": "Show for 7s" },
-  "dashboardFalsePositiveRescuePreviewClickability": { "message": "Unblock for 7s" },
-  "dashboardFalsePositiveTypeHidden": { "message": "Element hidden" },
-  "dashboardFalsePositiveTypeClickBlocked": { "message": "Visible but not clickable" },
-  "dashboardFalsePositiveRescueReport": { "message": "Report false positive" },
-  "dashboardFalsePositiveRescueReported": { "message": "False positive observation recorded." },
-  "dashboardFalsePositiveRescueFailed": { "message": "Failed to update the rescue record." },
-
-  "dashboardCustomSitesHeading": { "message": "Enhanced protection" },
-  "dashboardCustomSitesBuiltinHeader": { "message": "Built-in enhanced sites" },
-  "dashboardCustomSitesBuiltinDesc": { "message": "These sites receive enhanced protection. Unknown sites still get basic player tools and baseline ad blocking by default." },
-  "dashboardCustomSitesBuiltinBadge": { "message": "Built-in" },
-  "dashboardCustomSitesAddHeader": { "message": "Promote site to enhanced mode" },
-  "dashboardCustomSitesAddDesc": { "message": "Unknown sites already receive basic player tools and baseline ad blocking. Add a domain here to enable earlier injection, site-specific heuristics, and stronger protection." },
-  "dashboardCustomSitesPlaceholder": { "message": "Enter domain (e.g., example.com)" },
-  "dashboardCustomSitesListHeader": { "message": "Your enhanced sites" },
-  "dashboardCustomSitesEmpty": { "message": "No enhanced sites yet" },
-  "dashboardCustomSitesInvalid": { "message": "Please enter a valid domain name (e.g., example.com)" },
-  "dashboardCustomSitesPermDenied": { "message": "Permission denied. Cannot add site without host permission." },
-  "dashboardCustomSitesAdded": { "message": "$1 promoted to enhanced protection" },
-  "dashboardCustomSitesRemoved": { "message": "$1 removed from enhanced protection" },
-  "dashboardCustomSitesPreviewHeader": { "message": "Enhanced match patterns" },
-
-  "popupPlayerPageTitle": { "message": "Falcon-Player-Enhance - Distraction-free Playback" },
-  "popupPlayerModeTitle": { "message": "Distraction-free playback mode" },
-  "popupPlayerPin": { "message": "📌 Pin" },
-  "popupPlayerPinned": { "message": "📌 Pinned" },
-  "popupPlayerPip": { "message": "Picture-in-Picture" },
-  "popupPlayerExitPip": { "message": "Exit PiP" },
-  "popupPlayerClose": { "message": "Close" },
-  "popupPlayerErrorTitle": { "message": "❌ Failed to load video" },
-  "popupPlayerPinTitlePinned": { "message": "Persistent display enabled. Click to unpin." },
-  "popupPlayerPinTitleUnpinned": { "message": "Pin this window. It will auto reopen after close." },
-  "popupPlayerErrorInvalidSource": { "message": "No valid video source parameter provided." },
-  "popupPlayerAlertPipUnsupported": { "message": "Picture-in-Picture is unavailable." },
-  "popupPlayerAlertIframePipUnsupported": { "message": "PiP is not supported for iframe players." },
-  "popupPlayerAlertUnpinBeforeClose": { "message": "This window is pinned. Unpin from the PIN button before closing." },
-  "popupFlowClickSub": { "message": "Click the player" },
-  "popupFlowDetectSub": { "message": "Detect & clean" },
-  "popupFlowPlaySub": { "message": "Safe playback" },
-  "dashboardAiRestoreDefaults": { "message": "Restore defaults" },
-  "dashboardAiCandidateHelp": { "message": "Accept records that a generated candidate passed review. Promote installs an accepted candidate as confirmed rules; use Rollback to undo that promotion." },
-  "dashboardAiSelectAllCandidates": { "message": "Select all reviewable" },
-  "dashboardAiAcceptSelectedCandidates": { "message": "Accept selected" },
-  "popupPickElementActivating": { "message": "Element blocking mode is starting. Pick an element on the page." },
-  "popupPickElementFailed": { "message": "Element blocking mode could not start: $1" },
-  "popupPickElementNoTab": { "message": "No page tab is available for Block element." },
-  "popupPickElementDisabled": { "message": "Enable protection before using Block element." }
+  "langCode": {
+    "message": "en"
+  },
+  "extName": {
+    "message": "Falcon-Player-Enhance"
+  },
+  "extDescription": {
+    "message": "AI-assisted player protection for overlays, popups, redirects, fake players, click traps, and reversible rescue."
+  },
+  "actionTitle": {
+    "message": "Open Falcon-Player-Enhance control panel"
+  },
+  "popupPageTitle": {
+    "message": "Falcon-Player-Enhance"
+  },
+  "popupTagline": {
+    "message": "Clean video. No interference."
+  },
+  "popupPinTitle": {
+    "message": "Pin current control panel window"
+  },
+  "popupThemeToggleTitle": {
+    "message": "Toggle theme"
+  },
+  "popupMediaDetectionOnTitle": {
+    "message": "Video detection is on. Click to turn it off."
+  },
+  "popupMediaDetectionOffTitle": {
+    "message": "Video detection is off. Click to enable detection for this page."
+  },
+  "popupMasterToggleTitle": {
+    "message": "Enable/disable protection"
+  },
+  "popupFlowStatusClickLock": {
+    "message": "Click target player to lock"
+  },
+  "popupFlowStatusVideoDetectionOff": {
+    "message": "Video detection is off. Use the 🎬 icon to enable it."
+  },
+  "popupBlockingLevelLabel": {
+    "message": "Blocking level"
+  },
+  "popupBlockingLevelTitle": {
+    "message": "0=OFF, 1=Basic player guard, 2=Standard, 3=Enhanced redirect guard"
+  },
+  "popupBlockingLevelOption0": {
+    "message": "0 - OFF"
+  },
+  "popupBlockingLevelOption1": {
+    "message": "1 - Basic"
+  },
+  "popupBlockingLevelOption2": {
+    "message": "2 - Standard"
+  },
+  "popupBlockingLevelOption3": {
+    "message": "3 - Enhanced"
+  },
+  "popupBlockingHintL0": {
+    "message": "L0 OFF: disable all blocking features"
+  },
+  "popupBlockingHintL1": {
+    "message": "L1 Basic: keep only player protection and controls"
+  },
+  "popupBlockingHintL2": {
+    "message": "L2 Standard: block popups and malicious redirects"
+  },
+  "popupBlockingHintL3": {
+    "message": "L3 Enhanced: includes enhanced redirect protection"
+  },
+  "popupWhitelistEnhanceOnlyLabel": {
+    "message": "Whitelist-only mode"
+  },
+  "popupWhitelistEnhanceOnlyTitle": {
+    "message": "Whitelist sites only get player enhancement without page cleanup"
+  },
+  "popupWhitelistEnhanceOnlyAriaEnabled": {
+    "message": "Whitelist-only mode: Enabled"
+  },
+  "popupWhitelistEnhanceOnlyAriaDisabled": {
+    "message": "Whitelist-only mode: Disabled"
+  },
+  "popupPopupGuardLabel": {
+    "message": "Popup guard"
+  },
+  "popupPopupGuardTitle": {
+    "message": "Close suspicious spawned popup tabs from managed player sites"
+  },
+  "popupPopupGuardAriaLabel": {
+    "message": "Enable or disable suspicious popup guard"
+  },
+  "popupSameTabRedirectGuardLabel": {
+    "message": "Same-tab redirect guard"
+  },
+  "popupSameTabRedirectGuardTitle": {
+    "message": "Recover suspicious same-tab external redirects on managed player sites"
+  },
+  "popupSameTabRedirectGuardAriaLabel": {
+    "message": "Enable or disable suspicious same-tab redirect guard"
+  },
+  "popupMainControlsTitle": {
+    "message": "Main playback controls"
+  },
+  "popupRescanTitle": {
+    "message": "Re-detect players"
+  },
+  "popupTargetUnlocked": {
+    "message": "Unlocked"
+  },
+  "popupTargetLocked": {
+    "message": "Locked"
+  },
+  "popupTargetDetailSelect": {
+    "message": "Select a target player below first"
+  },
+  "popupEmptyNoPlayer": {
+    "message": "No player detected yet"
+  },
+  "popupSeekBackTitle": {
+    "message": "Seek back 5s"
+  },
+  "popupPlayPauseTitle": {
+    "message": "Play/Pause"
+  },
+  "popupSeekForwardTitle": {
+    "message": "Seek forward 5s"
+  },
+  "popupMuteTitle": {
+    "message": "Toggle mute"
+  },
+  "popupStatsOverlays": {
+    "message": "Overlays"
+  },
+  "popupStatsPopups": {
+    "message": "Popups"
+  },
+  "popupStatsFakeVideos": {
+    "message": "Fake videos"
+  },
+  "popupStatsProtected": {
+    "message": "Protected"
+  },
+  "popupStatsEmptyFirstUse": {
+    "message": "Visit a video site to start protecting your player."
+  },
+  "popupStatsEmptyActive": {
+    "message": "Protection is active. Counters will update when something is blocked."
+  },
+  "popupStatsEmptyDisabled": {
+    "message": "Protection is off. Turn it back on to track protection events."
+  },
+  "popupAiMonitorTitle": {
+    "message": "AI always-on monitor"
+  },
+  "popupDevTag": {
+    "message": "(In development)"
+  },
+  "popupAiMonitorToggleTitle": {
+    "message": "Enable/disable AI monitoring"
+  },
+  "popupAiRiskScoreLabel": {
+    "message": "Risk score"
+  },
+  "popupAiHighRiskSites": {
+    "message": "High-risk sites"
+  },
+  "popupAiTelemetryEvents": {
+    "message": "Telemetry events"
+  },
+  "popupAiPolicyRecent": {
+    "message": "Last applied"
+  },
+  "popupAiProviderLabel": {
+    "message": "Provider"
+  },
+  "popupAiProviderModelLabel": {
+    "message": "Model"
+  },
+  "popupAiProviderStatusOnline": {
+    "message": "online"
+  },
+  "popupAiProviderStatusOffline": {
+    "message": "offline"
+  },
+  "popupAiPolicyGateLabel": {
+    "message": "Policy gate"
+  },
+  "popupAiPolicyModeLabel": {
+    "message": "Mode"
+  },
+  "popupAiPolicyReasonLabel": {
+    "message": "Reason"
+  },
+  "popupAiNoReversibleActions": {
+    "message": "No reversible actions"
+  },
+  "popupAiEvidenceLabel": {
+    "message": "Evidence"
+  },
+  "popupAiEvidenceClean": {
+    "message": "This site looks clean so far."
+  },
+  "popupAiEvidenceFallback": {
+    "message": "Fallback: $1"
+  },
+  "popupAiExportTitle": {
+    "message": "Export AI training data"
+  },
+  "popupAiExportData": {
+    "message": "Export data"
+  },
+  "popupAiResetTitle": {
+    "message": "Reset AI learning records"
+  },
+  "popupAiResetLearning": {
+    "message": "Reset learning"
+  },
+  "popupAiDowngradeTitle": {
+    "message": "Temporarily downgrade this site's policy"
+  },
+  "popupAiDowngradeAction": {
+    "message": "Temporarily downgrade this site policy"
+  },
+  "popupFalsePositiveRescueTitle": {
+    "message": "False positive rescue"
+  },
+  "popupFalsePositiveScanPage": {
+    "message": "Scan page"
+  },
+  "popupFalsePositiveScanPageTitle": {
+    "message": "Scan the current page for reversible blocking actions"
+  },
+  "popupFalsePositiveRescueEmpty": {
+    "message": "Scan the current page to find reversible blocking actions."
+  },
+  "popupFalsePositiveScanning": {
+    "message": "Scanning current page..."
+  },
+  "popupFalsePositiveNoActions": {
+    "message": "No reversible blocking actions found on this page."
+  },
+  "popupFalsePositiveActionCount": {
+    "message": "$1 reversible action(s) found."
+  },
+  "popupFalsePositiveActionCountDetailed": {
+    "message": "$1 reversible action(s) found: hidden $2, click-blocked $3."
+  },
+  "popupFalsePositiveTypeHidden": {
+    "message": "Element hidden"
+  },
+  "popupFalsePositiveTypeClickBlocked": {
+    "message": "Visible but not clickable"
+  },
+  "popupFalsePositiveRestoreOnce": {
+    "message": "Restore once"
+  },
+  "popupFalsePositiveRestoreVisibility": {
+    "message": "Restore element"
+  },
+  "popupFalsePositiveRestoreClickability": {
+    "message": "Restore clickability"
+  },
+  "popupFalsePositivePreviewToggle": {
+    "message": "Preview"
+  },
+  "popupFalsePositivePreviewTitle": {
+    "message": "Preview restored elements temporarily"
+  },
+  "popupFalsePositivePreviewAction": {
+    "message": "Preview"
+  },
+  "popupFalsePositivePreviewVisibility": {
+    "message": "Show for 7s"
+  },
+  "popupFalsePositivePreviewClickability": {
+    "message": "Unblock for 7s"
+  },
+  "popupFalsePositiveReport": {
+    "message": "Report false positive"
+  },
+  "popupFalsePositiveReported": {
+    "message": "False positive observation recorded."
+  },
+  "popupFalsePositiveUpdateFailed": {
+    "message": "Failed to update the rescue record."
+  },
+  "popupAiCandidatesHeader": {
+    "message": "Generated candidates"
+  },
+  "popupAiCandidatesEmpty": {
+    "message": "No generated candidates yet."
+  },
+  "popupAiCandidatesSummary": {
+    "message": "$1 candidate set(s). Accepted $2, rejected $3, active promotions $4."
+  },
+  "popupAiCandidatesNoSummary": {
+    "message": "No summary"
+  },
+  "popupAiCandidatesSelectAll": {
+    "message": "Select all"
+  },
+  "popupAiCandidatesAcceptSelected": {
+    "message": "Accept selected"
+  },
+  "popupAiCandidatesAccepting": {
+    "message": "Accepting $1 selected candidate(s)..."
+  },
+  "popupAiCandidatesAccepted": {
+    "message": "Accepted $1 selected candidate(s)."
+  },
+  "popupAiCandidatesAcceptPartial": {
+    "message": "Accepted $1 candidate(s), $2 failed."
+  },
+  "popupAiCandidateAccept": {
+    "message": "Accept"
+  },
+  "popupAiCandidateReject": {
+    "message": "Reject"
+  },
+  "popupAiCandidatePromote": {
+    "message": "Promote"
+  },
+  "popupAiCandidateRollback": {
+    "message": "Rollback"
+  },
+  "popupAiCandidateActionDone": {
+    "message": "$1 complete."
+  },
+  "popupAiCandidateActionFailed": {
+    "message": "Candidate action failed."
+  },
+  "popupDisplayReloadWarningTitle": {
+    "message": "Page settings may not be applied yet"
+  },
+  "popupDisplayReloadWarningBody": {
+    "message": "Display-related settings changed while auto reload is off. The page you are watching may still be using the previous cleanup and blocking rules."
+  },
+  "popupDisplayReloadWarningBodyWithKeys": {
+    "message": "Changed settings: $1. This page may still be using the previous cleanup and blocking rules."
+  },
+  "popupDisplayReloadNow": {
+    "message": "Reload now"
+  },
+  "popupDisplayReloadNowTitle": {
+    "message": "Reload the current page now"
+  },
+  "popupPickElementTitle": {
+    "message": "Enable element blocking mode"
+  },
+  "popupShortcutsTitle": {
+    "message": "Shortcuts and controls overview"
+  },
+  "popupShortcutPlayPause": {
+    "message": "Play/Pause"
+  },
+  "popupShortcutSeek5": {
+    "message": "±5 seconds"
+  },
+  "popupShortcutVolume": {
+    "message": "Volume"
+  },
+  "popupShortcutHoverHint": {
+    "message": "Hover for full list"
+  },
+  "popupShortcutFocusHint": {
+    "message": "Click or focus for full list"
+  },
+  "popupShortcutsToggleLabel": {
+    "message": "Open shortcuts and controls overview"
+  },
+  "popupShortcutPanelTitle": {
+    "message": "Shortcuts and controls overview"
+  },
+  "popupShortcutQuickActions": {
+    "message": "Quick actions"
+  },
+  "popupShortcutActionChip": {
+    "message": "Click player chip"
+  },
+  "popupShortcutActionChipDesc": {
+    "message": "Lock control target"
+  },
+  "popupShortcutActionPick": {
+    "message": "Click 🚫"
+  },
+  "popupShortcutActionPickDesc": {
+    "message": "Enable element blocking mode"
+  },
+  "popupShortcutActionPin": {
+    "message": "Click 📌/📍"
+  },
+  "popupShortcutActionPinDesc": {
+    "message": "Toggle sidecar pin"
+  },
+  "popupShortcutActionDowngrade": {
+    "message": "Temporarily downgrade site policy"
+  },
+  "popupShortcutActionDowngradeDesc": {
+    "message": "Quick rollback for false positives"
+  },
+  "popupShortcutPlayback": {
+    "message": "Playback"
+  },
+  "popupShortcutPlayPauseDesc": {
+    "message": "Play/Pause"
+  },
+  "popupShortcutSeek5Desc": {
+    "message": "Seek ±5 seconds"
+  },
+  "popupShortcutSeek10Desc": {
+    "message": "Seek ±10 seconds"
+  },
+  "popupShortcutHomeEndDesc": {
+    "message": "Start/End"
+  },
+  "popupShortcutJump90Desc": {
+    "message": "Jump 0%-90%"
+  },
+  "popupShortcutJump99Desc": {
+    "message": "Precise jump 0%-99%"
+  },
+  "popupShortcutVolumeSpeed": {
+    "message": "Volume and speed"
+  },
+  "popupShortcutVolumeDesc": {
+    "message": "Volume ±10%"
+  },
+  "popupShortcutMuteDesc": {
+    "message": "Toggle mute"
+  },
+  "popupShortcutSpeedDownDesc": {
+    "message": "Decrease speed"
+  },
+  "popupShortcutSpeedUpDesc": {
+    "message": "Increase speed"
+  },
+  "popupShortcutFullscreenDesc": {
+    "message": "Fullscreen"
+  },
+  "popupShortcutScreenshotDesc": {
+    "message": "Screenshot"
+  },
+  "popupOpenDashboardTitle": {
+    "message": "Settings and management"
+  },
+  "popupPinTitlePinned": {
+    "message": "Pinned in side panel, click to unpin"
+  },
+  "popupPinTitleUnpinned": {
+    "message": "Pin to side panel for persistent display"
+  },
+  "popupTargetDetailNeedSelect": {
+    "message": "Select target player before controlling"
+  },
+  "popupTargetDetailNoPlayer": {
+    "message": "No player detected on current page"
+  },
+  "popupTargetDetailUnsupported": {
+    "message": "$1 is not directly controllable. Select another controllable player."
+  },
+  "popupTargetDetailLocked": {
+    "message": "$1 locked and ready to control"
+  },
+  "popupPlayerEmptyTitle": {
+    "message": "No players detected on this page"
+  },
+  "popupPlayerEmptyHint": {
+    "message": "Run DETECT again after the page finishes loading, or switch to a page with a real video player."
+  },
+  "popupMediaDetectionOffEmptyTitle": {
+    "message": "Video detection is off"
+  },
+  "popupMediaDetectionOffEmptyHint": {
+    "message": "Use the 🎬 icon in the top-right corner when you want Falcon to scan this page for players."
+  },
+  "popupFlowStatusDetectRetry": {
+    "message": "Detect failed. Try DETECT again."
+  },
+  "popupFlowStatusLocked": {
+    "message": "Locked: $1"
+  },
+  "popupFlowStatusPlayersDetected": {
+    "message": "Click target player ($1 detected)"
+  },
+  "popupFlowStatusNoPlayer": {
+    "message": "Detect completed: no player found"
+  },
+  "popupFlowStatusThreatsBlocked": {
+    "message": "$1 threat(s) blocked"
+  },
+  "popupFlowStatusDetecting": {
+    "message": "Detecting players..."
+  },
+  "popupConfirmResetAi": {
+    "message": "Reset AI learning data? This action cannot be undone."
+  },
+  "popupPickElementTitleActive": {
+    "message": "Exit element blocking mode"
+  },
+  "popupPickElementTitleInactive": {
+    "message": "Enable element blocking mode"
+  },
+  "popupAddCurrentSiteTitle": {
+    "message": "Promote current site to enhanced Falcon-Player-Enhance protection"
+  },
+  "popupToolbarAddSite": {
+    "message": "Enhance site"
+  },
+  "dashboardPageTitle": {
+    "message": "Falcon-Player-Enhance Settings"
+  },
+  "dashboardMenuPlayer": {
+    "message": "Player settings"
+  },
+  "dashboardMenuDomains": {
+    "message": "My lists"
+  },
+  "dashboardMenuCustomSites": {
+    "message": "Enhanced protection"
+  },
+  "dashboardMenuElements": {
+    "message": "Blocked elements"
+  },
+  "dashboardMenuSecurity": {
+    "message": "Security settings"
+  },
+  "dashboardThemeToggleTitle": {
+    "message": "Toggle theme"
+  },
+  "dashboardThemeLight": {
+    "message": "Light mode"
+  },
+  "dashboardThemeDark": {
+    "message": "Dark mode"
+  },
+  "dashboardPlayerHeading": {
+    "message": "Player settings"
+  },
+  "dashboardStatOverlays": {
+    "message": "Overlay removals"
+  },
+  "dashboardStatPopups": {
+    "message": "Popup blocks"
+  },
+  "dashboardStatPlayers": {
+    "message": "Players protected"
+  },
+  "dashboardProtectionFeatures": {
+    "message": "Protection features"
+  },
+  "dashboardFeatureOverlayTitle": {
+    "message": "Auto overlay removal"
+  },
+  "dashboardFeatureOverlayDesc": {
+    "message": "Automatically detect and remove ad overlays above players"
+  },
+  "dashboardFeaturePopupTitle": {
+    "message": "Popup blocking"
+  },
+  "dashboardFeaturePopupDesc": {
+    "message": "Block malicious popups and redirects triggered by clicks"
+  },
+  "dashboardFeatureFakeVideoTitle": {
+    "message": "Fake video removal"
+  },
+  "dashboardFeatureFakeVideoDesc": {
+    "message": "Automatically remove fake videos"
+  },
+  "dashboardFeatureSyncTitle": {
+    "message": "Playback progress sync"
+  },
+  "dashboardFeatureSyncDesc": {
+    "message": "Remember your watch progress"
+  },
+  "dashboardDisplayApplyHeader": {
+    "message": "Page display updates"
+  },
+  "dashboardDisplayAutoReloadTitle": {
+    "message": "Reload page after display-related settings"
+  },
+  "dashboardDisplayAutoReloadDesc": {
+    "message": "Settings that change page cleanup, blocking, hidden elements, or site lists reload the active page by default so the current view is updated."
+  },
+  "dashboardDisplayReloadNotice": {
+    "message": "Falcon classifies page cleanup, protection level, navigation guards, hidden-element rules, and site lists as display-related. Changes reload the active page automatically unless you turn this off."
+  },
+  "dashboardDisplayReloadNoticeDismiss": {
+    "message": "Got it"
+  },
+  "dashboardDisplayReloadApplied": {
+    "message": "Display-related settings saved. Active page reloaded."
+  },
+  "dashboardDisplayReloadPending": {
+    "message": "Display-related settings saved. Auto reload is off, so the side panel will warn that the current page may not be updated."
+  },
+  "dashboardDisplayReloadEnabled": {
+    "message": "Auto reload is enabled for display-related settings."
+  },
+  "dashboardDisplayReloadDisabled": {
+    "message": "Auto reload is disabled. The side panel will warn when a watched page may still need reload."
+  },
+  "dashboardPopupAutoFitTitle": {
+    "message": "Auto-fit popup player"
+  },
+  "dashboardPopupAutoFitDesc": {
+    "message": "Make distraction-free playback automatically fill the available popup window space"
+  },
+  "dashboardPopupAiMonitorTitle": {
+    "message": "Show AI monitor in popup"
+  },
+  "dashboardPopupAiMonitorDesc": {
+    "message": "Keep advanced AI policy details hidden by default unless you want to inspect them in the popup."
+  },
+  "dashboardEnabled": {
+    "message": "Enabled"
+  },
+  "dashboardHotkeysRef": {
+    "message": "Hotkey reference"
+  },
+  "dashboardHotkeysPlayback": {
+    "message": "Playback"
+  },
+  "dashboardHotkeysPlayPause": {
+    "message": "Play/Pause"
+  },
+  "dashboardHotkeysSeek5": {
+    "message": "Seek ±5 seconds"
+  },
+  "dashboardHotkeysSeek10": {
+    "message": "Seek ±10 seconds"
+  },
+  "dashboardHotkeysHomeEnd": {
+    "message": "Jump to start/end"
+  },
+  "dashboardHotkeysJump90": {
+    "message": "Jump 0%-90%"
+  },
+  "dashboardHotkeysJump99": {
+    "message": "Double-tap two digits within 500ms: precise jump 0%-99%"
+  },
+  "dashboardHotkeysVolumeSpeed": {
+    "message": "Volume and speed"
+  },
+  "dashboardHotkeysVolume": {
+    "message": "Volume ±10%"
+  },
+  "dashboardHotkeysMute": {
+    "message": "Toggle mute"
+  },
+  "dashboardHotkeysSpeedDown": {
+    "message": "Decrease speed"
+  },
+  "dashboardHotkeysSpeedUp": {
+    "message": "Increase speed"
+  },
+  "dashboardHotkeysOther": {
+    "message": "Other"
+  },
+  "dashboardHotkeysFullscreen": {
+    "message": "Fullscreen"
+  },
+  "dashboardHotkeysScreenshot": {
+    "message": "Screenshot"
+  },
+  "dashboardDomainsHeading": {
+    "message": "Domain list"
+  },
+  "dashboardWhitelistHeader": {
+    "message": "Whitelist (no rules applied)"
+  },
+  "dashboardWhitelistPlaceholder": {
+    "message": "Enter domain (e.g., example.com)"
+  },
+  "dashboardAdd": {
+    "message": "Add"
+  },
+  "dashboardBlacklistHeader": {
+    "message": "Blacklist (strict protection)"
+  },
+  "dashboardBlacklistPlaceholder": {
+    "message": "Enter domain"
+  },
+  "dashboardElementsHeading": {
+    "message": "Blocked elements"
+  },
+  "dashboardBlockedElementsHeader": {
+    "message": "Blocked page elements"
+  },
+  "dashboardBlockedElementsEmpty": {
+    "message": "No blocked-element rules yet."
+  },
+  "dashboardBlockedElementsCount": {
+    "message": "$1 blocked-element rule(s) saved."
+  },
+  "dashboardBlockedElementsPreview": {
+    "message": "Preview on page"
+  },
+  "dashboardBlockedElementsPreviewTitle": {
+    "message": "Temporarily preview this blocked-element rule on the current page"
+  },
+  "dashboardBlockedElementsPreviewNoTab": {
+    "message": "No previewable tab is available right now."
+  },
+  "dashboardBlockedElementsPreviewHostMismatch": {
+    "message": "Open a page on $1 to preview this rule."
+  },
+  "dashboardBlockedElementsPreviewNoMatch": {
+    "message": "This rule does not match any element on the current page."
+  },
+  "dashboardBlockedElementsPreviewMatched": {
+    "message": "Previewed $1 matched element(s) on the current page."
+  },
+  "dashboardLoading": {
+    "message": "Loading..."
+  },
+  "dashboardClearAllRules": {
+    "message": "Clear all rules"
+  },
+  "dashboardSecurityHeading": {
+    "message": "Security settings"
+  },
+  "dashboardSandboxTitle": {
+    "message": "Sandbox protection"
+  },
+  "dashboardSandboxDesc": {
+    "message": "Open suspicious sites in a restricted environment to prevent sensitive data access."
+  },
+  "dashboardAboutSandbox": {
+    "message": "About sandbox"
+  },
+  "dashboardAboutSandboxText": {
+    "message": "Sandbox mode limits site permissions, including blocking popups, downloads, and cookie access. It is the strongest defense against malicious sites."
+  },
+  "dashboardDataManagement": {
+    "message": "Data management"
+  },
+  "dashboardResetStatsTitle": {
+    "message": "Reset statistics"
+  },
+  "dashboardResetStatsDesc": {
+    "message": "Clear all counters and keep settings."
+  },
+  "dashboardReset": {
+    "message": "Reset"
+  },
+  "dashboardEmptyNoItems": {
+    "message": "No items yet"
+  },
+  "dashboardConfirmResetStats": {
+    "message": "Reset all statistics?"
+  },
+  "dashboardJustNow": {
+    "message": "Just now"
+  },
+  "dashboardMinutesAgo": {
+    "message": "$1 minute(s) ago"
+  },
+  "dashboardHoursAgo": {
+    "message": "$1 hour(s) ago"
+  },
+  "dashboardDaysAgo": {
+    "message": "$1 day(s) ago"
+  },
+  "dashboardEmptyNoBlockedElements": {
+    "message": "No blocked elements yet"
+  },
+  "dashboardUnknownHost": {
+    "message": "Unknown host"
+  },
+  "dashboardItemsCount": {
+    "message": "$1 item(s)"
+  },
+  "dashboardAddedAt": {
+    "message": "Added at $1"
+  },
+  "dashboardRemoveRuleTitle": {
+    "message": "Delete this rule"
+  },
+  "dashboardConfirmClearElements": {
+    "message": "Clear all blocked element rules?\nThis will restore all blocked elements."
+  },
+  "dashboardFalsePositiveRescueHeader": {
+    "message": "False positive rescue"
+  },
+  "dashboardFalsePositiveRescueEmpty": {
+    "message": "Scan the current page to find reversible blocking actions."
+  },
+  "dashboardFalsePositiveRescueNoActions": {
+    "message": "No reversible blocking actions found on the current page."
+  },
+  "dashboardFalsePositiveRescueCount": {
+    "message": "$1 reversible action(s) found on the current page."
+  },
+  "dashboardFalsePositiveRescueCountDetailed": {
+    "message": "$1 reversible action(s) found on the current page: hidden $2, click-blocked $3."
+  },
+  "dashboardFalsePositiveRescueRefresh": {
+    "message": "Scan current page"
+  },
+  "dashboardFalsePositiveRescueRestore": {
+    "message": "Restore once"
+  },
+  "dashboardFalsePositiveRescueRestoreVisibility": {
+    "message": "Restore element"
+  },
+  "dashboardFalsePositiveRescueRestoreClickability": {
+    "message": "Restore clickability"
+  },
+  "dashboardFalsePositiveRescuePreviewVisibility": {
+    "message": "Show for 7s"
+  },
+  "dashboardFalsePositiveRescuePreviewClickability": {
+    "message": "Unblock for 7s"
+  },
+  "dashboardFalsePositiveTypeHidden": {
+    "message": "Element hidden"
+  },
+  "dashboardFalsePositiveTypeClickBlocked": {
+    "message": "Visible but not clickable"
+  },
+  "dashboardFalsePositiveRescueReport": {
+    "message": "Report false positive"
+  },
+  "dashboardFalsePositiveRescueReported": {
+    "message": "False positive observation recorded."
+  },
+  "dashboardFalsePositiveRescueFailed": {
+    "message": "Failed to update the rescue record."
+  },
+  "dashboardCustomSitesHeading": {
+    "message": "Enhanced protection"
+  },
+  "dashboardCustomSitesBuiltinHeader": {
+    "message": "Built-in enhanced sites"
+  },
+  "dashboardCustomSitesBuiltinDesc": {
+    "message": "These sites receive enhanced protection. Unknown sites still get basic player tools and baseline ad blocking by default."
+  },
+  "dashboardCustomSitesBuiltinBadge": {
+    "message": "Built-in"
+  },
+  "dashboardCustomSitesAddHeader": {
+    "message": "Promote site to enhanced mode"
+  },
+  "dashboardCustomSitesAddDesc": {
+    "message": "Unknown sites already receive basic player tools and baseline ad blocking. Add a domain here to enable earlier injection, site-specific heuristics, and stronger protection."
+  },
+  "dashboardCustomSitesPlaceholder": {
+    "message": "Enter domain (e.g., example.com)"
+  },
+  "dashboardCustomSitesListHeader": {
+    "message": "Your enhanced sites"
+  },
+  "dashboardCustomSitesEmpty": {
+    "message": "No enhanced sites yet"
+  },
+  "dashboardCustomSitesInvalid": {
+    "message": "Please enter a valid domain name (e.g., example.com)"
+  },
+  "dashboardCustomSitesPermDenied": {
+    "message": "Permission denied. Cannot add site without host permission."
+  },
+  "dashboardCustomSitesAdded": {
+    "message": "$1 promoted to enhanced protection"
+  },
+  "dashboardCustomSitesRemoved": {
+    "message": "$1 removed from enhanced protection"
+  },
+  "dashboardCustomSitesPreviewHeader": {
+    "message": "Enhanced match patterns"
+  },
+  "popupPlayerPageTitle": {
+    "message": "Falcon-Player-Enhance - Distraction-free Playback"
+  },
+  "popupPlayerModeTitle": {
+    "message": "Distraction-free playback mode"
+  },
+  "popupPlayerPin": {
+    "message": "📌 Pin"
+  },
+  "popupPlayerPinned": {
+    "message": "📌 Pinned"
+  },
+  "popupPlayerPip": {
+    "message": "Picture-in-Picture"
+  },
+  "popupPlayerExitPip": {
+    "message": "Exit PiP"
+  },
+  "popupPlayerClose": {
+    "message": "Close"
+  },
+  "popupPlayerErrorTitle": {
+    "message": "❌ Failed to load video"
+  },
+  "popupPlayerPinTitlePinned": {
+    "message": "Persistent display enabled. Click to unpin."
+  },
+  "popupPlayerPinTitleUnpinned": {
+    "message": "Pin this window. It will auto reopen after close."
+  },
+  "popupPlayerErrorInvalidSource": {
+    "message": "No valid video source parameter provided."
+  },
+  "popupPlayerAlertPipUnsupported": {
+    "message": "Picture-in-Picture is unavailable."
+  },
+  "popupPlayerAlertIframePipUnsupported": {
+    "message": "PiP is not supported for iframe players."
+  },
+  "popupPlayerAlertUnpinBeforeClose": {
+    "message": "This window is pinned. Unpin from the PIN button before closing."
+  },
+  "popupFlowClickSub": {
+    "message": "Click the player"
+  },
+  "popupFlowDetectSub": {
+    "message": "Detect & clean"
+  },
+  "popupFlowPlaySub": {
+    "message": "Safe playback"
+  },
+  "dashboardAiRestoreDefaults": {
+    "message": "Restore defaults"
+  },
+  "dashboardAiCandidateHelp": {
+    "message": "Accept records that a generated candidate passed review. Promote installs an accepted candidate as confirmed rules; use Rollback to undo that promotion."
+  },
+  "dashboardAiSelectAllCandidates": {
+    "message": "Select all reviewable"
+  },
+  "dashboardAiAcceptSelectedCandidates": {
+    "message": "Accept selected"
+  },
+  "popupPickElementActivating": {
+    "message": "Element blocking mode is starting. Pick an element on the page."
+  },
+  "popupPickElementFailed": {
+    "message": "Element blocking mode could not start: $1"
+  },
+  "popupPickElementNoTab": {
+    "message": "No page tab is available for Block element."
+  },
+  "popupPickElementDisabled": {
+    "message": "Enable protection before using Block element."
+  },
+  "dashboardAiRefreshModels": {
+    "message": "Refresh models"
+  },
+  "dashboardAiModelHint": {
+    "message": "Run a health check to load models from this provider."
+  },
+  "dashboardAiChromeHeader": {
+    "message": "Chrome Built-in Gemini"
+  },
+  "dashboardAiChromeIntro": {
+    "message": "Prompt API shipped for extensions in Chrome 138. Numeric temperature and topK stay extension-only and must be set together or omitted. Traditional Chinese is not a Prompt API output language yet."
+  },
+  "dashboardAiSamplingLabel": {
+    "message": "Sampling"
+  },
+  "dashboardAiSamplingRuntime": {
+    "message": "Runtime defaults"
+  },
+  "dashboardAiSamplingCustom": {
+    "message": "Custom temperature and topK"
+  },
+  "dashboardAiLanguagesLabel": {
+    "message": "Languages"
+  },
+  "dashboardAiConstraintTitle": {
+    "message": "JSON response constraint"
+  },
+  "dashboardAiConstraintDesc": {
+    "message": "Ask Prompt API for schema-constrained JSON, with a plain-text fallback."
+  },
+  "dashboardAiFlagsHeader": {
+    "message": "Experimental flags"
+  },
+  "dashboardAiCopyFlag": {
+    "message": "Copy flag"
+  },
+  "dashboardAiCopied": {
+    "message": "Copied"
+  },
+  "dashboardAiPromptMissing": {
+    "message": "Prompt API is not exposed in this extension page. Chrome 138+ extensions should have it without a flag; older Chrome still needs chrome://flags/#prompt-api."
+  },
+  "dashboardAiParamsMissing": {
+    "message": "LanguageModel.params() is only available in extension contexts."
+  },
+  "dashboardAiCatalogFailed": {
+    "message": "Unable to load the Chrome Built-in AI catalog."
+  }
 }

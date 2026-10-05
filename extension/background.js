@@ -404,8 +404,8 @@ const GATEWAY_DEFAULT_TOP_K = 40;
 const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
 const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 10000;
 const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 30000;
-const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 0.2;
-const CHROME_BUILTIN_DEFAULT_TOP_K = 8;
+const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 1;
+const CHROME_BUILTIN_DEFAULT_TOP_K = 3;
 const APP_VERSION = chrome.runtime.getManifest().version || '0.0.0';
 const LM_STUDIO_DEFAULT_MIN_RISK_SCORE = 8;
 const LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS = 8;
@@ -2864,7 +2864,10 @@ function normalizeAiProviderSettings(input = {}) {
     temperature: clamp(Number(input.temperature ?? providerDefaults.temperature ?? defaults.temperature), 0, 2),
     topK: clamp(Number(input.topK ?? providerDefaults.topK ?? defaults.topK), 1, 128),
     enableDynamicRuleCandidates:
-      input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true
+      input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true,
+    chromeSampling: String(input.chromeSampling || '').toLowerCase() === 'custom' ? 'custom' : 'runtime',
+    chromeLanguages: normalizeChromeBuiltinLanguages(input.chromeLanguages),
+    chromeResponseConstraint: input.chromeResponseConstraint !== false
   };
 }
 
@@ -4598,6 +4601,35 @@ function extractGeminiOutputText(payload) {
     .trim();
 }
 
+const CHROME_BUILTIN_LANGUAGES = ['en', 'es', 'ja', 'de', 'fr'];
+const CHROME_BUILTIN_DOCS = [
+  { label: 'Built-in AI overview', url: 'https://developer.chrome.com/docs/ai/built-in' },
+  { label: 'Prompt API', url: 'https://developer.chrome.com/docs/ai/prompt-api' },
+  { label: 'Writer API', url: 'https://developer.chrome.com/docs/ai/writer-api' },
+  { label: 'Rewriter API', url: 'https://developer.chrome.com/docs/ai/rewriter-api' }
+];
+
+function normalizeChromeBuiltinLanguages(values) {
+  const allowed = new Set(CHROME_BUILTIN_LANGUAGES);
+  const source = Array.isArray(values) ? values : String(values || '').split(',');
+  const normalized = [];
+  source.forEach((value) => {
+    const language = String(value || '').trim().toLowerCase();
+    if (allowed.has(language) && !normalized.includes(language)) normalized.push(language);
+  });
+  return normalized.length > 0 ? normalized : ['en'];
+}
+
+function isChromeBuiltinReadyAvailability(value) {
+  const status = String(value || '').toLowerCase();
+  return status === 'ready' || status === 'available' || status === 'readily';
+}
+
+function isChromeBuiltinDownloadAvailability(value) {
+  const status = String(value || '').toLowerCase();
+  return status === 'downloadable' || status === 'downloading' || status === 'after-download';
+}
+
 async function resolveChromeLanguageModel() {
   const api = globalThis.LanguageModel || globalThis.ai?.languageModel;
   if (!api?.create) {
@@ -4617,11 +4649,13 @@ function getChromeBuiltinCapabilitySnapshot() {
 
 async function buildChromeBuiltinSessionOptions(api, settings = {}) {
   const options = {};
+  const languages = normalizeChromeBuiltinLanguages(settings.chromeLanguages);
+  const useCustomSampling = String(settings.chromeSampling || 'runtime').toLowerCase() === 'custom';
 
-  if (typeof api.params === 'function') {
+  if (useCustomSampling && typeof api.params === 'function') {
     const params = await api.params();
     const temperature = clamp(
-      Number(settings.temperature ?? CHROME_BUILTIN_DEFAULT_TEMPERATURE),
+      Number(settings.temperature ?? params?.defaultTemperature ?? CHROME_BUILTIN_DEFAULT_TEMPERATURE),
       0,
       Number(params?.maxTemperature || 2)
     );
@@ -4632,15 +4666,15 @@ async function buildChromeBuiltinSessionOptions(api, settings = {}) {
         Number(params?.maxTopK || 128)
       )
     );
-
+    // Extension sessions must set both sampling values or neither.
     options.temperature = temperature;
     options.topK = topK;
   }
 
   return {
     ...options,
-    expectedInputs: [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }]
+    expectedInputs: [{ type: 'text', languages }],
+    expectedOutputs: [{ type: 'text', languages }]
   };
 }
 
@@ -5703,7 +5737,8 @@ async function runOpenAiHealthCheck(settings = aiState.providerSettings) {
       endpoint: normalized.endpoint,
       service: 'openai',
       resolvedModel,
-      modelCount
+      modelCount,
+      models: models.slice(0, 120)
     };
   } catch (error) {
     aiState.providerState = normalizeAiProviderState({
@@ -5774,7 +5809,8 @@ async function runGeminiHealthCheck(settings = aiState.providerSettings) {
       endpoint: normalized.endpoint,
       service: 'gemini',
       resolvedModel,
-      modelCount: 1
+      modelCount: 1,
+      models: [resolvedModel]
     };
   } catch (error) {
     aiState.providerState = normalizeAiProviderState({
@@ -5872,10 +5908,10 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
     const availability = sessionConfig.availability;
     const params = typeof api.params === 'function' ? await api.params() : null;
     const capabilityStatus = String(availability || 'available').toLowerCase();
-    const isAvailable = capabilityStatus === 'available';
+    const isAvailable = isChromeBuiltinReadyAvailability(capabilityStatus);
 
     if (!isAvailable) {
-      const downloadAttempt = capabilityStatus === 'downloadable'
+      const downloadAttempt = isChromeBuiltinDownloadAvailability(capabilityStatus)
         ? await attemptChromeBuiltinDownloadStart(api, sessionConfig, normalized)
         : null;
       const readinessStatus = downloadAttempt?.started ? 'downloading' : capabilityStatus;
@@ -5954,11 +5990,16 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
       service: 'chrome_prompt_api',
       resolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
       modelCount: 1,
+      models: [normalized.model || CHROME_BUILTIN_DEFAULT_MODEL],
       availability,
       capabilityStatus,
       route: sessionConfig.route,
       attempts: sessionConfig.attempts,
       params,
+      languages: normalizeChromeBuiltinLanguages(normalized.chromeLanguages),
+      sampling: normalized.chromeSampling || 'runtime',
+      docs: CHROME_BUILTIN_DOCS,
+      extensionContext: 'Prompt API is shipped for Chrome extensions since Chrome 138. Numeric temperature and topK remain extension-only and must be set together or omitted.',
       probe: 'create_prompt_destroy',
       capability: getChromeBuiltinCapabilitySnapshot()
     };
@@ -6329,7 +6370,7 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
 
   try {
     const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
-    if (String(sessionConfig.availability || '').toLowerCase() !== 'available') {
+    if (!isChromeBuiltinReadyAvailability(sessionConfig.availability)) {
       throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
     }
     session = await api.create({
@@ -6580,7 +6621,7 @@ async function requestAiElementClassification(hostname, features = {}) {
       let session = null;
       try {
         const sessionConfig = await resolveChromeBuiltinSessionConfig(api, settings);
-        if (String(sessionConfig.availability || '').toLowerCase() !== 'available') {
+        if (!isChromeBuiltinReadyAvailability(sessionConfig.availability)) {
           throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
         }
         session = await api.create({

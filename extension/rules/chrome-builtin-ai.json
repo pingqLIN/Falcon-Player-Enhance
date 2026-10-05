@@ -1,0 +1,266 @@
+{
+  "version": 1,
+  "languages": [
+    "en",
+    "es",
+    "ja",
+    "de",
+    "fr"
+  ],
+  "docs": [
+    {
+      "label": "Built-in AI",
+      "url": "https://developer.chrome.com/docs/ai/built-in"
+    },
+    {
+      "label": "Prompt API",
+      "url": "https://developer.chrome.com/docs/ai/prompt-api"
+    },
+    {
+      "label": "Writer API",
+      "url": "https://developer.chrome.com/docs/ai/writer-api"
+    },
+    {
+      "label": "Rewriter API",
+      "url": "https://developer.chrome.com/docs/ai/rewriter-api"
+    },
+    {
+      "label": "Web AI demos",
+      "url": "https://github.com/GoogleChromeLabs/web-ai-demos"
+    }
+  ],
+  "flags": [
+    {
+      "id": "prompt-api",
+      "name": "Prompt API",
+      "layer": "core_api",
+      "flag": "prompt-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Enabled Multilingual",
+        "Disabled"
+      ],
+      "extension_note": "Shipped in Chrome extensions since Chrome 138. Web pages use origin trial for samplingMode.",
+      "documentation": "https://developer.chrome.com/docs/ai/prompt-api",
+      "description": "General on-device language interface for rewrite, summary, and classification. Not for factual Q&A."
+    },
+    {
+      "id": "prompt-api-multimodal-input",
+      "name": "Prompt API multimodal input",
+      "layer": "core_api",
+      "flag": "prompt-api-multimodal-input",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "input_modalities": [
+        "text",
+        "image",
+        "audio"
+      ],
+      "documentation": "https://developer.chrome.com/docs/ai/prompt-api",
+      "description": "Extends Prompt API with image and audio input."
+    },
+    {
+      "id": "prompt-api-sampling-mode",
+      "name": "Prompt API sampling mode",
+      "layer": "engine",
+      "flag": "prompt-api-sampling-mode",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "sampling_modes": [
+        "most-predictable",
+        "predictable",
+        "slightly-predictable",
+        "balanced",
+        "slightly-creative",
+        "creative",
+        "most-creative"
+      ],
+      "description": "Web/origin-trial semantic sampling. Extension sessions still use numeric temperature and topK."
+    },
+    {
+      "id": "writer-api",
+      "name": "Writer API",
+      "layer": "core_api",
+      "flag": "writer-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Enabled Multilingual",
+        "Disabled"
+      ],
+      "documentation": "https://developer.chrome.com/docs/ai/writer-api",
+      "description": "Task API for drafting text."
+    },
+    {
+      "id": "rewriter-api",
+      "name": "Rewriter API",
+      "layer": "core_api",
+      "flag": "rewriter-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Enabled Multilingual",
+        "Disabled"
+      ],
+      "documentation": "https://developer.chrome.com/docs/ai/rewriter-api",
+      "description": "Task API for rewrite and tone changes."
+    },
+    {
+      "id": "summarizer-api",
+      "name": "Summarizer API",
+      "layer": "core_api",
+      "flag": "summarizer-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Enabled Multilingual",
+        "Disabled"
+      ],
+      "documentation": "https://developer.chrome.com/docs/ai/summarizer-api",
+      "description": "On-device long-text summary API."
+    },
+    {
+      "id": "proofreader-api",
+      "name": "Proofreader API",
+      "layer": "core_api",
+      "flag": "proofreader-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "description": "Small expert model for grammar and spelling."
+    },
+    {
+      "id": "semantic-embedder-api",
+      "name": "Semantic Embedder API",
+      "layer": "core_api",
+      "flag": "semantic-embedder-api",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "description": "On-device embeddings for local similarity."
+    },
+    {
+      "id": "gemma4-for-built-in-ai",
+      "name": "Gemma 4 for Built-in AI",
+      "layer": "runtime",
+      "flag": "gemma4-for-built-in-ai",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "description": "Switches Built-in AI APIs to the Gemma 4 runtime."
+    },
+    {
+      "id": "on-device-model-speculative-decoding",
+      "name": "Speculative decoding",
+      "layer": "runtime",
+      "flag": "on-device-model-speculative-decoding",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "dependencies": [
+        "LiteRT-LM",
+        "Gemma 4",
+        "Sampling Mode"
+      ],
+      "description": "Throughput optimization. Enabling it also pulls related runtime flags."
+    },
+    {
+      "id": "summarizer-api-performance-preference",
+      "name": "Summarizer performance preference",
+      "layer": "runtime",
+      "flag": "summarizer-api-performance-preference",
+      "platforms": [
+        "Mac",
+        "Windows",
+        "Linux",
+        "ChromeOS"
+      ],
+      "options": [
+        "Default",
+        "Enabled",
+        "Disabled"
+      ],
+      "supported_preferences": [
+        "capability",
+        "speed",
+        "auto"
+      ],
+      "description": "Chooses capability, speed, or auto expert-model routing."
+    }
+  ]
+}

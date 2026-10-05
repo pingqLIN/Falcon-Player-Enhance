@@ -272,26 +272,31 @@
                             <div class="provider-card-logo">🤖</div>
                             <div class="provider-card-name">OpenAI</div>
                             <div class="provider-card-sub">GPT-5.4-mini</div>
+                            <div class="provider-card-active" hidden>Active</div>
                         </div>
                         <div class="provider-card" data-provider="gemini" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">✨</div>
                             <div class="provider-card-name">Gemini</div>
                             <div class="provider-card-sub">Google AI</div>
+                            <div class="provider-card-active" hidden>Active</div>
                         </div>
                         <div class="provider-card" data-provider="lmstudio" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🖥️</div>
                             <div class="provider-card-name">LM Studio</div>
                             <div class="provider-card-sub">Local model</div>
+                            <div class="provider-card-active" hidden>Active</div>
                         </div>
                         <div class="provider-card" data-provider="gateway" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">🔗</div>
                             <div class="provider-card-name">Gateway</div>
                             <div class="provider-card-sub">Custom endpoint</div>
+                            <div class="provider-card-active" hidden>Active</div>
                         </div>
                         <div class="provider-card" data-provider="chrome_builtin" role="button" tabindex="0" aria-pressed="false">
                             <div class="provider-card-logo">◆</div>
                             <div class="provider-card-name">Chrome Built-in</div>
                             <div class="provider-card-sub">Gemini Nano</div>
+                            <div class="provider-card-active" hidden>Active</div>
                         </div>
                     </div>
                 </div>
@@ -315,7 +320,15 @@
                     <!-- Model -->
                     <div class="input-row" id="ai-model-row">
                         <label class="ai-field-label" for="lmstudio-model" data-i18n="dashboardAiModelLabel">Model</label>
-                        <input type="text" id="lmstudio-model" class="text-input" placeholder="e.g. gpt-5.4-mini">
+                        <div class="ai-model-controls">
+                            <input type="text" id="lmstudio-model" class="text-input" list="ai-model-options" placeholder="e.g. gpt-5.4-mini" autocomplete="off">
+                            <datalist id="ai-model-options"></datalist>
+                            <button type="button" class="btn-secondary" id="btn-refresh-ai-models" data-i18n="dashboardAiRefreshModels">Refresh models</button>
+                        </div>
+                    </div>
+                    <div class="ai-model-meta" id="ai-model-meta">
+                        <select id="ai-model-select" class="text-input" aria-label="Discovered models"></select>
+                        <div class="info-text" id="ai-model-hint" data-i18n="dashboardAiModelHint">Run a health check to load models from this provider.</div>
                     </div>
 
                     <!-- Endpoint -->
@@ -323,6 +336,36 @@
                         <label class="ai-field-label" for="lmstudio-endpoint" data-i18n="dashboardAiEndpointLabel">Endpoint</label>
                         <input type="text" id="lmstudio-endpoint" class="text-input" placeholder="https://api.openai.com/v1/responses">
                     </div>
+                </div>
+
+
+                <div class="settings-group" id="chrome-builtin-panel" hidden>
+                    <div class="settings-header" data-i18n="dashboardAiChromeHeader">Chrome Built-in Gemini</div>
+                    <div class="info-text" id="chrome-probe-status" data-i18n="dashboardAiChromeIntro">Prompt API shipped for extensions in Chrome 138. Numeric temperature and topK stay extension-only and must be set together or omitted. Traditional Chinese is not a Prompt API output language yet.</div>
+                    <div class="info-text" id="chrome-params-summary"></div>
+                    <div class="input-row">
+                        <label class="ai-field-label" for="chrome-sampling-mode" data-i18n="dashboardAiSamplingLabel">Sampling</label>
+                        <select id="chrome-sampling-mode" class="text-input">
+                            <option value="runtime" data-i18n="dashboardAiSamplingRuntime">Runtime defaults</option>
+                            <option value="custom" data-i18n="dashboardAiSamplingCustom">Custom temperature and topK</option>
+                        </select>
+                    </div>
+                    <div class="input-row">
+                        <label class="ai-field-label" data-i18n="dashboardAiLanguagesLabel">Languages</label>
+                        <div id="chrome-language-options" class="chrome-language-options"></div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <div class="setting-title" data-i18n="dashboardAiConstraintTitle">JSON response constraint</div>
+                            <div class="setting-desc" data-i18n="dashboardAiConstraintDesc">Ask Prompt API for schema-constrained JSON, with a plain-text fallback.</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="chrome-response-constraint" checked><span class="slider"></span></label>
+                    </div>
+                    <div class="chrome-docs-links" id="chrome-docs-links"></div>
+                    <details class="collapsible-section">
+                        <summary class="collapsible-summary" data-i18n="dashboardAiFlagsHeader">Experimental flags</summary>
+                        <div class="collapsible-body" id="chrome-flags-list"></div>
+                    </details>
                 </div>
 
                 <!-- Mode selection (radio cards) -->
@@ -516,6 +559,7 @@
         </main>
     </div>
     <script src="../content/i18n.js"></script>
+    <script src="chrome-builtin-panel.js"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>
