@@ -991,5 +991,14 @@
   },
   "dashboardAiCatalogFailed": {
     "message": "Unable to load the Chrome Built-in AI catalog."
+  },
+  "dashboardAiModelStorageLabel": {
+    "message": "Storage"
+  },
+  "dashboardAiModelStoragePlaceholder": {
+    "message": "~/.lmstudio/models"
+  },
+  "dashboardAiModelStorageHint": {
+    "message": "Local model directory. This path stays in extension settings and is not sent to cloud providers."
   }
 }

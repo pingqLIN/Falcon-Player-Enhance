@@ -330,6 +330,11 @@
                         <select id="ai-model-select" class="text-input" aria-label="Discovered models"></select>
                         <div class="info-text" id="ai-model-hint" data-i18n="dashboardAiModelHint">Run a health check to load models from this provider.</div>
                     </div>
+                    <div class="input-row" id="ai-model-storage-row" hidden>
+                        <label class="ai-field-label" for="lmstudio-model-storage" data-i18n="dashboardAiModelStorageLabel">Storage</label>
+                        <input type="text" id="lmstudio-model-storage" class="text-input" placeholder="~/.lmstudio/models" data-i18n-placeholder="dashboardAiModelStoragePlaceholder" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="info-text" id="ai-model-storage-hint" hidden data-i18n="dashboardAiModelStorageHint">Local model directory. This path stays in extension settings and is not sent to cloud providers.</div>
 
                     <!-- Endpoint -->
                     <div class="input-row" id="ai-endpoint-row">

@@ -991,5 +991,14 @@
   },
   "dashboardAiCatalogFailed": {
     "message": "無法載入 Chrome 內建 AI 規格表。"
+  },
+  "dashboardAiModelStorageLabel": {
+    "message": "儲存位置"
+  },
+  "dashboardAiModelStoragePlaceholder": {
+    "message": "~/.lmstudio/models"
+  },
+  "dashboardAiModelStorageHint": {
+    "message": "本機模型目錄。這個路徑只存在擴充功能設定，不會送到雲端服務商。"
   }
 }
