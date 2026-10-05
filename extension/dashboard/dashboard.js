@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lmstudioEnabled = document.getElementById('lmstudio-enabled');
     const lmstudioEndpoint = document.getElementById('lmstudio-endpoint');
     const lmstudioModel = document.getElementById('lmstudio-model');
+    const lmstudioModelStorage = document.getElementById('lmstudio-model-storage');
     const lmstudioMode = document.getElementById('lmstudio-mode');
     const lmstudioTimeout = document.getElementById('lmstudio-timeout');
     const lmstudioCooldown = document.getElementById('lmstudio-cooldown');
@@ -526,6 +527,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (modelLocked && !lmstudioModel.value) lmstudioModel.value = 'Gemini Nano';
         }
         if (btnRefreshAiModels) btnRefreshAiModels.hidden = modelLocked;
+        const needsStoragePath = provider === 'lmstudio' || provider === 'gateway';
+        document.getElementById('ai-model-storage-row')?.toggleAttribute('hidden', !needsStoragePath);
+        document.getElementById('ai-model-storage-hint')?.toggleAttribute('hidden', !needsStoragePath);
         if (chromeBuiltinPanel) chromeBuiltinPanel.hidden = provider !== 'chrome_builtin';
         document.getElementById('chrome-builtin-temperature')?.closest('.input-row')?.toggleAttribute('hidden', provider !== 'chrome_builtin');
         document.getElementById('chrome-builtin-topk')?.closest('.input-row')?.toggleAttribute('hidden', provider !== 'chrome_builtin');
@@ -972,6 +976,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lmstudioModel) {
             lmstudioModel.value = settings?.model || getProviderDefaultModel(provider);
         }
+        if (lmstudioModelStorage) {
+            lmstudioModelStorage.value = settings?.modelStoragePath || '';
+        }
         if (lmstudioMode) lmstudioMode.value = settings?.mode || 'hybrid';
         if (lmstudioTimeout) lmstudioTimeout.value = String(settings?.timeoutMs || getProviderDefaultTimeout(provider));
         if (lmstudioCooldown) lmstudioCooldown.value = String(settings?.cooldownMs || getProviderDefaultCooldown(provider));
@@ -1010,6 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
             model: lmstudioModel?.value || (
                 getProviderDefaultModel(provider)
             ),
+            modelStoragePath: lmstudioModelStorage?.value || '',
             apiKey: aiProviderToken?.value || '',
             mode: lmstudioMode?.value || 'hybrid',
             timeoutMs: Number(lmstudioTimeout?.value || getProviderDefaultTimeout(provider)),
@@ -1026,6 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const providerLabel = getProviderLabel(provider);
         if (lmstudioEndpoint) lmstudioEndpoint.value = getProviderDefaultEndpoint(provider);
         if (lmstudioModel) lmstudioModel.value = getProviderDefaultModel(provider);
+        if (lmstudioModelStorage) lmstudioModelStorage.value = provider === 'lmstudio' ? '~/.lmstudio/models' : '';
         if (lmstudioTimeout) lmstudioTimeout.value = String(getProviderDefaultTimeout(provider));
         if (lmstudioCooldown) lmstudioCooldown.value = String(getProviderDefaultCooldown(provider));
         if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(getProviderDefaultTemperature(provider));

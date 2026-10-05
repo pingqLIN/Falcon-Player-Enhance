@@ -1076,6 +1076,15 @@
         scheduleProcessLoop();
 
         // DOM 變化監控
+        let mutationScanTimer = null;
+        function scheduleMutationScan() {
+            if (mutationScanTimer) return;
+            mutationScanTimer = setTimeout(() => {
+                mutationScanTimer = null;
+                if (blockingEnabled) processAllPlayers();
+            }, 200);
+        }
+
         const observer = new MutationObserver((mutations) => {
             if (!blockingEnabled) return;
             let shouldProcess = false;
@@ -1096,7 +1105,7 @@
             }
             
             if (shouldProcess) {
-                setTimeout(processAllPlayers, 200);
+                scheduleMutationScan();
             }
         });
         

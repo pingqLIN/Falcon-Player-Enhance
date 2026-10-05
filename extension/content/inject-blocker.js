@@ -1510,11 +1510,23 @@ document.addEventListener('DOMContentLoaded', neutralizeMetaRefresh);
 setInterval(neutralizeMetaRefresh, 1000);
 
 function neutralizeLevel3FullscreenOverlays() {
+    if (document.hidden) return;
     if (!isLevelAtLeast(BLOCKING_LEVEL.HARDENED)) return;
     if (!isPlayerSite() || isCompatibilityModeSite()) return;
 
     const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
-    const selectors = 'div,section,span';
+    const selectors = [
+        'div[style*="position:fixed"]',
+        'div[style*="position: fixed"]',
+        'div[style*="position:absolute"]',
+        'div[style*="position: absolute"]',
+        'section[style*="position:fixed"]',
+        'section[style*="position: fixed"]',
+        '[class*="overlay"]',
+        '[class*="popup"]',
+        '[id*="overlay"]',
+        '[id*="popup"]'
+    ].join(',');
     document.querySelectorAll(selectors).forEach((el) => {
         if (!el || isInternalElement(el)) return;
         if (containsProtectedMedia(el)) return;
@@ -1690,6 +1702,7 @@ function removeClickjackingLayer(element) {
 
 // 主動掃描並移除覆蓋層
 function scanAndRemoveOverlays() {
+    if (document.hidden) return;
     const elements = document.querySelectorAll(
         'div[style*="position"], div[style*="z-index"], ' +
         'span[style*="position"], section[style*="position"]'

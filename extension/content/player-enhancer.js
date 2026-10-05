@@ -1730,37 +1730,32 @@
      * 移除父頁面的廣告覆蓋層 (僅處理父頁面,不觸及 iframe 內部)
      */
     function removeParentPageOverlays() {
-        if (!cleanupEnabled) return;
-        const allElements = document.querySelectorAll('div, aside, section, span');
+        if (!cleanupEnabled || document.hidden) return;
+        const candidates = document.querySelectorAll(
+            '[class*="overlay"], [class*="popup"], [class*="ad-container"], [class*="banner-ad"], [id*="overlay"], [id*="popup"]'
+        );
         let removedCount = 0;
+        const suspiciousPatterns = ['ad-overlay', 'ad-container', 'popup-overlay', 'click-overlay', 'banner-ad'];
         
-        allElements.forEach(element => {
-            // 不處理 iframe 內部元素 (實際上也無法存取)
-            if (element.tagName === 'IFRAME') return;
+        candidates.forEach(element => {
+            if (element.tagName === 'IFRAME' || element.tagName === 'VIDEO') return;
             if (isInternalShieldElement(element)) return;
+            if (isMediaResumeDialog(element)) return;
+            if (element.closest('video, iframe, .shield-detected-player, [data-shield-player-type]')) return;
             
             const className = (element.className || '').toString().toLowerCase();
             const id = (element.id || '').toLowerCase();
-            const text = (element.innerText || '').substring(0, 100).toLowerCase();
-            
+            const signature = `${className} ${id}`;
+            const isSuspicious = suspiciousPatterns.some((pattern) => signature.includes(pattern));
+            if (!isSuspicious) return;
+
             const style = window.getComputedStyle(element);
-            const zIndex = parseInt(style.zIndex) || 0;
+            const zIndex = parseInt(style.zIndex, 10) || 0;
             const position = style.position;
             
-            // 只移除明顯的廣告元素
-            const suspiciousPatterns = [
-                'notification', 'permission', 'allow', 'block', 'subscribe',
-                'modal', 'overlay', 'popup', 'ad-container', 'banner'
-            ];
-            
-            const isSuspicious = suspiciousPatterns.some(p => 
-                className.includes(p) || id.includes(p) || text.includes(p)
-            );
-            
-            // 高 z-index + 定位 + 可疑內容 = 移除
-            if ((position === 'absolute' || position === 'fixed') && zIndex > 100 && isSuspicious) {
+            if ((position === 'absolute' || position === 'fixed') && zIndex > 100) {
                 element.style.setProperty('display', 'none', 'important');
-                element.remove();
+                element.style.setProperty('pointer-events', 'none', 'important');
                 removedCount++;
                 console.log('🗑️ 已移除父頁面廣告元素:', className || id || element.tagName);
             }
@@ -1809,11 +1804,20 @@
             }
         }, 5000); // 5秒一次
 
+        let parentOverlayScanTimer = null;
+        function scheduleParentOverlayScan() {
+            if (parentOverlayScanTimer) return;
+            parentOverlayScanTimer = setTimeout(() => {
+                parentOverlayScanTimer = null;
+                enhanceIframes();
+                if (cleanupEnabled && shouldRunAggressiveOverlayCleanup) {
+                    removeParentPageOverlays();
+                }
+            }, 250);
+        }
+
         const observer = new MutationObserver(() => {
-            enhanceIframes();
-            if (cleanupEnabled && shouldRunAggressiveOverlayCleanup) {
-                removeParentPageOverlays();
-            }
+            scheduleParentOverlayScan();
         });
 
         if (document.body) {

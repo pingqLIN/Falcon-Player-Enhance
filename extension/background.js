@@ -2867,7 +2867,8 @@ function normalizeAiProviderSettings(input = {}) {
       input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true,
     chromeSampling: String(input.chromeSampling || '').toLowerCase() === 'custom' ? 'custom' : 'runtime',
     chromeLanguages: normalizeChromeBuiltinLanguages(input.chromeLanguages),
-    chromeResponseConstraint: input.chromeResponseConstraint !== false
+    chromeResponseConstraint: input.chromeResponseConstraint !== false,
+    modelStoragePath: String(input.modelStoragePath || '').trim().slice(0, 500)
   };
 }
 
