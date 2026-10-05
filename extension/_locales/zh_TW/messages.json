@@ -1,321 +1,995 @@
 {
-  "langCode": { "message": "zh_TW" },
-  "extName": { "message": "Falcon-Player-Enhance" },
-  "extDescription": { "message": "AI 輔助的播放器防護工具，處理覆蓋層、彈窗、跳轉、假播放器、點擊陷阱與可逆救援。" },
-  "actionTitle": { "message": "開啟 Falcon-Player-Enhance 控制面板" },
-
-  "popupPageTitle": { "message": "Falcon-Player-Enhance" },
-  "popupTagline": { "message": "乾淨播放，不受干擾。" },
-  "popupPinTitle": { "message": "釘選目前控制面板視窗" },
-  "popupThemeToggleTitle": { "message": "切換主題" },
-  "popupMediaDetectionOnTitle": { "message": "影片偵測已開啟，點擊可關閉。" },
-  "popupMediaDetectionOffTitle": { "message": "影片偵測已關閉，點擊後才會偵測此頁播放器。" },
-  "popupMasterToggleTitle": { "message": "啟用/停用防護" },
-  "popupFlowStatusClickLock": { "message": "先點選目標播放器再鎖定" },
-  "popupFlowStatusVideoDetectionOff": { "message": "影片偵測已關閉；需要時請點右上角 🎬 開啟。" },
-  "popupBlockingLevelLabel": { "message": "封鎖等級" },
-  "popupBlockingLevelTitle": { "message": "0=OFF, 1=基礎影片防護, 2=標準, 3=強化導流防護" },
-  "popupBlockingLevelOption0": { "message": "0 - OFF" },
-  "popupBlockingLevelOption1": { "message": "1 - 基礎" },
-  "popupBlockingLevelOption2": { "message": "2 - 標準" },
-  "popupBlockingLevelOption3": { "message": "3 - 強化" },
-  "popupBlockingHintL0": { "message": "L0 OFF：停用所有封鎖功能" },
-  "popupBlockingHintL1": { "message": "L1 基礎：僅保留影片相關防護與控制" },
-  "popupBlockingHintL2": { "message": "L2 標準：彈窗與惡意導流攔截" },
-  "popupBlockingHintL3": { "message": "L3 強化：包含強化版導流防護" },
-  "popupWhitelistEnhanceOnlyLabel": { "message": "白名單保護模式" },
-  "popupWhitelistEnhanceOnlyTitle": { "message": "白名單網站僅做播放器增強，不移除任何頁面元件" },
-  "popupWhitelistEnhanceOnlyAriaEnabled": { "message": "白名單保護模式：已啟用" },
-  "popupWhitelistEnhanceOnlyAriaDisabled": { "message": "白名單保護模式：已停用" },
-  "popupPopupGuardLabel": { "message": "Popup 防護" },
-  "popupPopupGuardTitle": { "message": "關閉受管理播放器站點產生的可疑新分頁" },
-  "popupPopupGuardAriaLabel": { "message": "啟用或停用可疑新分頁防護" },
-  "popupSameTabRedirectGuardLabel": { "message": "同頁導流防護" },
-  "popupSameTabRedirectGuardTitle": { "message": "還原受管理播放器站點的可疑同頁外站導流" },
-  "popupSameTabRedirectGuardAriaLabel": { "message": "啟用或停用可疑同頁導流防護" },
-  "popupMainControlsTitle": { "message": "主播放控制" },
-  "popupRescanTitle": { "message": "重新偵測播放器" },
-  "popupTargetUnlocked": { "message": "未鎖定" },
-  "popupTargetLocked": { "message": "已鎖定" },
-  "popupTargetDetailSelect": { "message": "先點選下方目標播放器" },
-  "popupEmptyNoPlayer": { "message": "尚未偵測到播放器" },
-  "popupSeekBackTitle": { "message": "倒退 5 秒" },
-  "popupPlayPauseTitle": { "message": "播放/暫停" },
-  "popupSeekForwardTitle": { "message": "前進 5 秒" },
-  "popupMuteTitle": { "message": "靜音切換" },
-  "popupStatsOverlays": { "message": "覆蓋層" },
-  "popupStatsPopups": { "message": "彈窗" },
-  "popupStatsFakeVideos": { "message": "假影片" },
-  "popupStatsProtected": { "message": "已保護" },
-  "popupStatsEmptyFirstUse": { "message": "前往影片網站後，這裡就會開始顯示保護狀態。" },
-  "popupStatsEmptyActive": { "message": "防護已啟用。當攔截或清理發生時，計數器會在這裡更新。" },
-  "popupStatsEmptyDisabled": { "message": "目前防護已關閉。重新開啟後才會開始累積保護事件。" },
-  "popupAiMonitorTitle": { "message": "AI 常駐監控" },
-  "popupDevTag": { "message": "(開發中)" },
-  "popupAiMonitorToggleTitle": { "message": "啟用/停用 AI 監控" },
-  "popupAiRiskScoreLabel": { "message": "風險分數" },
-  "popupAiHighRiskSites": { "message": "高風險站點" },
-  "popupAiTelemetryEvents": { "message": "遙測事件" },
-  "popupAiPolicyRecent": { "message": "最近生效" },
-  "popupAiProviderLabel": { "message": "提供者" },
-  "popupAiProviderModelLabel": { "message": "模型" },
-  "popupAiProviderStatusOnline": { "message": "線上" },
-  "popupAiProviderStatusOffline": { "message": "離線" },
-  "popupAiPolicyGateLabel": { "message": "策略閘門" },
-  "popupAiPolicyModeLabel": { "message": "模式" },
-  "popupAiPolicyReasonLabel": { "message": "原因" },
-  "popupAiNoReversibleActions": { "message": "目前沒有可逆操作" },
-  "popupAiEvidenceLabel": { "message": "依據" },
-  "popupAiEvidenceClean": { "message": "目前看起來這個網站相當乾淨。" },
-  "popupAiEvidenceFallback": { "message": "降級中：$1" },
-  "popupAiExportTitle": { "message": "匯出 AI 訓練資料" },
-  "popupAiExportData": { "message": "匯出資料" },
-  "popupAiResetTitle": { "message": "重置 AI 學習紀錄" },
-  "popupAiResetLearning": { "message": "重置學習" },
-  "popupAiDowngradeTitle": { "message": "暫時降級該站策略" },
-  "popupAiDowngradeAction": { "message": "暫時降級本站策略" },
-  "popupFalsePositiveRescueTitle": { "message": "誤判恢復" },
-  "popupFalsePositiveScanPage": { "message": "掃描頁面" },
-  "popupFalsePositiveScanPageTitle": { "message": "掃描目前頁面的可恢復封鎖操作" },
-  "popupFalsePositiveRescueEmpty": { "message": "掃描目前頁面，找出可單次恢復的封鎖操作。" },
-  "popupFalsePositiveScanning": { "message": "正在掃描目前頁面..." },
-  "popupFalsePositiveNoActions": { "message": "目前頁面沒有找到可恢復的封鎖操作。" },
-  "popupFalsePositiveActionCount": { "message": "找到 $1 筆可恢復操作。" },
-  "popupFalsePositiveActionCountDetailed": { "message": "找到 $1 筆可恢復操作：隱藏 $2、不可點擊 $3。" },
-  "popupFalsePositiveTypeHidden": { "message": "元件消失" },
-  "popupFalsePositiveTypeClickBlocked": { "message": "看得到但按不到" },
-  "popupFalsePositiveRestoreOnce": { "message": "單次恢復" },
-  "popupFalsePositiveRestoreVisibility": { "message": "恢復元件" },
-  "popupFalsePositiveRestoreClickability": { "message": "恢復可點擊" },
-  "popupFalsePositivePreviewToggle": { "message": "預覽" },
-  "popupFalsePositivePreviewTitle": { "message": "暫時預覽被恢復的元件" },
-  "popupFalsePositivePreviewAction": { "message": "預覽" },
-  "popupFalsePositivePreviewVisibility": { "message": "顯示 7 秒" },
-  "popupFalsePositivePreviewClickability": { "message": "解除阻擋 7 秒" },
-  "popupFalsePositiveReport": { "message": "回報誤判" },
-  "popupFalsePositiveReported": { "message": "已記錄誤判觀察。" },
-  "popupFalsePositiveUpdateFailed": { "message": "無法更新恢復紀錄。" },
-  "popupAiCandidatesHeader": { "message": "Generated candidates" },
-  "popupAiCandidatesEmpty": { "message": "尚無 Generated candidates。" },
-  "popupAiCandidatesSummary": { "message": "$1 組 candidates。已接受 $2、已拒絕 $3、有效升級 $4。" },
-  "popupAiCandidatesNoSummary": { "message": "尚無摘要" },
-  "popupAiCandidatesSelectAll": { "message": "全選" },
-  "popupAiCandidatesAcceptSelected": { "message": "核可所選" },
-  "popupAiCandidatesAccepting": { "message": "正在核可 $1 個所選 candidate..." },
-  "popupAiCandidatesAccepted": { "message": "已核可 $1 個所選 candidate。" },
-  "popupAiCandidatesAcceptPartial": { "message": "已核可 $1 個 candidate，$2 個失敗。" },
-  "popupAiCandidateAccept": { "message": "Accept" },
-  "popupAiCandidateReject": { "message": "Reject" },
-  "popupAiCandidatePromote": { "message": "Promote" },
-  "popupAiCandidateRollback": { "message": "Rollback" },
-  "popupAiCandidateActionDone": { "message": "$1 已完成。" },
-  "popupAiCandidateActionFailed": { "message": "Candidate 操作失敗。" },
-  "popupDisplayReloadWarningTitle": { "message": "目前頁面可能尚未套用新設定" },
-  "popupDisplayReloadWarningBody": { "message": "顯示相關設定已變更，但自動重載已停用。你正在觀看的頁面可能仍在使用先前的清理與封鎖規則。" },
-  "popupDisplayReloadWarningBodyWithKeys": { "message": "已變更設定：$1。此頁面可能仍在使用先前的清理與封鎖規則。" },
-  "popupDisplayReloadNow": { "message": "立即重載" },
-  "popupDisplayReloadNowTitle": { "message": "立即重載目前頁面" },
-  "popupPickElementTitle": { "message": "啟動元素封鎖模式" },
-  "popupShortcutsTitle": { "message": "快捷鍵與操作總覽" },
-  "popupShortcutPlayPause": { "message": "播放/暫停" },
-  "popupShortcutSeek5": { "message": "±5 秒" },
-  "popupShortcutVolume": { "message": "音量" },
-  "popupShortcutHoverHint": { "message": "滑鼠停留顯示完整功能" },
-  "popupShortcutFocusHint": { "message": "點擊或聚焦可展開完整功能" },
-  "popupShortcutsToggleLabel": { "message": "開啟快捷鍵與操作總覽" },
-  "popupShortcutPanelTitle": { "message": "快捷鍵與操作總覽" },
-  "popupShortcutQuickActions": { "message": "快顯操作" },
-  "popupShortcutActionChip": { "message": "點選播放器晶片" },
-  "popupShortcutActionChipDesc": { "message": "鎖定控制目標" },
-  "popupShortcutActionPick": { "message": "點擊 🚫" },
-  "popupShortcutActionPickDesc": { "message": "啟動元素封鎖模式" },
-  "popupShortcutActionPin": { "message": "點擊 📌/📍" },
-  "popupShortcutActionPinDesc": { "message": "切換 Sidecar 釘選" },
-  "popupShortcutActionDowngrade": { "message": "暫時降級本站策略" },
-  "popupShortcutActionDowngradeDesc": { "message": "快速回退誤攔截" },
-  "popupShortcutPlayback": { "message": "播放控制" },
-  "popupShortcutPlayPauseDesc": { "message": "播放/暫停" },
-  "popupShortcutSeek5Desc": { "message": "快轉 ±5 秒" },
-  "popupShortcutSeek10Desc": { "message": "快轉 ±10 秒" },
-  "popupShortcutHomeEndDesc": { "message": "開頭/結尾" },
-  "popupShortcutJump90Desc": { "message": "跳轉 0%-90%" },
-  "popupShortcutJump99Desc": { "message": "精準跳轉 0%-99%" },
-  "popupShortcutVolumeSpeed": { "message": "音量與速度" },
-  "popupShortcutVolumeDesc": { "message": "音量 ±10%" },
-  "popupShortcutMuteDesc": { "message": "靜音切換" },
-  "popupShortcutSpeedDownDesc": { "message": "降低速度" },
-  "popupShortcutSpeedUpDesc": { "message": "提高速度" },
-  "popupShortcutFullscreenDesc": { "message": "全螢幕" },
-  "popupShortcutScreenshotDesc": { "message": "截圖" },
-  "popupOpenDashboardTitle": { "message": "設定與管理" },
-  "popupPinTitlePinned": { "message": "目前已釘選在側邊欄，點擊可解除" },
-  "popupPinTitleUnpinned": { "message": "釘選到側邊欄常駐顯示" },
-  "popupTargetDetailNeedSelect": { "message": "先點選目標播放器後才可控制" },
-  "popupTargetDetailNoPlayer": { "message": "目前頁面尚未偵測到播放器" },
-  "popupTargetDetailUnsupported": { "message": "$1 目前不支援直接控制，請改選可控播放器" },
-  "popupTargetDetailLocked": { "message": "$1 已鎖定，可直接控制" },
-  "popupPlayerEmptyTitle": { "message": "這一頁還沒有偵測到播放器" },
-  "popupPlayerEmptyHint": { "message": "等頁面載入完成後再按一次 DETECT，或切換到真正有影片播放器的頁面。" },
-  "popupMediaDetectionOffEmptyTitle": { "message": "影片偵測已關閉" },
-  "popupMediaDetectionOffEmptyHint": { "message": "需要 Falcon 掃描此頁播放器時，請使用右上角 🎬 圖示開啟。" },
-  "popupFlowStatusDetectRetry": { "message": "偵測失敗，請再按一次 DETECT。" },
-  "popupFlowStatusLocked": { "message": "已鎖定：$1" },
-  "popupFlowStatusPlayersDetected": { "message": "請點選目標播放器（已偵測 $1 個）" },
-  "popupFlowStatusNoPlayer": { "message": "偵測完成：尚未找到播放器" },
-  "popupFlowStatusThreatsBlocked": { "message": "已攔截 $1 個威脅" },
-  "popupFlowStatusDetecting": { "message": "正在偵測播放器..." },
-  "popupConfirmResetAi": { "message": "確定要重置 AI 學習資料嗎？此操作不可復原" },
-  "popupPickElementTitleActive": { "message": "結束元素封鎖模式" },
-  "popupPickElementTitleInactive": { "message": "啟動元素封鎖模式" },
-  "popupAddCurrentSiteTitle": { "message": "將目前網站升級為 Falcon-Player-Enhance 增強保護" },
-  "popupToolbarAddSite": { "message": "增強站點" },
-
-  "dashboardPageTitle": { "message": "Falcon-Player-Enhance 設定" },
-  "dashboardMenuPlayer": { "message": "播放器設定" },
-  "dashboardMenuDomains": { "message": "我的清單" },
-  "dashboardMenuCustomSites": { "message": "增強保護" },
-  "dashboardMenuElements": { "message": "封鎖元素" },
-  "dashboardMenuSecurity": { "message": "安全設定" },
-  "dashboardThemeToggleTitle": { "message": "切換主題" },
-  "dashboardThemeLight": { "message": "淺色模式" },
-  "dashboardThemeDark": { "message": "深色模式" },
-  "dashboardPlayerHeading": { "message": "播放器設定" },
-  "dashboardStatOverlays": { "message": "覆蓋層移除" },
-  "dashboardStatPopups": { "message": "彈窗攔截" },
-  "dashboardStatPlayers": { "message": "播放器保護" },
-  "dashboardProtectionFeatures": { "message": "保護功能" },
-  "dashboardFeatureOverlayTitle": { "message": "覆蓋層自動移除" },
-  "dashboardFeatureOverlayDesc": { "message": "自動偵測並移除播放器上方的廣告覆蓋層" },
-  "dashboardFeaturePopupTitle": { "message": "彈窗攔截" },
-  "dashboardFeaturePopupDesc": { "message": "攔截點擊時觸發的惡意彈窗和重定向" },
-  "dashboardFeatureFakeVideoTitle": { "message": "虛假影片移除" },
-  "dashboardFeatureFakeVideoDesc": { "message": "自動移除假影片" },
-  "dashboardFeatureSyncTitle": { "message": "播放進度同步" },
-  "dashboardFeatureSyncDesc": { "message": "記住觀看進度" },
-  "dashboardDisplayApplyHeader": { "message": "頁面顯示更新" },
-  "dashboardDisplayAutoReloadTitle": { "message": "顯示相關設定變更後重載頁面" },
-  "dashboardDisplayAutoReloadDesc": { "message": "會改變頁面清理、封鎖、隱藏元素或站點清單的設定，預設會重載目前頁面，讓正在看的畫面套用新規則。" },
-  "dashboardDisplayReloadNotice": { "message": "Falcon 會將頁面清理、保護等級、導流防護、隱藏元素規則與站點清單視為顯示相關設定。除非你關閉此選項，這些變更會自動重載目前頁面。" },
-  "dashboardDisplayReloadNoticeDismiss": { "message": "知道了" },
-  "dashboardDisplayReloadApplied": { "message": "顯示相關設定已儲存，已重載目前頁面。" },
-  "dashboardDisplayReloadPending": { "message": "顯示相關設定已儲存。自動重載已停用，側欄會提示目前頁面可能尚未更新。" },
-  "dashboardDisplayReloadEnabled": { "message": "顯示相關設定的自動重載已啟用。" },
-  "dashboardDisplayReloadDisabled": { "message": "自動重載已停用。當觀看中的頁面可能需要重載時，側欄會顯示警示。" },
-  "dashboardPopupAutoFitTitle": { "message": "無干擾視窗自動貼齊" },
-  "dashboardPopupAutoFitDesc": { "message": "讓無干擾播放視窗中的播放器自動填滿可用視窗空間" },
-  "dashboardPopupAiMonitorTitle": { "message": "在 popup 顯示 AI 監控面板" },
-  "dashboardPopupAiMonitorDesc": { "message": "預設隱藏進階 AI 策略細節，只有在你想在 popup 檢查時才顯示。" },
-  "dashboardEnabled": { "message": "啟用" },
-  "dashboardHotkeysRef": { "message": "快捷鍵參考" },
-  "dashboardHotkeysPlayback": { "message": "播放控制" },
-  "dashboardHotkeysPlayPause": { "message": "播放/暫停" },
-  "dashboardHotkeysSeek5": { "message": "快轉 ±5 秒" },
-  "dashboardHotkeysSeek10": { "message": "快轉 ±10 秒" },
-  "dashboardHotkeysHomeEnd": { "message": "跳到開頭/結尾" },
-  "dashboardHotkeysJump90": { "message": "跳轉 0%-90%" },
-  "dashboardHotkeysJump99": { "message": "500ms 內連按兩位數：精準跳轉 0%-99%" },
-  "dashboardHotkeysVolumeSpeed": { "message": "音量與速度" },
-  "dashboardHotkeysVolume": { "message": "音量 ±10%" },
-  "dashboardHotkeysMute": { "message": "靜音切換" },
-  "dashboardHotkeysSpeedDown": { "message": "降低速度" },
-  "dashboardHotkeysSpeedUp": { "message": "提高速度" },
-  "dashboardHotkeysOther": { "message": "其他" },
-  "dashboardHotkeysFullscreen": { "message": "全螢幕" },
-  "dashboardHotkeysScreenshot": { "message": "截圖" },
-  "dashboardDomainsHeading": { "message": "網域清單" },
-  "dashboardWhitelistHeader": { "message": "白名單 (不套用規則)" },
-  "dashboardWhitelistPlaceholder": { "message": "輸入網域 (例如: example.com)" },
-  "dashboardAdd": { "message": "新增" },
-  "dashboardBlacklistHeader": { "message": "黑名單 (嚴格保護)" },
-  "dashboardBlacklistPlaceholder": { "message": "輸入網域" },
-  "dashboardElementsHeading": { "message": "封鎖元素" },
-  "dashboardBlockedElementsHeader": { "message": "已封鎖的網頁元素" },
-  "dashboardBlockedElementsEmpty": { "message": "尚無 BLOCK 畫面元素規則。" },
-  "dashboardBlockedElementsCount": { "message": "目前共有 $1 條 BLOCK 畫面元素規則。" },
-  "dashboardBlockedElementsPreview": { "message": "目前頁面預覽" },
-  "dashboardBlockedElementsPreviewTitle": { "message": "在目前頁面暫時預覽這條封鎖規則的影響範圍" },
-  "dashboardBlockedElementsPreviewNoTab": { "message": "目前找不到可預覽的頁面分頁。" },
-  "dashboardBlockedElementsPreviewHostMismatch": { "message": "請先切換到 $1 的頁面，再預覽這條規則。" },
-  "dashboardBlockedElementsPreviewNoMatch": { "message": "這條規則在目前頁面沒有命中任何元素。" },
-  "dashboardBlockedElementsPreviewMatched": { "message": "目前頁面已預覽 $1 個命中元素。" },
-  "dashboardLoading": { "message": "載入中..." },
-  "dashboardClearAllRules": { "message": "清除所有規則" },
-  "dashboardSecurityHeading": { "message": "安全設定" },
-  "dashboardSandboxTitle": { "message": "沙盒防護" },
-  "dashboardSandboxDesc": { "message": "將可疑網站隔離在受限環境中開啟，防止存取敏感資料。" },
-  "dashboardAboutSandbox": { "message": "關於沙盒" },
-  "dashboardAboutSandboxText": { "message": "沙盒模式會限制網站的權限，包括禁止彈窗、下載和存取 Cookie。這是防禦惡意網站的最強手段。" },
-  "dashboardDataManagement": { "message": "資料管理" },
-  "dashboardResetStatsTitle": { "message": "重置統計資料" },
-  "dashboardResetStatsDesc": { "message": "清除所有計數器，保留設定。" },
-  "dashboardReset": { "message": "重置" },
-  "dashboardEmptyNoItems": { "message": "尚無項目" },
-  "dashboardConfirmResetStats": { "message": "確定要重置所有統計資料嗎？" },
-  "dashboardJustNow": { "message": "剛剛" },
-  "dashboardMinutesAgo": { "message": "$1 分鐘前" },
-  "dashboardHoursAgo": { "message": "$1 小時前" },
-  "dashboardDaysAgo": { "message": "$1 天前" },
-  "dashboardEmptyNoBlockedElements": { "message": "尚無封鎖元素" },
-  "dashboardUnknownHost": { "message": "未知網域" },
-  "dashboardItemsCount": { "message": "$1 項" },
-  "dashboardAddedAt": { "message": "新增於 $1" },
-  "dashboardRemoveRuleTitle": { "message": "刪除此規則" },
-  "dashboardConfirmClearElements": { "message": "確定要清除所有封鎖元素規則嗎？\n這將恢復所有被封鎖的元素。" },
-  "dashboardFalsePositiveRescueHeader": { "message": "誤判恢復" },
-  "dashboardFalsePositiveRescueEmpty": { "message": "掃描目前頁面，找出可單次恢復的封鎖操作。" },
-  "dashboardFalsePositiveRescueNoActions": { "message": "目前頁面沒有找到可恢復的封鎖操作。" },
-  "dashboardFalsePositiveRescueCount": { "message": "目前頁面找到 $1 筆可恢復操作。" },
-  "dashboardFalsePositiveRescueCountDetailed": { "message": "目前頁面找到 $1 筆可恢復操作：隱藏 $2、不可點擊 $3。" },
-  "dashboardFalsePositiveRescueRefresh": { "message": "掃描目前頁面" },
-  "dashboardFalsePositiveRescueRestore": { "message": "單次恢復" },
-  "dashboardFalsePositiveRescueRestoreVisibility": { "message": "恢復元件" },
-  "dashboardFalsePositiveRescueRestoreClickability": { "message": "恢復可點擊" },
-  "dashboardFalsePositiveRescuePreviewVisibility": { "message": "顯示 7 秒" },
-  "dashboardFalsePositiveRescuePreviewClickability": { "message": "解除阻擋 7 秒" },
-  "dashboardFalsePositiveTypeHidden": { "message": "元件消失" },
-  "dashboardFalsePositiveTypeClickBlocked": { "message": "看得到但按不到" },
-  "dashboardFalsePositiveRescueReport": { "message": "回報誤判" },
-  "dashboardFalsePositiveRescueReported": { "message": "已記錄誤判觀察。" },
-  "dashboardFalsePositiveRescueFailed": { "message": "無法更新恢復紀錄。" },
-
-  "dashboardCustomSitesHeading": { "message": "增強保護" },
-  "dashboardCustomSitesBuiltinHeader": { "message": "內建增強站點" },
-  "dashboardCustomSitesBuiltinDesc": { "message": "這些站點會套用增強保護。其他未知站點仍會預設啟用基礎播放器工具與基礎廣告攔截。" },
-  "dashboardCustomSitesBuiltinBadge": { "message": "內建" },
-  "dashboardCustomSitesAddHeader": { "message": "將站點升級為增強模式" },
-  "dashboardCustomSitesAddDesc": { "message": "未知站點已預設啟用基礎播放器工具與基礎廣告攔截。若要啟用更早期注入、站點專屬啟發式與進階防護，請在此加入網域。" },
-  "dashboardCustomSitesPlaceholder": { "message": "輸入網域（例如：example.com）" },
-  "dashboardCustomSitesListHeader": { "message": "你的增強站點" },
-  "dashboardCustomSitesEmpty": { "message": "尚無自訂增強站點" },
-  "dashboardCustomSitesInvalid": { "message": "請輸入有效的網域名稱（例如：example.com）" },
-  "dashboardCustomSitesPermDenied": { "message": "權限遭拒。需取得主機權限才能新增站點。" },
-  "dashboardCustomSitesAdded": { "message": "已將 $1 升級為增強保護" },
-  "dashboardCustomSitesRemoved": { "message": "已將 $1 移出增強保護清單" },
-  "dashboardCustomSitesPreviewHeader": { "message": "增強模式比對範圍" },
-
-  "popupPlayerPageTitle": { "message": "Falcon-Player-Enhance - 無干擾播放" },
-  "popupPlayerModeTitle": { "message": "無干擾播放模式" },
-  "popupPlayerPin": { "message": "📌 釘選" },
-  "popupPlayerPinned": { "message": "📌 已釘選" },
-  "popupPlayerPip": { "message": "子母畫面" },
-  "popupPlayerExitPip": { "message": "退出子母畫面" },
-  "popupPlayerClose": { "message": "關閉" },
-  "popupPlayerErrorTitle": { "message": "❌ 無法載入影片" },
-  "popupPlayerPinTitlePinned": { "message": "已啟用持久顯示，點擊可解除釘選" },
-  "popupPlayerPinTitleUnpinned": { "message": "釘選視窗，關閉後會自動重開" },
-  "popupPlayerErrorInvalidSource": { "message": "未提供有效的影片來源參數" },
-  "popupPlayerAlertPipUnsupported": { "message": "子母畫面功能無法使用" },
-  "popupPlayerAlertIframePipUnsupported": { "message": "iframe 播放器不支援子母畫面" },
-  "popupPlayerAlertUnpinBeforeClose": { "message": "此視窗已釘選，請先點上方 PIN 解除釘選後再關閉" },
-  "popupFlowClickSub": { "message": "點選播放器" },
-  "popupFlowDetectSub": { "message": "偵測與清除" },
-  "popupFlowPlaySub": { "message": "安全播放" },
-  "dashboardAiRestoreDefaults": { "message": "恢復預設" },
-  "dashboardAiCandidateHelp": { "message": "Accept 代表已人工審核通過，但尚未改動正式規則。Promote 會把已接受的 candidate 升級成 confirmed rules；Rollback 可撤回這次升級。" },
-  "dashboardAiSelectAllCandidates": { "message": "全選可審核項目" },
-  "dashboardAiAcceptSelectedCandidates": { "message": "接受所選" },
-  "popupPickElementActivating": { "message": "正在啟動元素封鎖模式，請到頁面上點選要封鎖的元素。" },
-  "popupPickElementFailed": { "message": "元素封鎖模式啟動失敗：$1" },
-  "popupPickElementNoTab": { "message": "目前沒有可使用 Block element 的頁面分頁。" },
-  "popupPickElementDisabled": { "message": "請先啟用防護，再使用 Block element。" }
+  "langCode": {
+    "message": "zh_TW"
+  },
+  "extName": {
+    "message": "Falcon-Player-Enhance"
+  },
+  "extDescription": {
+    "message": "AI 輔助的播放器防護工具，處理覆蓋層、彈窗、跳轉、假播放器、點擊陷阱與可逆救援。"
+  },
+  "actionTitle": {
+    "message": "開啟 Falcon-Player-Enhance 控制面板"
+  },
+  "popupPageTitle": {
+    "message": "Falcon-Player-Enhance"
+  },
+  "popupTagline": {
+    "message": "乾淨播放，不受干擾。"
+  },
+  "popupPinTitle": {
+    "message": "釘選目前控制面板視窗"
+  },
+  "popupThemeToggleTitle": {
+    "message": "切換主題"
+  },
+  "popupMediaDetectionOnTitle": {
+    "message": "影片偵測已開啟，點擊可關閉。"
+  },
+  "popupMediaDetectionOffTitle": {
+    "message": "影片偵測已關閉，點擊後才會偵測此頁播放器。"
+  },
+  "popupMasterToggleTitle": {
+    "message": "啟用/停用防護"
+  },
+  "popupFlowStatusClickLock": {
+    "message": "先點選目標播放器再鎖定"
+  },
+  "popupFlowStatusVideoDetectionOff": {
+    "message": "影片偵測已關閉；需要時請點右上角 🎬 開啟。"
+  },
+  "popupBlockingLevelLabel": {
+    "message": "封鎖等級"
+  },
+  "popupBlockingLevelTitle": {
+    "message": "0=OFF, 1=基礎影片防護, 2=標準, 3=強化導流防護"
+  },
+  "popupBlockingLevelOption0": {
+    "message": "0 - OFF"
+  },
+  "popupBlockingLevelOption1": {
+    "message": "1 - 基礎"
+  },
+  "popupBlockingLevelOption2": {
+    "message": "2 - 標準"
+  },
+  "popupBlockingLevelOption3": {
+    "message": "3 - 強化"
+  },
+  "popupBlockingHintL0": {
+    "message": "L0 OFF：停用所有封鎖功能"
+  },
+  "popupBlockingHintL1": {
+    "message": "L1 基礎：僅保留影片相關防護與控制"
+  },
+  "popupBlockingHintL2": {
+    "message": "L2 標準：彈窗與惡意導流攔截"
+  },
+  "popupBlockingHintL3": {
+    "message": "L3 強化：包含強化版導流防護"
+  },
+  "popupWhitelistEnhanceOnlyLabel": {
+    "message": "白名單保護模式"
+  },
+  "popupWhitelistEnhanceOnlyTitle": {
+    "message": "白名單網站僅做播放器增強，不移除任何頁面元件"
+  },
+  "popupWhitelistEnhanceOnlyAriaEnabled": {
+    "message": "白名單保護模式：已啟用"
+  },
+  "popupWhitelistEnhanceOnlyAriaDisabled": {
+    "message": "白名單保護模式：已停用"
+  },
+  "popupPopupGuardLabel": {
+    "message": "Popup 防護"
+  },
+  "popupPopupGuardTitle": {
+    "message": "關閉受管理播放器站點產生的可疑新分頁"
+  },
+  "popupPopupGuardAriaLabel": {
+    "message": "啟用或停用可疑新分頁防護"
+  },
+  "popupSameTabRedirectGuardLabel": {
+    "message": "同頁導流防護"
+  },
+  "popupSameTabRedirectGuardTitle": {
+    "message": "還原受管理播放器站點的可疑同頁外站導流"
+  },
+  "popupSameTabRedirectGuardAriaLabel": {
+    "message": "啟用或停用可疑同頁導流防護"
+  },
+  "popupMainControlsTitle": {
+    "message": "主播放控制"
+  },
+  "popupRescanTitle": {
+    "message": "重新偵測播放器"
+  },
+  "popupTargetUnlocked": {
+    "message": "未鎖定"
+  },
+  "popupTargetLocked": {
+    "message": "已鎖定"
+  },
+  "popupTargetDetailSelect": {
+    "message": "先點選下方目標播放器"
+  },
+  "popupEmptyNoPlayer": {
+    "message": "尚未偵測到播放器"
+  },
+  "popupSeekBackTitle": {
+    "message": "倒退 5 秒"
+  },
+  "popupPlayPauseTitle": {
+    "message": "播放/暫停"
+  },
+  "popupSeekForwardTitle": {
+    "message": "前進 5 秒"
+  },
+  "popupMuteTitle": {
+    "message": "靜音切換"
+  },
+  "popupStatsOverlays": {
+    "message": "覆蓋層"
+  },
+  "popupStatsPopups": {
+    "message": "彈窗"
+  },
+  "popupStatsFakeVideos": {
+    "message": "假影片"
+  },
+  "popupStatsProtected": {
+    "message": "已保護"
+  },
+  "popupStatsEmptyFirstUse": {
+    "message": "前往影片網站後，這裡就會開始顯示保護狀態。"
+  },
+  "popupStatsEmptyActive": {
+    "message": "防護已啟用。當攔截或清理發生時，計數器會在這裡更新。"
+  },
+  "popupStatsEmptyDisabled": {
+    "message": "目前防護已關閉。重新開啟後才會開始累積保護事件。"
+  },
+  "popupAiMonitorTitle": {
+    "message": "AI 常駐監控"
+  },
+  "popupDevTag": {
+    "message": "(開發中)"
+  },
+  "popupAiMonitorToggleTitle": {
+    "message": "啟用/停用 AI 監控"
+  },
+  "popupAiRiskScoreLabel": {
+    "message": "風險分數"
+  },
+  "popupAiHighRiskSites": {
+    "message": "高風險站點"
+  },
+  "popupAiTelemetryEvents": {
+    "message": "遙測事件"
+  },
+  "popupAiPolicyRecent": {
+    "message": "最近生效"
+  },
+  "popupAiProviderLabel": {
+    "message": "提供者"
+  },
+  "popupAiProviderModelLabel": {
+    "message": "模型"
+  },
+  "popupAiProviderStatusOnline": {
+    "message": "線上"
+  },
+  "popupAiProviderStatusOffline": {
+    "message": "離線"
+  },
+  "popupAiPolicyGateLabel": {
+    "message": "策略閘門"
+  },
+  "popupAiPolicyModeLabel": {
+    "message": "模式"
+  },
+  "popupAiPolicyReasonLabel": {
+    "message": "原因"
+  },
+  "popupAiNoReversibleActions": {
+    "message": "目前沒有可逆操作"
+  },
+  "popupAiEvidenceLabel": {
+    "message": "依據"
+  },
+  "popupAiEvidenceClean": {
+    "message": "目前看起來這個網站相當乾淨。"
+  },
+  "popupAiEvidenceFallback": {
+    "message": "降級中：$1"
+  },
+  "popupAiExportTitle": {
+    "message": "匯出 AI 訓練資料"
+  },
+  "popupAiExportData": {
+    "message": "匯出資料"
+  },
+  "popupAiResetTitle": {
+    "message": "重置 AI 學習紀錄"
+  },
+  "popupAiResetLearning": {
+    "message": "重置學習"
+  },
+  "popupAiDowngradeTitle": {
+    "message": "暫時降級該站策略"
+  },
+  "popupAiDowngradeAction": {
+    "message": "暫時降級本站策略"
+  },
+  "popupFalsePositiveRescueTitle": {
+    "message": "誤判恢復"
+  },
+  "popupFalsePositiveScanPage": {
+    "message": "掃描頁面"
+  },
+  "popupFalsePositiveScanPageTitle": {
+    "message": "掃描目前頁面的可恢復封鎖操作"
+  },
+  "popupFalsePositiveRescueEmpty": {
+    "message": "掃描目前頁面，找出可單次恢復的封鎖操作。"
+  },
+  "popupFalsePositiveScanning": {
+    "message": "正在掃描目前頁面..."
+  },
+  "popupFalsePositiveNoActions": {
+    "message": "目前頁面沒有找到可恢復的封鎖操作。"
+  },
+  "popupFalsePositiveActionCount": {
+    "message": "找到 $1 筆可恢復操作。"
+  },
+  "popupFalsePositiveActionCountDetailed": {
+    "message": "找到 $1 筆可恢復操作：隱藏 $2、不可點擊 $3。"
+  },
+  "popupFalsePositiveTypeHidden": {
+    "message": "元件消失"
+  },
+  "popupFalsePositiveTypeClickBlocked": {
+    "message": "看得到但按不到"
+  },
+  "popupFalsePositiveRestoreOnce": {
+    "message": "單次恢復"
+  },
+  "popupFalsePositiveRestoreVisibility": {
+    "message": "恢復元件"
+  },
+  "popupFalsePositiveRestoreClickability": {
+    "message": "恢復可點擊"
+  },
+  "popupFalsePositivePreviewToggle": {
+    "message": "預覽"
+  },
+  "popupFalsePositivePreviewTitle": {
+    "message": "暫時預覽被恢復的元件"
+  },
+  "popupFalsePositivePreviewAction": {
+    "message": "預覽"
+  },
+  "popupFalsePositivePreviewVisibility": {
+    "message": "顯示 7 秒"
+  },
+  "popupFalsePositivePreviewClickability": {
+    "message": "解除阻擋 7 秒"
+  },
+  "popupFalsePositiveReport": {
+    "message": "回報誤判"
+  },
+  "popupFalsePositiveReported": {
+    "message": "已記錄誤判觀察。"
+  },
+  "popupFalsePositiveUpdateFailed": {
+    "message": "無法更新恢復紀錄。"
+  },
+  "popupAiCandidatesHeader": {
+    "message": "Generated candidates"
+  },
+  "popupAiCandidatesEmpty": {
+    "message": "尚無 Generated candidates。"
+  },
+  "popupAiCandidatesSummary": {
+    "message": "$1 組 candidates。已接受 $2、已拒絕 $3、有效升級 $4。"
+  },
+  "popupAiCandidatesNoSummary": {
+    "message": "尚無摘要"
+  },
+  "popupAiCandidatesSelectAll": {
+    "message": "全選"
+  },
+  "popupAiCandidatesAcceptSelected": {
+    "message": "核可所選"
+  },
+  "popupAiCandidatesAccepting": {
+    "message": "正在核可 $1 個所選 candidate..."
+  },
+  "popupAiCandidatesAccepted": {
+    "message": "已核可 $1 個所選 candidate。"
+  },
+  "popupAiCandidatesAcceptPartial": {
+    "message": "已核可 $1 個 candidate，$2 個失敗。"
+  },
+  "popupAiCandidateAccept": {
+    "message": "Accept"
+  },
+  "popupAiCandidateReject": {
+    "message": "Reject"
+  },
+  "popupAiCandidatePromote": {
+    "message": "Promote"
+  },
+  "popupAiCandidateRollback": {
+    "message": "Rollback"
+  },
+  "popupAiCandidateActionDone": {
+    "message": "$1 已完成。"
+  },
+  "popupAiCandidateActionFailed": {
+    "message": "Candidate 操作失敗。"
+  },
+  "popupDisplayReloadWarningTitle": {
+    "message": "目前頁面可能尚未套用新設定"
+  },
+  "popupDisplayReloadWarningBody": {
+    "message": "顯示相關設定已變更，但自動重載已停用。你正在觀看的頁面可能仍在使用先前的清理與封鎖規則。"
+  },
+  "popupDisplayReloadWarningBodyWithKeys": {
+    "message": "已變更設定：$1。此頁面可能仍在使用先前的清理與封鎖規則。"
+  },
+  "popupDisplayReloadNow": {
+    "message": "立即重載"
+  },
+  "popupDisplayReloadNowTitle": {
+    "message": "立即重載目前頁面"
+  },
+  "popupPickElementTitle": {
+    "message": "啟動元素封鎖模式"
+  },
+  "popupShortcutsTitle": {
+    "message": "快捷鍵與操作總覽"
+  },
+  "popupShortcutPlayPause": {
+    "message": "播放/暫停"
+  },
+  "popupShortcutSeek5": {
+    "message": "±5 秒"
+  },
+  "popupShortcutVolume": {
+    "message": "音量"
+  },
+  "popupShortcutHoverHint": {
+    "message": "滑鼠停留顯示完整功能"
+  },
+  "popupShortcutFocusHint": {
+    "message": "點擊或聚焦可展開完整功能"
+  },
+  "popupShortcutsToggleLabel": {
+    "message": "開啟快捷鍵與操作總覽"
+  },
+  "popupShortcutPanelTitle": {
+    "message": "快捷鍵與操作總覽"
+  },
+  "popupShortcutQuickActions": {
+    "message": "快顯操作"
+  },
+  "popupShortcutActionChip": {
+    "message": "點選播放器晶片"
+  },
+  "popupShortcutActionChipDesc": {
+    "message": "鎖定控制目標"
+  },
+  "popupShortcutActionPick": {
+    "message": "點擊 🚫"
+  },
+  "popupShortcutActionPickDesc": {
+    "message": "啟動元素封鎖模式"
+  },
+  "popupShortcutActionPin": {
+    "message": "點擊 📌/📍"
+  },
+  "popupShortcutActionPinDesc": {
+    "message": "切換 Sidecar 釘選"
+  },
+  "popupShortcutActionDowngrade": {
+    "message": "暫時降級本站策略"
+  },
+  "popupShortcutActionDowngradeDesc": {
+    "message": "快速回退誤攔截"
+  },
+  "popupShortcutPlayback": {
+    "message": "播放控制"
+  },
+  "popupShortcutPlayPauseDesc": {
+    "message": "播放/暫停"
+  },
+  "popupShortcutSeek5Desc": {
+    "message": "快轉 ±5 秒"
+  },
+  "popupShortcutSeek10Desc": {
+    "message": "快轉 ±10 秒"
+  },
+  "popupShortcutHomeEndDesc": {
+    "message": "開頭/結尾"
+  },
+  "popupShortcutJump90Desc": {
+    "message": "跳轉 0%-90%"
+  },
+  "popupShortcutJump99Desc": {
+    "message": "精準跳轉 0%-99%"
+  },
+  "popupShortcutVolumeSpeed": {
+    "message": "音量與速度"
+  },
+  "popupShortcutVolumeDesc": {
+    "message": "音量 ±10%"
+  },
+  "popupShortcutMuteDesc": {
+    "message": "靜音切換"
+  },
+  "popupShortcutSpeedDownDesc": {
+    "message": "降低速度"
+  },
+  "popupShortcutSpeedUpDesc": {
+    "message": "提高速度"
+  },
+  "popupShortcutFullscreenDesc": {
+    "message": "全螢幕"
+  },
+  "popupShortcutScreenshotDesc": {
+    "message": "截圖"
+  },
+  "popupOpenDashboardTitle": {
+    "message": "設定與管理"
+  },
+  "popupPinTitlePinned": {
+    "message": "目前已釘選在側邊欄，點擊可解除"
+  },
+  "popupPinTitleUnpinned": {
+    "message": "釘選到側邊欄常駐顯示"
+  },
+  "popupTargetDetailNeedSelect": {
+    "message": "先點選目標播放器後才可控制"
+  },
+  "popupTargetDetailNoPlayer": {
+    "message": "目前頁面尚未偵測到播放器"
+  },
+  "popupTargetDetailUnsupported": {
+    "message": "$1 目前不支援直接控制，請改選可控播放器"
+  },
+  "popupTargetDetailLocked": {
+    "message": "$1 已鎖定，可直接控制"
+  },
+  "popupPlayerEmptyTitle": {
+    "message": "這一頁還沒有偵測到播放器"
+  },
+  "popupPlayerEmptyHint": {
+    "message": "等頁面載入完成後再按一次 DETECT，或切換到真正有影片播放器的頁面。"
+  },
+  "popupMediaDetectionOffEmptyTitle": {
+    "message": "影片偵測已關閉"
+  },
+  "popupMediaDetectionOffEmptyHint": {
+    "message": "需要 Falcon 掃描此頁播放器時，請使用右上角 🎬 圖示開啟。"
+  },
+  "popupFlowStatusDetectRetry": {
+    "message": "偵測失敗，請再按一次 DETECT。"
+  },
+  "popupFlowStatusLocked": {
+    "message": "已鎖定：$1"
+  },
+  "popupFlowStatusPlayersDetected": {
+    "message": "請點選目標播放器（已偵測 $1 個）"
+  },
+  "popupFlowStatusNoPlayer": {
+    "message": "偵測完成：尚未找到播放器"
+  },
+  "popupFlowStatusThreatsBlocked": {
+    "message": "已攔截 $1 個威脅"
+  },
+  "popupFlowStatusDetecting": {
+    "message": "正在偵測播放器..."
+  },
+  "popupConfirmResetAi": {
+    "message": "確定要重置 AI 學習資料嗎？此操作不可復原"
+  },
+  "popupPickElementTitleActive": {
+    "message": "結束元素封鎖模式"
+  },
+  "popupPickElementTitleInactive": {
+    "message": "啟動元素封鎖模式"
+  },
+  "popupAddCurrentSiteTitle": {
+    "message": "將目前網站升級為 Falcon-Player-Enhance 增強保護"
+  },
+  "popupToolbarAddSite": {
+    "message": "增強站點"
+  },
+  "dashboardPageTitle": {
+    "message": "Falcon-Player-Enhance 設定"
+  },
+  "dashboardMenuPlayer": {
+    "message": "播放器設定"
+  },
+  "dashboardMenuDomains": {
+    "message": "我的清單"
+  },
+  "dashboardMenuCustomSites": {
+    "message": "增強保護"
+  },
+  "dashboardMenuElements": {
+    "message": "封鎖元素"
+  },
+  "dashboardMenuSecurity": {
+    "message": "安全設定"
+  },
+  "dashboardThemeToggleTitle": {
+    "message": "切換主題"
+  },
+  "dashboardThemeLight": {
+    "message": "淺色模式"
+  },
+  "dashboardThemeDark": {
+    "message": "深色模式"
+  },
+  "dashboardPlayerHeading": {
+    "message": "播放器設定"
+  },
+  "dashboardStatOverlays": {
+    "message": "覆蓋層移除"
+  },
+  "dashboardStatPopups": {
+    "message": "彈窗攔截"
+  },
+  "dashboardStatPlayers": {
+    "message": "播放器保護"
+  },
+  "dashboardProtectionFeatures": {
+    "message": "保護功能"
+  },
+  "dashboardFeatureOverlayTitle": {
+    "message": "覆蓋層自動移除"
+  },
+  "dashboardFeatureOverlayDesc": {
+    "message": "自動偵測並移除播放器上方的廣告覆蓋層"
+  },
+  "dashboardFeaturePopupTitle": {
+    "message": "彈窗攔截"
+  },
+  "dashboardFeaturePopupDesc": {
+    "message": "攔截點擊時觸發的惡意彈窗和重定向"
+  },
+  "dashboardFeatureFakeVideoTitle": {
+    "message": "虛假影片移除"
+  },
+  "dashboardFeatureFakeVideoDesc": {
+    "message": "自動移除假影片"
+  },
+  "dashboardFeatureSyncTitle": {
+    "message": "播放進度同步"
+  },
+  "dashboardFeatureSyncDesc": {
+    "message": "記住觀看進度"
+  },
+  "dashboardDisplayApplyHeader": {
+    "message": "頁面顯示更新"
+  },
+  "dashboardDisplayAutoReloadTitle": {
+    "message": "顯示相關設定變更後重載頁面"
+  },
+  "dashboardDisplayAutoReloadDesc": {
+    "message": "會改變頁面清理、封鎖、隱藏元素或站點清單的設定，預設會重載目前頁面，讓正在看的畫面套用新規則。"
+  },
+  "dashboardDisplayReloadNotice": {
+    "message": "Falcon 會將頁面清理、保護等級、導流防護、隱藏元素規則與站點清單視為顯示相關設定。除非你關閉此選項，這些變更會自動重載目前頁面。"
+  },
+  "dashboardDisplayReloadNoticeDismiss": {
+    "message": "知道了"
+  },
+  "dashboardDisplayReloadApplied": {
+    "message": "顯示相關設定已儲存，已重載目前頁面。"
+  },
+  "dashboardDisplayReloadPending": {
+    "message": "顯示相關設定已儲存。自動重載已停用，側欄會提示目前頁面可能尚未更新。"
+  },
+  "dashboardDisplayReloadEnabled": {
+    "message": "顯示相關設定的自動重載已啟用。"
+  },
+  "dashboardDisplayReloadDisabled": {
+    "message": "自動重載已停用。當觀看中的頁面可能需要重載時，側欄會顯示警示。"
+  },
+  "dashboardPopupAutoFitTitle": {
+    "message": "無干擾視窗自動貼齊"
+  },
+  "dashboardPopupAutoFitDesc": {
+    "message": "讓無干擾播放視窗中的播放器自動填滿可用視窗空間"
+  },
+  "dashboardPopupAiMonitorTitle": {
+    "message": "在 popup 顯示 AI 監控面板"
+  },
+  "dashboardPopupAiMonitorDesc": {
+    "message": "預設隱藏進階 AI 策略細節，只有在你想在 popup 檢查時才顯示。"
+  },
+  "dashboardEnabled": {
+    "message": "啟用"
+  },
+  "dashboardHotkeysRef": {
+    "message": "快捷鍵參考"
+  },
+  "dashboardHotkeysPlayback": {
+    "message": "播放控制"
+  },
+  "dashboardHotkeysPlayPause": {
+    "message": "播放/暫停"
+  },
+  "dashboardHotkeysSeek5": {
+    "message": "快轉 ±5 秒"
+  },
+  "dashboardHotkeysSeek10": {
+    "message": "快轉 ±10 秒"
+  },
+  "dashboardHotkeysHomeEnd": {
+    "message": "跳到開頭/結尾"
+  },
+  "dashboardHotkeysJump90": {
+    "message": "跳轉 0%-90%"
+  },
+  "dashboardHotkeysJump99": {
+    "message": "500ms 內連按兩位數：精準跳轉 0%-99%"
+  },
+  "dashboardHotkeysVolumeSpeed": {
+    "message": "音量與速度"
+  },
+  "dashboardHotkeysVolume": {
+    "message": "音量 ±10%"
+  },
+  "dashboardHotkeysMute": {
+    "message": "靜音切換"
+  },
+  "dashboardHotkeysSpeedDown": {
+    "message": "降低速度"
+  },
+  "dashboardHotkeysSpeedUp": {
+    "message": "提高速度"
+  },
+  "dashboardHotkeysOther": {
+    "message": "其他"
+  },
+  "dashboardHotkeysFullscreen": {
+    "message": "全螢幕"
+  },
+  "dashboardHotkeysScreenshot": {
+    "message": "截圖"
+  },
+  "dashboardDomainsHeading": {
+    "message": "網域清單"
+  },
+  "dashboardWhitelistHeader": {
+    "message": "白名單 (不套用規則)"
+  },
+  "dashboardWhitelistPlaceholder": {
+    "message": "輸入網域 (例如: example.com)"
+  },
+  "dashboardAdd": {
+    "message": "新增"
+  },
+  "dashboardBlacklistHeader": {
+    "message": "黑名單 (嚴格保護)"
+  },
+  "dashboardBlacklistPlaceholder": {
+    "message": "輸入網域"
+  },
+  "dashboardElementsHeading": {
+    "message": "封鎖元素"
+  },
+  "dashboardBlockedElementsHeader": {
+    "message": "已封鎖的網頁元素"
+  },
+  "dashboardBlockedElementsEmpty": {
+    "message": "尚無 BLOCK 畫面元素規則。"
+  },
+  "dashboardBlockedElementsCount": {
+    "message": "目前共有 $1 條 BLOCK 畫面元素規則。"
+  },
+  "dashboardBlockedElementsPreview": {
+    "message": "目前頁面預覽"
+  },
+  "dashboardBlockedElementsPreviewTitle": {
+    "message": "在目前頁面暫時預覽這條封鎖規則的影響範圍"
+  },
+  "dashboardBlockedElementsPreviewNoTab": {
+    "message": "目前找不到可預覽的頁面分頁。"
+  },
+  "dashboardBlockedElementsPreviewHostMismatch": {
+    "message": "請先切換到 $1 的頁面，再預覽這條規則。"
+  },
+  "dashboardBlockedElementsPreviewNoMatch": {
+    "message": "這條規則在目前頁面沒有命中任何元素。"
+  },
+  "dashboardBlockedElementsPreviewMatched": {
+    "message": "目前頁面已預覽 $1 個命中元素。"
+  },
+  "dashboardLoading": {
+    "message": "載入中..."
+  },
+  "dashboardClearAllRules": {
+    "message": "清除所有規則"
+  },
+  "dashboardSecurityHeading": {
+    "message": "安全設定"
+  },
+  "dashboardSandboxTitle": {
+    "message": "沙盒防護"
+  },
+  "dashboardSandboxDesc": {
+    "message": "將可疑網站隔離在受限環境中開啟，防止存取敏感資料。"
+  },
+  "dashboardAboutSandbox": {
+    "message": "關於沙盒"
+  },
+  "dashboardAboutSandboxText": {
+    "message": "沙盒模式會限制網站的權限，包括禁止彈窗、下載和存取 Cookie。這是防禦惡意網站的最強手段。"
+  },
+  "dashboardDataManagement": {
+    "message": "資料管理"
+  },
+  "dashboardResetStatsTitle": {
+    "message": "重置統計資料"
+  },
+  "dashboardResetStatsDesc": {
+    "message": "清除所有計數器，保留設定。"
+  },
+  "dashboardReset": {
+    "message": "重置"
+  },
+  "dashboardEmptyNoItems": {
+    "message": "尚無項目"
+  },
+  "dashboardConfirmResetStats": {
+    "message": "確定要重置所有統計資料嗎？"
+  },
+  "dashboardJustNow": {
+    "message": "剛剛"
+  },
+  "dashboardMinutesAgo": {
+    "message": "$1 分鐘前"
+  },
+  "dashboardHoursAgo": {
+    "message": "$1 小時前"
+  },
+  "dashboardDaysAgo": {
+    "message": "$1 天前"
+  },
+  "dashboardEmptyNoBlockedElements": {
+    "message": "尚無封鎖元素"
+  },
+  "dashboardUnknownHost": {
+    "message": "未知網域"
+  },
+  "dashboardItemsCount": {
+    "message": "$1 項"
+  },
+  "dashboardAddedAt": {
+    "message": "新增於 $1"
+  },
+  "dashboardRemoveRuleTitle": {
+    "message": "刪除此規則"
+  },
+  "dashboardConfirmClearElements": {
+    "message": "確定要清除所有封鎖元素規則嗎？\n這將恢復所有被封鎖的元素。"
+  },
+  "dashboardFalsePositiveRescueHeader": {
+    "message": "誤判恢復"
+  },
+  "dashboardFalsePositiveRescueEmpty": {
+    "message": "掃描目前頁面，找出可單次恢復的封鎖操作。"
+  },
+  "dashboardFalsePositiveRescueNoActions": {
+    "message": "目前頁面沒有找到可恢復的封鎖操作。"
+  },
+  "dashboardFalsePositiveRescueCount": {
+    "message": "目前頁面找到 $1 筆可恢復操作。"
+  },
+  "dashboardFalsePositiveRescueCountDetailed": {
+    "message": "目前頁面找到 $1 筆可恢復操作：隱藏 $2、不可點擊 $3。"
+  },
+  "dashboardFalsePositiveRescueRefresh": {
+    "message": "掃描目前頁面"
+  },
+  "dashboardFalsePositiveRescueRestore": {
+    "message": "單次恢復"
+  },
+  "dashboardFalsePositiveRescueRestoreVisibility": {
+    "message": "恢復元件"
+  },
+  "dashboardFalsePositiveRescueRestoreClickability": {
+    "message": "恢復可點擊"
+  },
+  "dashboardFalsePositiveRescuePreviewVisibility": {
+    "message": "顯示 7 秒"
+  },
+  "dashboardFalsePositiveRescuePreviewClickability": {
+    "message": "解除阻擋 7 秒"
+  },
+  "dashboardFalsePositiveTypeHidden": {
+    "message": "元件消失"
+  },
+  "dashboardFalsePositiveTypeClickBlocked": {
+    "message": "看得到但按不到"
+  },
+  "dashboardFalsePositiveRescueReport": {
+    "message": "回報誤判"
+  },
+  "dashboardFalsePositiveRescueReported": {
+    "message": "已記錄誤判觀察。"
+  },
+  "dashboardFalsePositiveRescueFailed": {
+    "message": "無法更新恢復紀錄。"
+  },
+  "dashboardCustomSitesHeading": {
+    "message": "增強保護"
+  },
+  "dashboardCustomSitesBuiltinHeader": {
+    "message": "內建增強站點"
+  },
+  "dashboardCustomSitesBuiltinDesc": {
+    "message": "這些站點會套用增強保護。其他未知站點仍會預設啟用基礎播放器工具與基礎廣告攔截。"
+  },
+  "dashboardCustomSitesBuiltinBadge": {
+    "message": "內建"
+  },
+  "dashboardCustomSitesAddHeader": {
+    "message": "將站點升級為增強模式"
+  },
+  "dashboardCustomSitesAddDesc": {
+    "message": "未知站點已預設啟用基礎播放器工具與基礎廣告攔截。若要啟用更早期注入、站點專屬啟發式與進階防護，請在此加入網域。"
+  },
+  "dashboardCustomSitesPlaceholder": {
+    "message": "輸入網域（例如：example.com）"
+  },
+  "dashboardCustomSitesListHeader": {
+    "message": "你的增強站點"
+  },
+  "dashboardCustomSitesEmpty": {
+    "message": "尚無自訂增強站點"
+  },
+  "dashboardCustomSitesInvalid": {
+    "message": "請輸入有效的網域名稱（例如：example.com）"
+  },
+  "dashboardCustomSitesPermDenied": {
+    "message": "權限遭拒。需取得主機權限才能新增站點。"
+  },
+  "dashboardCustomSitesAdded": {
+    "message": "已將 $1 升級為增強保護"
+  },
+  "dashboardCustomSitesRemoved": {
+    "message": "已將 $1 移出增強保護清單"
+  },
+  "dashboardCustomSitesPreviewHeader": {
+    "message": "增強模式比對範圍"
+  },
+  "popupPlayerPageTitle": {
+    "message": "Falcon-Player-Enhance - 無干擾播放"
+  },
+  "popupPlayerModeTitle": {
+    "message": "無干擾播放模式"
+  },
+  "popupPlayerPin": {
+    "message": "📌 釘選"
+  },
+  "popupPlayerPinned": {
+    "message": "📌 已釘選"
+  },
+  "popupPlayerPip": {
+    "message": "子母畫面"
+  },
+  "popupPlayerExitPip": {
+    "message": "退出子母畫面"
+  },
+  "popupPlayerClose": {
+    "message": "關閉"
+  },
+  "popupPlayerErrorTitle": {
+    "message": "❌ 無法載入影片"
+  },
+  "popupPlayerPinTitlePinned": {
+    "message": "已啟用持久顯示，點擊可解除釘選"
+  },
+  "popupPlayerPinTitleUnpinned": {
+    "message": "釘選視窗，關閉後會自動重開"
+  },
+  "popupPlayerErrorInvalidSource": {
+    "message": "未提供有效的影片來源參數"
+  },
+  "popupPlayerAlertPipUnsupported": {
+    "message": "子母畫面功能無法使用"
+  },
+  "popupPlayerAlertIframePipUnsupported": {
+    "message": "iframe 播放器不支援子母畫面"
+  },
+  "popupPlayerAlertUnpinBeforeClose": {
+    "message": "此視窗已釘選，請先點上方 PIN 解除釘選後再關閉"
+  },
+  "popupFlowClickSub": {
+    "message": "點選播放器"
+  },
+  "popupFlowDetectSub": {
+    "message": "偵測與清除"
+  },
+  "popupFlowPlaySub": {
+    "message": "安全播放"
+  },
+  "dashboardAiRestoreDefaults": {
+    "message": "恢復預設"
+  },
+  "dashboardAiCandidateHelp": {
+    "message": "Accept 代表已人工審核通過，但尚未改動正式規則。Promote 會把已接受的 candidate 升級成 confirmed rules；Rollback 可撤回這次升級。"
+  },
+  "dashboardAiSelectAllCandidates": {
+    "message": "全選可審核項目"
+  },
+  "dashboardAiAcceptSelectedCandidates": {
+    "message": "接受所選"
+  },
+  "popupPickElementActivating": {
+    "message": "正在啟動元素封鎖模式，請到頁面上點選要封鎖的元素。"
+  },
+  "popupPickElementFailed": {
+    "message": "元素封鎖模式啟動失敗：$1"
+  },
+  "popupPickElementNoTab": {
+    "message": "目前沒有可使用 Block element 的頁面分頁。"
+  },
+  "popupPickElementDisabled": {
+    "message": "請先啟用防護，再使用 Block element。"
+  },
+  "dashboardAiRefreshModels": {
+    "message": "重新載入模型"
+  },
+  "dashboardAiModelHint": {
+    "message": "執行健康檢查後，會載入此服務商可用的模型。"
+  },
+  "dashboardAiChromeHeader": {
+    "message": "Chrome 內建 Gemini"
+  },
+  "dashboardAiChromeIntro": {
+    "message": "Prompt API 自 Chrome 138 起已在擴充功能環境正式提供。擴充功能仍使用數值 temperature 與 topK，且必須同時設定或同時省略。繁體中文目前不是 Prompt API 的輸出語系。"
+  },
+  "dashboardAiSamplingLabel": {
+    "message": "取樣"
+  },
+  "dashboardAiSamplingRuntime": {
+    "message": "使用執行期預設"
+  },
+  "dashboardAiSamplingCustom": {
+    "message": "自訂 temperature 與 topK"
+  },
+  "dashboardAiLanguagesLabel": {
+    "message": "語系"
+  },
+  "dashboardAiConstraintTitle": {
+    "message": "JSON 結構限制"
+  },
+  "dashboardAiConstraintDesc": {
+    "message": "要求 Prompt API 依 schema 輸出 JSON，不支援時改回純文字。"
+  },
+  "dashboardAiFlagsHeader": {
+    "message": "實驗性 Flags"
+  },
+  "dashboardAiCopyFlag": {
+    "message": "複製 Flag"
+  },
+  "dashboardAiCopied": {
+    "message": "已複製"
+  },
+  "dashboardAiPromptMissing": {
+    "message": "此擴充功能頁面沒有 Prompt API。Chrome 138+ 的擴充功能不需 Flag；較舊版本仍需開啟 chrome://flags/#prompt-api。"
+  },
+  "dashboardAiParamsMissing": {
+    "message": "LanguageModel.params() 只在擴充功能環境提供。"
+  },
+  "dashboardAiCatalogFailed": {
+    "message": "無法載入 Chrome 內建 AI 規格表。"
+  }
 }

@@ -1175,3 +1175,47 @@ details.collapsible-section[open] .collapsible-summary::after {
 .settings-header + .settings-list {
     margin-top: 0;
 }
+
+.provider-card-active {
+    margin-top: 4px;
+    color: var(--accent-green, #3dd68c);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.ai-model-controls,
+.ai-model-meta {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    min-width: 0;
+}
+
+.ai-model-meta {
+    margin: -4px 0 12px 80px;
+    flex-direction: column;
+}
+
+.chrome-language-options,
+.chrome-docs-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chrome-language-option {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    font-size: 12px;
+}
+
+.chrome-flag-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--separator);
+}
+
+.chrome-flag-title {
+    font-size: 13px;
+    font-weight: 600;
+}

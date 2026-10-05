@@ -64,6 +64,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const lmstudioCooldown = document.getElementById('lmstudio-cooldown');
     const chromeBuiltinTemperature = document.getElementById('chrome-builtin-temperature');
     const chromeBuiltinTopK = document.getElementById('chrome-builtin-topk');
+    const aiModelSelect = document.getElementById('ai-model-select');
+    const aiModelHint = document.getElementById('ai-model-hint');
+    const aiModelOptions = document.getElementById('ai-model-options');
+    const btnRefreshAiModels = document.getElementById('btn-refresh-ai-models');
+    const chromeBuiltinPanel = document.getElementById('chrome-builtin-panel');
+    const discoveredModelsByProvider = {};
     const lmstudioDynamicRules = document.getElementById('lmstudio-dynamic-rules');
     const lmstudioStatus = document.getElementById('lmstudio-status');
     const btnSaveLmstudio = document.getElementById('btn-save-lmstudio');
@@ -455,7 +461,75 @@ document.addEventListener('DOMContentLoaded', () => {
             const isSelected = card.dataset.provider === provider;
             card.classList.toggle('selected', isSelected);
             card.setAttribute('aria-pressed', String(isSelected));
+            const badge = card.querySelector('.provider-card-active');
+            if (badge) badge.hidden = !isSelected;
         });
+    }
+
+    function normalizeModelId(model) {
+        if (!model) return '';
+        if (typeof model === 'string') return model.trim().split('/').pop();
+        return String(model.id || model.name || model.model || '').trim().split('/').pop();
+    }
+
+    function rememberDiscoveredModels(provider, models) {
+        const ids = [];
+        (Array.isArray(models) ? models : []).forEach((model) => {
+            const id = normalizeModelId(model);
+            if (id && !ids.includes(id)) ids.push(id);
+        });
+        discoveredModelsByProvider[provider] = ids.slice(0, 120);
+        return discoveredModelsByProvider[provider];
+    }
+
+    function renderModelPicker(provider, preferred = '') {
+        const models = discoveredModelsByProvider[provider] || [];
+        const current = preferred || lmstudioModel?.value || '';
+        if (aiModelOptions) {
+            aiModelOptions.innerHTML = '';
+            models.forEach((model) => {
+                const option = document.createElement('option');
+                option.value = model;
+                aiModelOptions.appendChild(option);
+            });
+        }
+        if (aiModelSelect) {
+            aiModelSelect.innerHTML = '';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = models.length ? 'Select a discovered model' : 'No discovered models yet';
+            aiModelSelect.appendChild(placeholder);
+            models.forEach((model) => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                option.selected = model === current;
+                aiModelSelect.appendChild(option);
+            });
+        }
+        if (aiModelHint) {
+            const missing = current && models.length > 0 && !models.includes(current);
+            aiModelHint.textContent = models.length
+                ? `${models.length} models from the last check${missing ? `. ${current} is not in the list.` : '.'}`
+                : 'Run a health check to load models from this provider.';
+        }
+    }
+
+    function applyProviderFieldVisibility(provider) {
+        const needsKey = provider === 'openai' || provider === 'gemini' || provider === 'gateway';
+        const needsEndpoint = provider !== 'chrome_builtin';
+        const modelLocked = provider === 'chrome_builtin';
+        document.getElementById('ai-key-row')?.toggleAttribute('hidden', !needsKey);
+        document.getElementById('ai-endpoint-row')?.toggleAttribute('hidden', !needsEndpoint);
+        if (lmstudioModel) {
+            lmstudioModel.readOnly = modelLocked;
+            if (modelLocked && !lmstudioModel.value) lmstudioModel.value = 'Gemini Nano';
+        }
+        if (btnRefreshAiModels) btnRefreshAiModels.hidden = modelLocked;
+        if (chromeBuiltinPanel) chromeBuiltinPanel.hidden = provider !== 'chrome_builtin';
+        document.getElementById('chrome-builtin-temperature')?.closest('.input-row')?.toggleAttribute('hidden', provider !== 'chrome_builtin');
+        document.getElementById('chrome-builtin-topk')?.closest('.input-row')?.toggleAttribute('hidden', provider !== 'chrome_builtin');
+        renderModelPicker(provider);
     }
 
     function getSelectedProvider() {
@@ -632,7 +706,9 @@ document.addEventListener('DOMContentLoaded', () => {
             aiProvider.value = nextProvider;
         }
         setSelectedProviderCard(nextProvider);
+        applyProviderFieldVisibility(nextProvider);
         renderApiKeyState(hasStoredCredential, Boolean(aiProviderToken?.value.trim()));
+        if (nextProvider === 'chrome_builtin') window.FalconChromeBuiltin?.probe?.();
         if (aiConfigurePanel) {
             aiConfigurePanel.style.display = 'block';
         }
@@ -902,6 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(settings?.temperature ?? getProviderDefaultTemperature(provider));
         if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(settings?.topK ?? getProviderDefaultTopK(provider));
         if (lmstudioDynamicRules) lmstudioDynamicRules.checked = settings?.enableDynamicRuleCandidates !== false;
+        window.FalconChromeBuiltin?.apply?.(settings || {});
+        applyProviderFieldVisibility(provider);
         setSelectedProviderCard(provider);
         setSelectedModeCard(lmstudioMode?.value || 'hybrid');
         if (aiConfigurePanel) {
@@ -938,7 +1016,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cooldownMs: Number(lmstudioCooldown?.value || getProviderDefaultCooldown(provider)),
             temperature: Number(chromeBuiltinTemperature?.value || getProviderDefaultTemperature(provider)),
             topK: Number(chromeBuiltinTopK?.value || getProviderDefaultTopK(provider)),
-            enableDynamicRuleCandidates: lmstudioDynamicRules?.checked !== false
+            enableDynamicRuleCandidates: lmstudioDynamicRules?.checked !== false,
+            ...(window.FalconChromeBuiltin?.collect?.() || {})
         };
     }
 
@@ -1011,6 +1090,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadAiProviderSettings(settings.provider);
             return;
         }
+        rememberDiscoveredModels(settings.provider, response.models || (response.resolvedModel ? [response.resolvedModel] : []));
+        renderModelPicker(settings.provider, response.resolvedModel || settings.model);
         const modelCount = Number(response.modelCount || 0);
         const resolvedModel = response.resolvedModel ? ` active=${response.resolvedModel}` : '';
         const serviceInfo = response.service ? ` service=${response.service}` : '';
@@ -1111,6 +1192,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (btnCheckLmstudio) {
         btnCheckLmstudio.addEventListener('click', runAiProviderHealthCheck);
+    }
+    if (btnRefreshAiModels) {
+        btnRefreshAiModels.addEventListener('click', runAiProviderHealthCheck);
+    }
+    if (aiModelSelect) {
+        aiModelSelect.addEventListener('change', () => {
+            if (!aiModelSelect.value || !lmstudioModel) return;
+            lmstudioModel.value = aiModelSelect.value;
+            setLmStudioStatus(`Model set to ${aiModelSelect.value}. Save settings to apply.`);
+        });
     }
     if (btnResetAiProviderDefaults) {
         btnResetAiProviderDefaults.addEventListener('click', restoreAiProviderDefaults);

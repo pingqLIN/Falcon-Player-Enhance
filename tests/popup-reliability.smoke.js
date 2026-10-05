@@ -1,7 +1,8 @@
 const fs = require('fs');
 const vm = require('vm');
 
-const backgroundSource = fs.readFileSync('Q:/Projects/Falcon-Player-Enhance/extension/background.js', 'utf8');
+const path = require('path');
+const backgroundSource = fs.readFileSync(path.join(__dirname, '..', 'extension', 'background.js'), 'utf8');
 
 function assert(condition, message) {
   if (!condition) {
