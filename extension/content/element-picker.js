@@ -49,6 +49,7 @@
     if (document.getElementById('__element_picker_style__')) return;
     const style = document.createElement('style');
     style.id = '__element_picker_style__';
+    style.setAttribute('data-shield-internal', 'true');
     style.textContent = `
       @keyframes shieldPickerGlowPulse {
         0% {
@@ -77,7 +78,8 @@
   }
 
   function getPickerParent() {
-    if (document.body) return document.body;
+    // Mount outside the site's body subtree so page-level hides cannot swallow
+    // the picker's own controls and its interaction shield.
     return document.documentElement;
   }
 
@@ -114,8 +116,12 @@
 
   function isPickerNode(node) {
     if (!(node instanceof Element)) return false;
-    if (node.id?.startsWith('__element_picker_')) return true;
-    return node.classList.contains(PICKER_TARGET_CLASS);
+    // The highlight class belongs to the WEBSITE TARGET, not to Falcon UI.
+    // Treating it as internal makes the click select its parent instead.
+    return Boolean(
+      node.closest?.('[data-shield-internal="true"]') ||
+      node.closest?.('[id^="__element_picker_"]')
+    );
   }
 
   function getUniqueSelector(selector) {
@@ -251,6 +257,7 @@
 
     overlay = document.createElement('div');
     overlay.id = '__element_picker_overlay__';
+    overlay.setAttribute('data-shield-internal', 'true');
     overlay.style.cssText = `
       position: fixed;
       pointer-events: none;
@@ -271,6 +278,7 @@
   function createInteractionShield() {
     interactionShield = document.createElement('div');
     interactionShield.id = '__element_picker_interaction_shield__';
+    interactionShield.setAttribute('data-shield-internal', 'true');
     interactionShield.style.cssText = `
       position: fixed;
       inset: 0;
@@ -296,6 +304,7 @@
   function createTooltip() {
     tooltip = document.createElement('div');
     tooltip.id = '__element_picker_tooltip__';
+    tooltip.setAttribute('data-shield-internal', 'true');
     tooltip.style.cssText = `
       position: fixed;
       z-index: 2147483647;
@@ -317,6 +326,7 @@
   function createConfirmDialog() {
     confirmDialog = document.createElement('div');
     confirmDialog.id = '__element_picker_confirm__';
+    confirmDialog.setAttribute('data-shield-internal', 'true');
     confirmDialog.style.cssText = `
       position: fixed;
       top: 50%;
@@ -505,9 +515,10 @@
   }
 
   function blockElement(target) {
+    if (!(target instanceof HTMLElement) || isPickerNode(target)) return;
     const selector = generateSelector(target);
     if (!selector) {
-      target.remove();
+      // Never mutate the page when the selector cannot be persisted safely.
       deactivatePicker();
       return;
     }

@@ -375,6 +375,20 @@
     const conflict = detectPolicyConflict(policyVersion, generatedAt, dispatchIssuedAt);
     const applyLatencyMs = dispatchIssuedAt > 0 ? Math.max(0, nowTs - dispatchIssuedAt) : null;
 
+    if (conflict) {
+      // Report the conflict but never let an older policy overwrite active protection.
+      reportPolicyApplied({
+        policyVersion,
+        source: 'stale_policy_rejected',
+        appliedAt: 0,
+        dispatchIssuedAt,
+        generatedAt,
+        applyLatencyMs: null,
+        conflict: true
+      });
+      return;
+    }
+
     aiPolicy = sanitizePolicyForRuntime(
       {
         ...policy,

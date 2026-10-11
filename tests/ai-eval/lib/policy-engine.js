@@ -1,14 +1,15 @@
 /* eslint-disable no-console */
 
 const AI_EVENT_WEIGHTS = {
-  runtime_bootstrap: 0.2,
+  runtime_bootstrap: 0,
   blocked_popup: 6,
   blocked_malicious_navigation: 7,
   overlay_removed: 4,
   clickjacking_detected: 8,
   suspicious_dom_churn: 3,
   false_positive_signal: -5,
-  user_override: -2
+  user_override: -2,
+  managed_redirect_listener_candidate: 0
 };
 
 const AI_DECAY_PER_MINUTE = 0.96;
@@ -29,6 +30,16 @@ function resolveTier(score) {
   if (score >= 18) return 'high';
   if (score >= 8) return 'medium';
   return 'low';
+}
+
+function eventWeight(type) {
+  return Object.prototype.hasOwnProperty.call(AI_EVENT_WEIGHTS, type) ? AI_EVENT_WEIGHTS[type] : 0;
+}
+
+function eventDelta(event, timestampSeconds, lastChurnSeconds) {
+  if (event.type === 'suspicious_dom_churn' &&
+      lastChurnSeconds != null && timestampSeconds - lastChurnSeconds < 20) return 0;
+  return eventWeight(event.type) * event.severity * event.confidence;
 }
 
 function applyDecay(score, deltaSeconds) {
@@ -65,8 +76,10 @@ function normalizeEvents(events = []) {
       lastSec = timeSec;
       return {
         type,
-        severity: clamp(Number(event.severity || 1), 0.1, 3),
-        confidence: clamp(Number(event.confidence || 0.7), 0.1, 1),
+        severity: Number.isFinite(Number(event.severity ?? 1))
+          ? clamp(Number(event.severity ?? 1), 0, 3) : 1,
+        confidence: Number.isFinite(Number(event.confidence ?? 0.7))
+          ? clamp(Number(event.confidence ?? 0.7), 0, 1) : 0.7,
         timeSec,
         source: String(event.source || raw?.context?.source || 'unknown')
       };
@@ -122,6 +135,7 @@ function simulateScenario(scenario) {
   const timeline = [];
   let highestTier = 'low';
   let reachedHighEventIndex = -1;
+  let lastChurnSeconds = null;
 
   scenario.events.forEach((event, index) => {
     const nextTime = Number(event.dtSec || 0);
@@ -129,10 +143,13 @@ function simulateScenario(scenario) {
     currentTimeSec = nextTime;
     score = applyDecay(score, delta);
 
-    const weight = AI_EVENT_WEIGHTS[event.type] || 1;
-    const severity = clamp(Number(event.severity || 1), 0.1, 3);
-    const confidence = clamp(Number(event.confidence || 0.7), 0.1, 1);
-    score = clamp(score + weight * severity * confidence, 0, 200);
+    const severity = Number.isFinite(Number(event.severity ?? 1))
+      ? clamp(Number(event.severity ?? 1), 0, 3) : 1;
+    const confidence = Number.isFinite(Number(event.confidence ?? 0.7))
+      ? clamp(Number(event.confidence ?? 0.7), 0, 1) : 0.7;
+    const riskDelta = eventDelta({ type: event.type, severity, confidence }, currentTimeSec, lastChurnSeconds);
+    if (event.type === 'suspicious_dom_churn' && riskDelta !== 0) lastChurnSeconds = currentTimeSec;
+    score = clamp(score + riskDelta, 0, 200);
 
     const tier = resolveTier(score);
     if (TIER_RANK[tier] > TIER_RANK[highestTier]) highestTier = tier;
@@ -164,6 +181,7 @@ function replayHost(hostname, rawEvents, options = {}) {
   let score = 0;
   let peakTier = 'low';
   let reachedHighEventIndex = -1;
+  let lastChurnSeconds = null;
   const fallback = {
     activeUntil: 0,
     cooldownUntil: 0,
@@ -176,8 +194,9 @@ function replayHost(hostname, rawEvents, options = {}) {
     currentSec = event.timeSec;
     score = applyDecay(score, deltaSec);
 
-    const weight = AI_EVENT_WEIGHTS[event.type] || 1;
-    score = clamp(score + weight * event.severity * event.confidence, 0, 200);
+    const delta = eventDelta(event, currentSec, lastChurnSeconds);
+    if (event.type === 'suspicious_dom_churn' && delta !== 0) lastChurnSeconds = currentSec;
+    score = clamp(score + delta, 0, 200);
 
     if ((event.type === 'false_positive_signal' || event.type === 'user_override') && currentSec >= fallback.cooldownUntil) {
       fallback.activeUntil = currentSec + AI_HOST_FALLBACK_DURATION_SEC;

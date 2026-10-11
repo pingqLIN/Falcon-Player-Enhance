@@ -5,6 +5,36 @@
 // AI 強化: 常駐監控介面、風險模型、策略下發
 // ============================================================================
 
+// Observability core is separate from the policy engine: traces never feed back into scoring.
+importScripts('shared/ai-observability.js');
+const falconAiObserver = globalThis.FalconAiObservability.createObserver({
+  storage: chrome.storage.session,
+  transport: async (entry, token) => {
+    const response = await fetch(globalThis.FalconAiObservability.BRIDGE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Falcon-Observer-Token': token
+      },
+      body: JSON.stringify(entry),
+      signal: AbortSignal.timeout(2500)
+    });
+    if (!response.ok) throw new Error('observer_http_' + response.status);
+  }
+});
+const falconObserverReady = falconAiObserver.restore().catch(() => null);
+function traceFalconAi(hostname, kind, details, modelOutput = '') {
+  falconAiObserver.record(hostname, kind, details, modelOutput);
+}
+
+// Chrome-verified navigation events, with no page text, URL path, query or hash.
+chrome.webNavigation?.onCommitted?.addListener((event) => {
+  traceFalconAi(getHostname(event.url), 'page_navigation', {
+    tabId: event.tabId, frameId: event.frameId,
+    source: 'browser_web_navigation', type: event.transitionType || 'committed'
+  });
+});
+
 const APP_BRAND = 'Falcon-Player-Enhance';
 const DEFAULT_WHITELIST = [
   'youtube.com',
@@ -482,14 +512,17 @@ const AI_ELEMENT_CLASSIFICATION_RESPONSE_CONSTRAINT = {
 };
 
 const AI_EVENT_WEIGHTS = {
-  runtime_bootstrap: 0.2,
+  // Runtime startup is diagnostic evidence, not evidence of malicious activity.
+  runtime_bootstrap: 0,
   blocked_popup: 6,
   blocked_malicious_navigation: 7,
   overlay_removed: 4,
   clickjacking_detected: 8,
   suspicious_dom_churn: 3,
   false_positive_signal: -5,
-  user_override: -2
+  user_override: -2,
+  // Observing a candidate listener is not equivalent to blocking a redirect.
+  managed_redirect_listener_candidate: 0
 };
 
 const STATS_DEFAULTS = {
@@ -4152,8 +4185,11 @@ function normalizeAiEvent(input) {
   const type = String(input.type || '').trim();
   if (!/^[a-z0-9_:-]{1,64}$/i.test(type)) return null;
 
-  const severity = clamp(Number(input.severity || 1), 0.1, 3);
-  const confidence = clamp(Number(input.confidence || 0.7), 0.1, 1);
+  const rawSeverity = Number(input.severity ?? 1);
+  const rawConfidence = Number(input.confidence ?? 0.7);
+  // Never let NaN, Infinity or a spoofed client clock reach persisted scores.
+  const severity = Number.isFinite(rawSeverity) ? clamp(rawSeverity, 0, 3) : 1;
+  const confidence = Number.isFinite(rawConfidence) ? clamp(rawConfidence, 0, 1) : 0.7;
 
   return {
     type,
@@ -4161,7 +4197,7 @@ function normalizeAiEvent(input) {
     severity,
     confidence,
     detail: sanitizeAiEventDetail(input.detail || {}),
-    ts: Number(input.ts || getNow())
+    ts: getNow()
   };
 }
 
@@ -4284,11 +4320,18 @@ function sanitizeAiTelemetryContext(context) {
   return sanitized;
 }
 
+function getDecayedRiskScore(profile, nowTs = getNow()) {
+  const currentScore = Number(profile?.riskScore);
+  const score = Number.isFinite(currentScore) ? clamp(currentScore, 0, 200) : 0;
+  const lastUpdatedAt = Number(profile?.lastUpdatedAt);
+  const elapsedMs = Number.isFinite(lastUpdatedAt) && lastUpdatedAt > 0
+    ? Math.max(0, nowTs - lastUpdatedAt)
+    : 0;
+  return clamp(score * Math.pow(AI_DECAY_PER_MINUTE, elapsedMs / 60000), 0, 200);
+}
+
 function applyRiskDecay(profile, nowTs) {
-  const deltaMs = Math.max(0, nowTs - Number(profile.lastUpdatedAt || nowTs));
-  const deltaMinutes = deltaMs / 60000;
-  const decayFactor = Math.pow(AI_DECAY_PER_MINUTE, deltaMinutes);
-  profile.riskScore = clamp(profile.riskScore * decayFactor, 0, 200);
+  profile.riskScore = getDecayedRiskScore(profile, nowTs);
   profile.lastUpdatedAt = nowTs;
 }
 
@@ -4303,14 +4346,31 @@ function pushRecentSignal(profile, eventType, delta, ts) {
 }
 
 function updateRiskProfile(profile, event) {
-  const nowTs = Number(event.ts || getNow());
+  // Only the background's trusted ingestion clock can advance risk decay.
+  const nowTs = getNow();
   applyRiskDecay(profile, nowTs);
 
-  const weight = AI_EVENT_WEIGHTS[event.type] || 1;
-  const delta = weight * event.severity * event.confidence;
+  const baseWeight = Object.prototype.hasOwnProperty.call(AI_EVENT_WEIGHTS, event.type)
+    ? AI_EVENT_WEIGHTS[event.type] : 0;
+  // Low-specificity DOM churn can be produced by ordinary SPA animations.
+  // Keep each event in telemetry, but limit how often it can change risk.
+  if (!profile.lastScoredAtByType || typeof profile.lastScoredAtByType !== 'object') {
+    profile.lastScoredAtByType = {};
+  }
+  const lastScoredAt = Number(profile.lastScoredAtByType[event.type] || 0);
+  const scoreCooldownMs = event.type === 'suspicious_dom_churn' ? 20000 : 0;
+  const canScore = baseWeight !== 0 &&
+    (scoreCooldownMs === 0 || lastScoredAt <= 0 || nowTs - lastScoredAt >= scoreCooldownMs);
+  const delta = canScore ? baseWeight * event.severity * event.confidence : 0;
   profile.riskScore = clamp(profile.riskScore + delta, 0, 200);
 
-  profile.events[event.type] = (profile.events[event.type] || 0) + 1;
+  if (!profile.events || typeof profile.events !== 'object') profile.events = {};
+  profile.events[event.type] = (Number(profile.events[event.type]) || 0) + 1;
+  if (canScore && delta !== 0) {
+    profile.lastScoredAtByType[event.type] = nowTs;
+    if (!profile.scoredEvents || typeof profile.scoredEvents !== 'object') profile.scoredEvents = {};
+    profile.scoredEvents[event.type] = (Number(profile.scoredEvents[event.type]) || 0) + 1;
+  }
   pushRecentSignal(profile, event.type, delta, nowTs);
 }
 
@@ -4331,10 +4391,30 @@ function isTrustedExtensionPageSender(sender) {
   return senderId === chrome.runtime.id && senderUrls.some((value) => value.startsWith(extensionOrigin));
 }
 
+function hasRecentConfirmedThreatSignal(profile, nowTs = getNow()) {
+  const confirmedTypes = new Set([
+    'blocked_popup', 'blocked_malicious_navigation', 'clickjacking_detected'
+  ]);
+  const signals = Array.isArray(profile?.recentSignals) ? profile.recentSignals : [];
+  return signals.some((signal) =>
+    confirmedTypes.has(String(signal?.type || '')) &&
+    Number(signal?.delta || 0) > 0 &&
+    Number.isFinite(Number(signal?.ts)) &&
+    nowTs - Number(signal.ts) >= 0 &&
+    nowTs - Number(signal.ts) <= 5 * 60 * 1000
+  );
+}
+
 function buildPolicyEvidence(profile, fallbackState = null) {
   const events = profile?.events && typeof profile.events === 'object' ? profile.events : {};
+  // Keep raw event counts for diagnostics. Explain the score using scored events,
+  // excluding zero-weight observations and rate-limited duplicates.
+  const scoredEvents = profile?.scoredEvents && typeof profile.scoredEvents === 'object'
+    ? profile.scoredEvents
+    : Object.fromEntries(Object.entries(events).filter(([type]) =>
+        Object.prototype.hasOwnProperty.call(AI_EVENT_WEIGHTS, type) && AI_EVENT_WEIGHTS[type] !== 0));
   const recentSignals = Array.isArray(profile?.recentSignals) ? profile.recentSignals : [];
-  const topSignals = Object.entries(events)
+  const topSignals = Object.entries(scoredEvents)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([type, count]) => ({
@@ -4354,6 +4434,7 @@ function buildPolicyEvidence(profile, fallbackState = null) {
   return {
     topSignals,
     recentSignals: recentSignalSummary,
+    confirmedThreatRecent: hasRecentConfirmedThreatSignal(profile),
     fallbackReason: String(fallbackState?.reason || ''),
     fallbackSource: String(fallbackState?.source || '')
   };
@@ -4632,7 +4713,7 @@ function isChromeBuiltinDownloadAvailability(value) {
 }
 
 async function resolveChromeLanguageModel() {
-  const api = globalThis.LanguageModel || globalThis.ai?.languageModel;
+  const api = globalThis.LanguageModel;
   if (!api?.create) {
     throw new Error('chrome_builtin_prompt_api_unavailable');
   }
@@ -4653,7 +4734,10 @@ async function buildChromeBuiltinSessionOptions(api, settings = {}) {
   const languages = normalizeChromeBuiltinLanguages(settings.chromeLanguages);
   const useCustomSampling = String(settings.chromeSampling || 'runtime').toLowerCase() === 'custom';
 
-  if (useCustomSampling && typeof api.params === 'function') {
+  if (useCustomSampling) {
+    if (typeof api.params !== 'function') {
+      throw new Error('chrome_builtin_custom_sampling_unavailable');
+    }
     const params = await api.params();
     const temperature = clamp(
       Number(settings.temperature ?? params?.defaultTemperature ?? CHROME_BUILTIN_DEFAULT_TEMPERATURE),
@@ -4674,53 +4758,26 @@ async function buildChromeBuiltinSessionOptions(api, settings = {}) {
 
   return {
     ...options,
-    expectedInputs: [{ type: 'text', languages }],
+    // Prompts contain English system instructions even when output is another language.
+    expectedInputs: [{ type: 'text', languages: Array.from(new Set(['en', ...languages])) }],
     expectedOutputs: [{ type: 'text', languages }]
   };
 }
 
-function toChromeBuiltinSamplingOnlyOptions(options = {}) {
-  return Object.fromEntries(
-    Object.entries(options).filter(([key]) => key === 'temperature' || key === 'topK')
-  );
-}
-
 async function resolveChromeBuiltinSessionConfig(api, settings = {}) {
-  const preferredOptions = await buildChromeBuiltinSessionOptions(api, settings);
-  const optionRoutes = [
-    { route: 'language-and-sampling', options: preferredOptions },
-    { route: 'sampling-only', options: toChromeBuiltinSamplingOnlyOptions(preferredOptions) },
-    { route: 'default', options: {} }
-  ];
-  const attempts = [];
-
-  for (const candidate of optionRoutes) {
-    try {
-      const availability =
-        typeof api.availability === 'function'
-          ? await api.availability(candidate.options)
-          : 'available';
-      attempts.push({
-        route: candidate.route,
-        availability: String(availability || '')
-      });
-
-      if (String(availability || '').toLowerCase() !== 'unavailable') {
-        return {
-          ...candidate,
-          availability,
-          attempts
-        };
-      }
-    } catch (error) {
-      attempts.push({
-        route: candidate.route,
-        error: String(error?.message || error)
-      });
-    }
+  // Do not strip a requested language or sampling option to make a different
+  // configuration appear available. Availability and create must match.
+  if (typeof api.availability !== 'function') {
+    throw new Error('chrome_builtin_availability_api_unavailable');
   }
-
-  throw new Error(`chrome_builtin_unavailable:${JSON.stringify(attempts)}`);
+  const options = await buildChromeBuiltinSessionOptions(api, settings);
+  const availability = String(await api.availability(options) || 'unavailable').toLowerCase();
+  return {
+    route: 'language-and-sampling',
+    options,
+    availability,
+    attempts: [{ route: 'language-and-sampling', availability }]
+  };
 }
 
 function promptChromeBuiltinSession(session, prompt, options = {}, timeoutMs = CHROME_BUILTIN_DEFAULT_TIMEOUT_MS) {
@@ -4736,37 +4793,6 @@ function promptChromeBuiltinSession(session, prompt, options = {}, timeoutMs = C
         clearTimeout(timer);
       });
   });
-}
-
-async function attemptChromeBuiltinDownloadStart(api, sessionConfig, settings = {}) {
-  const downloadTimeout = createRequestTimeout(Math.min(Number(settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 3000));
-  let downloadSession = null;
-  try {
-    downloadSession = await api.create({
-      ...sessionConfig.options,
-      signal: downloadTimeout.signal
-    });
-    return {
-      attempted: true,
-      started: true,
-      route: sessionConfig.route
-    };
-  } catch (error) {
-    return {
-      attempted: true,
-      started: false,
-      route: sessionConfig.route,
-      error: String(error?.message || error),
-      errorType: classifyAiProviderError(error)
-    };
-  } finally {
-    downloadTimeout.cleanup();
-    try {
-      downloadSession?.destroy?.();
-    } catch (_) {
-      // no-op
-    }
-  }
 }
 
 function buildTeachFeatureSummary(features = {}) {
@@ -5237,7 +5263,8 @@ function mergePolicyWithProviderAdvisory(policy, advisory, options = {}) {
       ])
     ).slice(0, 12);
     merged.policyGate = buildPolicyGate(merged.riskTier, merged.riskScore, {
-      fallbackActive: Boolean(policy?.fallbackActive)
+      fallbackActive: Boolean(policy?.fallbackActive),
+      hasConfirmedThreat: policy?.evidence?.confirmedThreatRecent === true
     });
   }
 
@@ -5912,12 +5939,11 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
     const isAvailable = isChromeBuiltinReadyAvailability(capabilityStatus);
 
     if (!isAvailable) {
-      const downloadAttempt = isChromeBuiltinDownloadAvailability(capabilityStatus)
-        ? await attemptChromeBuiltinDownloadStart(api, sessionConfig, normalized)
-        : null;
-      const readinessStatus = downloadAttempt?.started ? 'downloading' : capabilityStatus;
+      // A model download requires explicit user activation in the extension
+      // page. A background health check must never trigger a download.
+      const downloadActionRequired = isChromeBuiltinDownloadAvailability(capabilityStatus);
+      const readinessStatus = capabilityStatus;
       const error = `chrome_builtin_not_ready_${readinessStatus}`;
-      const serviceSuffix = downloadAttempt?.attempted ? ':download_attempted' : '';
       aiState.providerState = normalizeAiProviderState({
         ...aiState.providerState,
         lastHealthCheckAt: getNow(),
@@ -5927,9 +5953,9 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
         lastModelCount: 0,
         lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
         lastProvider: 'chrome_builtin',
-        lastService: `chrome_prompt_api:${readinessStatus}${serviceSuffix}`,
-        lastDownloadAttemptAt: downloadAttempt?.attempted ? getNow() : Number(aiState.providerState?.lastDownloadAttemptAt || 0),
-        lastDownloadStarted: downloadAttempt?.started === true
+        lastService: `chrome_prompt_api:${readinessStatus}`,
+        lastDownloadAttemptAt: Number(aiState.providerState?.lastDownloadAttemptAt || 0),
+        lastDownloadStarted: false
       });
       scheduleAiPersist();
 
@@ -5946,9 +5972,10 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
         errorType: classifyAiProviderError(error),
         route: sessionConfig.route,
         attempts: sessionConfig.attempts,
-        downloadAttempted: downloadAttempt?.attempted === true,
-        downloadStarted: downloadAttempt?.started === true,
-        downloadError: downloadAttempt?.error || '',
+        downloadAttempted: false,
+        downloadStarted: false,
+        downloadActionRequired,
+        downloadError: '',
         params,
         capability: getChromeBuiltinCapabilitySnapshot()
       };
@@ -6374,11 +6401,23 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
     if (!isChromeBuiltinReadyAvailability(sessionConfig.availability)) {
       throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
     }
+    traceFalconAi(hostname, 'chrome_builtin_availability', {
+      task: 'policy_advisory', availability: sessionConfig.availability,
+      samplingMode: settings.chromeSampling,
+      temperature: sessionConfig.options.temperature,
+      topK: sessionConfig.options.topK,
+      languages: settings.chromeLanguages,
+      responseConstraint: settings.chromeResponseConstraint,
+      timeoutMs: settings.timeoutMs
+    });
     session = await api.create({
       ...sessionConfig.options,
       signal: timeout.signal
     });
     const prompt = buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings);
+    traceFalconAi(hostname, 'chrome_builtin_request', {
+      task: 'policy_advisory', promptChars: prompt.length, model: CHROME_BUILTIN_DEFAULT_MODEL
+    });
     const rawText = await promptChromeBuiltinSession(
       session,
       prompt,
@@ -6401,6 +6440,13 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
     if (!advisory) {
       throw new Error('chrome_builtin_invalid_policy');
     }
+    traceFalconAi(hostname, 'chrome_builtin_result', {
+      task: 'policy_advisory', success: true, latencyMs: getNow() - startedAt,
+      responseChars: String(rawText || '').length,
+      confidence: advisory.confidence, riskScoreDelta: advisory.riskScoreDelta,
+      candidateCount: Array.isArray(advisory.candidateSelectors) ? advisory.candidateSelectors.length : 0,
+      domainCount: Array.isArray(advisory.candidateDomains) ? advisory.candidateDomains.length : 0
+    }, rawText);
 
     advisory.provider = 'chrome_builtin';
     advisory.model = CHROME_BUILTIN_DEFAULT_MODEL;
@@ -6434,6 +6480,12 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
     }
     scheduleAiPersist();
     return advisory;
+  } catch (error) {
+    traceFalconAi(hostname, 'chrome_builtin_error', {
+      task: 'policy_advisory', success: false, latencyMs: getNow() - startedAt,
+      errorCode: String(error?.name || 'prompt_api_failed')
+    });
+    throw error;
   } finally {
     timeout.cleanup();
     try {
@@ -6625,32 +6677,62 @@ async function requestAiElementClassification(hostname, features = {}) {
         if (!isChromeBuiltinReadyAvailability(sessionConfig.availability)) {
           throw new Error(`chrome_builtin_not_ready_${sessionConfig.availability}`);
         }
+        traceFalconAi(hostname, 'chrome_builtin_availability', {
+          task: 'element_classification', availability: sessionConfig.availability,
+          samplingMode: settings.chromeSampling,
+          temperature: sessionConfig.options.temperature,
+          topK: sessionConfig.options.topK, languages: settings.chromeLanguages,
+          responseConstraint: settings.chromeResponseConstraint,
+          timeoutMs: settings.timeoutMs
+        });
         session = await api.create({
           ...sessionConfig.options,
           signal: timeout.signal
         });
+        const debugPromptStartedAt = getNow();
+        traceFalconAi(hostname, 'chrome_builtin_request', {
+          task: 'element_classification', promptChars: prompt.length,
+          model: CHROME_BUILTIN_DEFAULT_MODEL
+        });
         let rawText = '';
-        try {
-          rawText = await promptChromeBuiltinSession(session, prompt, {
-            responseConstraint: AI_ELEMENT_CLASSIFICATION_RESPONSE_CONSTRAINT
-          }, settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS);
-        } catch (error) {
-          if (!isResponseConstraintUnsupportedError(error)) {
-            throw error;
-          }
+        if (settings.chromeResponseConstraint === false) {
           rawText = await promptChromeBuiltinSession(
-            session,
-            prompt,
-            {},
-            settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+            session, prompt, {}, settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
           );
+        } else {
+          try {
+            rawText = await promptChromeBuiltinSession(session, prompt, {
+              responseConstraint: AI_ELEMENT_CLASSIFICATION_RESPONSE_CONSTRAINT
+            }, settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS);
+          } catch (error) {
+            if (!isResponseConstraintUnsupportedError(error)) {
+              throw error;
+            }
+            rawText = await promptChromeBuiltinSession(
+              session, prompt, {}, settings.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+            );
+          }
         }
         const classification = {
           ...parseProviderElementClassification('chrome_builtin', rawText, localResult),
           provider: 'chrome_builtin'
         };
+        traceFalconAi(hostname, 'chrome_builtin_result', {
+          task: 'element_classification', success: true,
+          latencyMs: getNow() - debugPromptStartedAt,
+          responseChars: String(rawText || '').length,
+          category: classification.category,
+          confidence: classification.confidence,
+          suggestedAction: classification.suggestedAction
+        }, rawText);
         rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
         return classification;
+      } catch (error) {
+        traceFalconAi(hostname, 'chrome_builtin_error', {
+          task: 'element_classification', success: false,
+          errorCode: String(error?.name || 'prompt_api_failed')
+        });
+        throw error;
       } finally {
         timeout.cleanup();
         try {
@@ -6727,6 +6809,7 @@ async function requestAiElementClassification(hostname, features = {}) {
 
 function buildPolicyGate(riskTier, riskScore, options = {}) {
   const fallbackActive = options.fallbackActive === true;
+  const hasConfirmedThreat = options.hasConfirmedThreat !== false;
   const thresholds = {
     ...AI_POLICY_GATE_DEFAULT_THRESHOLDS
   };
@@ -6741,6 +6824,8 @@ function buildPolicyGate(riskTier, riskScore, options = {}) {
     tier = 'T1';
     mode = 'advisory-only';
     reason = 'host_fallback_active';
+  } else if ((riskTier === 'high' || riskTier === 'critical') && !hasConfirmedThreat) {
+    reason = 'uncorroborated_heuristic_risk';
   } else if (riskTier === 'high' || riskTier === 'critical') {
     tier = 'T2';
     mode = 'reversible-actions';
@@ -6776,9 +6861,11 @@ function buildPolicyGate(riskTier, riskScore, options = {}) {
 }
 
 function buildPolicyFromProfile(hostname, profile, source = 'ai_profile', nowTs = getNow()) {
-  const riskScore = Number(profile?.riskScore || 0);
+  const riskScore = getDecayedRiskScore(profile, nowTs);
   const riskTier = resolveRiskTier(riskScore);
-  const policyGate = buildPolicyGate(riskTier, riskScore);
+  const policyGate = buildPolicyGate(riskTier, riskScore, {
+    hasConfirmedThreat: hasRecentConfirmedThreatSignal(profile, nowTs)
+  });
   const evidence = buildPolicyEvidence(profile);
 
   const policy = {
@@ -6823,7 +6910,7 @@ function buildPolicyFromProfile(hostname, profile, source = 'ai_profile', nowTs 
     policy.guardExternalNavigation = true;
     policy.overlayScanMs = 700;
     policy.sensitivityBoost = 3;
-    policy.forceSandbox = true;
+    policy.forceSandbox = policyGate.allowReversibleActions === true;
     policy.extraBlockedDomains = [...AI_HIGH_RISK_EXTRA_DOMAINS];
   }
 
@@ -6951,11 +7038,15 @@ function getPolicyForHostname(hostname, options = {}) {
   const fallbackWindowChanged =
     Boolean(fallbackState.active) && Number(cached?.fallbackUntil || 0) !== Number(fallbackState.activeUntil || 0);
 
-  if (cached && options.forceRebuild !== true && !fallbackMismatch && !fallbackWindowChanged) {
+  const profile = getOrCreateProfile(normalized);
+  const projectedTier = resolveRiskTier(getDecayedRiskScore(profile, nowTs));
+  const cachedProfileTier = cached?.fallbackActive ? '' : cached?.riskTier;
+  const cacheAgeMs = Math.max(0, nowTs - Number(cached?.generatedAt || 0));
+  if (cached && options.forceRebuild !== true && !fallbackMismatch && !fallbackWindowChanged &&
+      cacheAgeMs < 30000 && (fallbackState.active || cachedProfileTier === projectedTier)) {
     return cached;
   }
 
-  const profile = getOrCreateProfile(normalized);
   const policy = buildResolvedPolicy(normalized, profile, cached || null, { nowTs });
   aiState.policyCache[normalized] = policy;
   return policy;
@@ -7051,9 +7142,21 @@ function processAiTelemetry(request, sender) {
   }
 
   const rawContext = request.context || {};
-  const hostname =
-    getHostname(rawContext.hostname) || getHostname(rawContext.url) || getHostname(sender?.tab?.url) || 'unknown-host';
-  const context = sanitizeAiTelemetryContext(rawContext);
+  // A content script's frame URL is authoritative; never let the payload
+  // attribute its telemetry (including false-positive fallback) to another host.
+  const senderDocumentUrl = String(sender?.url || sender?.documentUrl || '');
+  const senderDocumentHost = isTrackableMemoUrl(senderDocumentUrl)
+    ? getHostname(senderDocumentUrl) : '';
+  const trustedExtensionPage = isTrustedExtensionPageSender(sender);
+  const hostname = senderDocumentHost ||
+    (trustedExtensionPage
+      ? (getHostname(rawContext.hostname) || getHostname(rawContext.url))
+      : getHostname(sender?.tab?.url)) || 'unknown-host';
+  const context = sanitizeAiTelemetryContext({
+    ...rawContext,
+    hostname,
+    ...(senderDocumentHost ? { url: senderDocumentUrl } : {})
+  });
 
   const rawEvents = Array.isArray(request.events)
     ? request.events
@@ -7061,7 +7164,10 @@ function processAiTelemetry(request, sender) {
     ? [request.event]
     : [];
 
-  const events = rawEvents.map(normalizeAiEvent).filter(Boolean);
+  // One message must not be able to force unbounded event processing.
+  const events = rawEvents.slice(0, 50).map(normalizeAiEvent).filter((event) =>
+    event && (trustedExtensionPage || !['user_override', 'false_positive_signal'].includes(event.type))
+  );
   if (events.length === 0) {
     return {
       hostname,
@@ -7074,6 +7180,7 @@ function processAiTelemetry(request, sender) {
   const profile = getOrCreateProfile(hostname);
   const beforeSignature = policySignature(getPolicyForHostname(hostname));
   const nowTs = getNow();
+  const debugScoreBefore = getDecayedRiskScore(profile, nowTs);
   let fallbackTriggered = false;
 
   events.forEach((event) => {
@@ -7098,6 +7205,22 @@ function processAiTelemetry(request, sender) {
   });
   aiState.policyCache[hostname] = policy;
   const afterSignature = policySignature(policy);
+  traceFalconAi(hostname, 'page_telemetry_batch', {
+    tabId: Number(sender?.tab?.id || 0),
+    frameId: Number(sender?.frameId ?? -1),
+    source: String(context.source || ''),
+    events: events.map((event) => ({
+      type: event.type, source: event.source,
+      severity: event.severity, confidence: event.confidence
+    })),
+    count: events.length,
+    scoreBefore: Number(debugScoreBefore.toFixed(2)),
+    scoreAfter: Number(policy.riskScore || 0),
+    riskTier: policy.riskTier,
+    gateMode: policy.policyGate?.mode,
+    gateReason: policy.policyGate?.reason,
+    fallbackActive: policy.fallbackActive
+  });
 
   scheduleAiPersist();
 
@@ -7145,8 +7268,8 @@ function enableAiMonitorForAllTabs() {
 
 function buildAiInsightsSnapshot() {
   const profiles = Object.values(aiState.profiles || {});
-  profiles.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
   const nowTs = getNow();
+  profiles.sort((a, b) => getDecayedRiskScore(b, nowTs) - getDecayedRiskScore(a, nowTs));
   const providerSettings = redactAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const providerState = normalizeAiProviderState(aiState.providerState || {});
   const governance = buildCandidateGovernanceSnapshot(20);
@@ -7236,15 +7359,15 @@ function buildAiInsightsSnapshot() {
     activeFallbackHosts,
     hostMetrics,
     highRiskHosts: profiles
-      .filter((profile) => resolveRiskTier(profile.riskScore || 0) !== 'low')
+      .filter((profile) => resolveRiskTier(getDecayedRiskScore(profile, nowTs)) !== 'low')
       .slice(0, 20)
       .map((profile) => {
         const resolvedPolicy = getPolicyForHostname(profile.hostname);
         const fallbackState = getHostFallbackState(profile.hostname, nowTs);
         return {
           hostname: profile.hostname,
-          riskScore: Number((profile.riskScore || 0).toFixed(2)),
-          riskTier: resolveRiskTier(profile.riskScore || 0),
+          riskScore: Number(getDecayedRiskScore(profile, nowTs).toFixed(2)),
+          riskTier: resolveRiskTier(getDecayedRiskScore(profile, nowTs)),
           events: profile.events || {},
           lastUpdatedAt: profile.lastUpdatedAt || 0,
           policyGateTier: String(resolvedPolicy?.policyGate?.tier || 'T1'),
@@ -7469,7 +7592,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       aiState.providerAdvisoryCache = {};
       aiProviderAdvisoryInflight.clear();
       aiState.elementClassificationCache = {};
-      scheduleAiPersist();
+      // Do not acknowledge a configuration change until both local profiles and session secrets persist.
+      await persistAiState();
       sendResponse({
         success: true,
         aiEnabled: aiState.enabled,
@@ -7619,8 +7743,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'aiPolicyApplied') {
     const payload = request.payload || {};
-    const hostname =
-      getHostname(payload.hostname) || getHostname(payload.url) || getHostname(sender?.tab?.url) || 'unknown-host';
+    const senderDocumentUrl = String(sender?.url || sender?.documentUrl || '');
+    const hostname = (isTrackableMemoUrl(senderDocumentUrl) ? getHostname(senderDocumentUrl) : '') ||
+      (isTrustedExtensionPageSender(sender) ? getHostname(payload.hostname) || getHostname(payload.url) : '') ||
+      getHostname(sender?.tab?.url) || 'unknown-host';
     const currentPolicy = getPolicyForHostname(hostname);
     const appliedAt = Number(payload.appliedAt || getNow());
     const policyVersion = Number(payload.policyVersion || payload.version || 0);
@@ -7633,6 +7759,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     if (conflict) {
       recordPolicyConflict(hostname);
+      // A rejected stale receipt is evidence of conflict, not successful application.
+      scheduleAiPersist();
+      sendResponse({
+        success: true,
+        hostname,
+        conflict: true,
+        rejected: true,
+        metrics: getOrCreateHostMetrics(hostname),
+        policy: currentPolicy
+      });
+      return true;
     }
     if (Number.isFinite(latencyMs) && latencyMs >= 0) {
       recordPolicyApplyLatency(hostname, latencyMs, appliedAt);
@@ -7656,6 +7793,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'activateHostFallback') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
     const hostname =
       getHostname(request.hostname) || getHostname(request.url) || getHostname(sender?.tab?.url) || 'unknown-host';
     const activation = activateHostFallback(hostname, {
@@ -7694,6 +7835,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fallback: getHostFallbackState(hostname),
       metrics: getOrCreateHostMetrics(hostname)
     });
+    return true;
+  }
+
+  if (request.action === 'recordAiObservabilityProbe') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      await falconObserverReady;
+      const config = falconAiObserver.publicConfig();
+      if (!config.enabled) {
+        sendResponse({ success: true, captured: false });
+        return;
+      }
+      const entry = falconAiObserver.record(config.hostname, 'chrome_builtin_manual_probe', {
+        task: 'manual_extension_page_probe',
+        success: request.success === true,
+        errorCode: String(request.errorCode || ''),
+        latencyMs: Number(request.latencyMs || 0),
+        responseChars: Number(request.responseChars || 0),
+        samplingMode: String(request.samplingMode || ''),
+        temperature: request.temperature,
+        topK: request.topK,
+        languages: Array.isArray(request.languages) ? request.languages : []
+      }, String(request.modelOutput || ''));
+      sendResponse({ success: true, captured: Boolean(entry) });
+    })().catch((error) => sendResponse({ success: false, error: String(error?.message || error) }));
+    return true;
+  }
+
+  if (['startAiObservability', 'stopAiObservability', 'clearAiObservability', 'getAiObservability'].includes(request.action)) {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      await falconObserverReady;
+      if (request.action === 'startAiObservability') {
+        await falconAiObserver.start({
+          hostname: request.hostname,
+          includeModelOutput: request.includeModelOutput === true,
+          bridgeToken: request.bridgeToken
+        });
+      } else if (request.action === 'stopAiObservability') {
+        await falconAiObserver.stop();
+      } else if (request.action === 'clearAiObservability') {
+        await falconAiObserver.clear();
+      }
+      sendResponse({ success: true, snapshot: falconAiObserver.snapshot() });
+    })().catch((error) => sendResponse({
+      success: false, error: String(error?.message || error)
+    }));
     return true;
   }
 

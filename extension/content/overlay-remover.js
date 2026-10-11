@@ -207,6 +207,7 @@
 
     function isInternalShieldElement(element) {
         if (!(element instanceof Element)) return false;
+        if (element.closest?.('[data-shield-internal="true"], [id^="__element_picker_"]')) return true;
         let cursor = element;
         let depth = 0;
         while (cursor && depth < 10) {

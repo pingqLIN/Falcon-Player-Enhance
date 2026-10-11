@@ -95,6 +95,9 @@
 
         elements.forEach(element => {
             try {
+                // Skip Falcon UI and containers which currently own Falcon controls.
+                if (element.closest?.('[data-shield-internal="true"], [id^="__element_picker_"]') ||
+                    element.querySelector?.('[data-shield-internal="true"]')) return;
                 let className = '';
                 if (element.className) {
                     if (typeof element.className === 'string') {
@@ -112,7 +115,12 @@
                 if ((hasInset && hasFixed) || (hasFixed && hasPointerEvents)) {
                     // 檢查是否包含視頻播放器
                     const hasPlayer = element.querySelector('video, iframe');
-                    if (!hasPlayer) {
+                    const isDialog = element.matches?.('[role="dialog"], [role="alertdialog"], [aria-modal="true"]') ||
+                        element.querySelector?.('form, input, select, textarea, [role="dialog"], [role="alertdialog"], [aria-modal="true"]');
+                    const signature = (className + ' ' + (element.id || '')).toLowerCase();
+                    // Generic fixed/inset layout is insufficient to remove real site UI.
+                    const hasAdSignal = /(^|[\s_-])(ad|ads|advert|advertisement|popunder|clickjack|sponsor|preroll|promo)([\s_-]|$)/.test(signature);
+                    if (!hasPlayer && !isDialog && hasAdSignal) {
                         // 保護年齡驗證對話框
                         if (isAgeVerificationOverlay(element)) return;
 
