@@ -114,6 +114,10 @@
             .join(', ');
     }
 
+    function isFalconInternalElement(element) {
+        return Boolean(element?.closest?.('[data-shield-internal="true"], [id^="__element_picker_"]'));
+    }
+
     function buildActiveSelectorEntries() {
         const hostname = window.location.hostname.toLowerCase();
         const entries = [];
@@ -162,7 +166,11 @@
     }
 
     function generateCSS() {
-        const selectors = buildActiveSelectorEntries().map((entry) => appendRescueGuard(entry.selector));
+        const selectors = buildActiveSelectorEntries().map((entry) =>
+            appendRescueGuard(entry.selector).split(',').map((part) =>
+                part.trim() + ':not(html):not(body):not([data-shield-internal="true"]):not([data-shield-internal="true"] *)'
+            ).join(', ')
+        );
 
         return [...new Set(selectors)].map((sel) => {
             return `${sel} { display: none !important; visibility: hidden !important; }`;
@@ -277,6 +285,7 @@
             for (let index = 0; index < elements.length && records.length < MAX_COLLECTED_ACTIONS; index += 1) {
                 const element = elements[index];
                 if (!(element instanceof HTMLElement)) continue;
+                if (isFalconInternalElement(element)) continue;
                 if (element.hasAttribute(RESCUED_ATTRIBUTE)) continue;
                 const record = {
                     id: element.getAttribute(ACTION_ATTRIBUTE) || undefined,

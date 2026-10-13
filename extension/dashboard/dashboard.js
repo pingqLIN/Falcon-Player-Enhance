@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         openai: 'https://api.openai.com/v1/responses',
         gemini: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
         lmstudio: 'http://127.0.0.1:1234/v1/chat/completions',
-        gateway: 'http://127.0.0.1:8787/v1',
+        gateway: '',
         chrome_builtin: ''
     };
     const AI_PROVIDER_TIMEOUTS = {
@@ -28,21 +28,21 @@ document.addEventListener('DOMContentLoaded', () => {
         gemini: 60000,
         lmstudio: 30000,
         gateway: 30000,
-        chrome_builtin: 5000
+        chrome_builtin: 30000
     };
     const AI_PROVIDER_TEMPERATURES = {
         openai: 0.1,
         gemini: 0.1,
         lmstudio: 0.1,
         gateway: 0.1,
-        chrome_builtin: 0.2
+        chrome_builtin: 1
     };
     const AI_PROVIDER_TOP_K = {
         openai: 40,
         gemini: 40,
         lmstudio: 40,
         gateway: 40,
-        chrome_builtin: 8
+        chrome_builtin: 3
     };
 
     // ========== Theme ==========
@@ -100,6 +100,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasStoredCredential = false;
     let providerSelectionRevision = 0;
     let aiServiceEnabled = false;
+    let activeProvider = '';
+    let providerFormLoaded = false;
+    let saveInFlight = false;
+    const providerDrafts = new Map();
+    const dirtyProviders = new Set();
+    const aiProviderContext = document.getElementById('ai-provider-context');
 
     async function initTheme() {
         const result = await chrome.storage.local.get(['theme']);
@@ -431,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProviderDefaultEndpoint(provider) {
-        return AI_PROVIDER_ENDPOINTS[provider] || AI_PROVIDER_ENDPOINTS.lmstudio;
+        return Object.prototype.hasOwnProperty.call(AI_PROVIDER_ENDPOINTS, provider) ? AI_PROVIDER_ENDPOINTS[provider] : AI_PROVIDER_ENDPOINTS.lmstudio;
     }
 
     function getProviderDefaultTimeout(provider) {
@@ -453,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getProviderDefaultModel(provider) {
         if (provider === 'openai') return 'gpt-5.4-mini';
         if (provider === 'gemini') return 'gemini-2.5-flash';
+        if (provider === 'gateway') return 'gpt-5.4-mini';
         if (provider === 'chrome_builtin') return 'Gemini Nano';
         return '';
     }
@@ -463,8 +470,26 @@ document.addEventListener('DOMContentLoaded', () => {
             card.classList.toggle('selected', isSelected);
             card.setAttribute('aria-pressed', String(isSelected));
             const badge = card.querySelector('.provider-card-active');
-            if (badge) badge.hidden = !isSelected;
+            if (badge) {
+                badge.hidden = card.dataset.provider !== activeProvider;
+                badge.textContent = aiServiceEnabled ? 'Active' : 'Configured';
+            }
         });
+    }
+
+    function renderProviderContext() {
+        const selected = getSelectedProvider();
+        setSelectedProviderCard(selected);
+        if (!aiProviderContext) return;
+        const active = activeProvider ? getProviderLabel(activeProvider) : 'Loading';
+        const draft = dirtyProviders.has(selected) ? ' · Unsaved edits' : '';
+        aiProviderContext.textContent = `Editing: ${getProviderLabel(selected)} · ${aiServiceEnabled ? 'Active' : 'Configured'}: ${active}${draft}. Save to apply; switching only changes the editor.`;
+    }
+
+    function markProviderDirty() {
+        if (!providerFormLoaded) return;
+        dirtyProviders.add(getSelectedProvider());
+        renderProviderContext();
     }
 
     function normalizeModelId(model) {
@@ -592,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyAiServiceControlState() {
         const disabled = aiServiceEnabled !== true;
         const aiPanel = document.getElementById('ai');
-        aiPanel?.classList.toggle('ai-service-disabled', disabled);
+        aiPanel?.classList.remove('ai-service-disabled');
 
         const controls = Array.from(document.querySelectorAll(
             '#ai-configure-panel input, #ai-configure-panel button, #ai-configure-panel select, ' +
@@ -606,19 +631,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 control.disabled = true;
                 return;
             }
-            control.disabled = disabled;
+            if (control === btnUpdateApiKey || control === btnConfirmApiKey) {
+                control.disabled = ['lmstudio', 'chrome_builtin'].includes(getSelectedProvider());
+            } else if (control === aiModelSelect) {
+                control.disabled = !providerFormLoaded || getSelectedProvider() === 'chrome_builtin';
+            } else {
+                control.disabled = (control === btnSaveLmstudio && saveInFlight) || ((control === btnSaveLmstudio || control === btnCheckLmstudio || control === btnRefreshAiModels) && !providerFormLoaded);
+            }
         });
 
         providerCards.forEach((card) => {
-            card.classList.toggle('disabled', disabled);
-            card.setAttribute('aria-disabled', String(disabled));
-            card.tabIndex = disabled ? -1 : 0;
+            card.classList.remove('disabled');
+            card.setAttribute('aria-disabled', 'false');
+            card.tabIndex = 0;
         });
 
         modeCards.forEach((card) => {
-            card.classList.toggle('disabled', disabled);
-            card.setAttribute('aria-disabled', String(disabled));
-            card.tabIndex = disabled ? -1 : (card.getAttribute('aria-checked') === 'true' ? 0 : -1);
+            card.classList.remove('disabled');
+            card.setAttribute('aria-disabled', 'false');
+            card.tabIndex = card.getAttribute('aria-checked') === 'true' ? 0 : -1;
         });
 
         if (disabled && lmstudioCandidateList) {
@@ -635,8 +666,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const providerLabel = getProviderLabel(provider);
         const mode = String(settings?.mode || 'off');
         const enabled = aiServiceEnabled === true;
-        const lastHealthOk = state?.lastHealthOk === true;
-        const error = state?.lastError ? String(state.lastError) : '';
+        const healthMatchesProvider = state?.lastProvider === provider;
+        const lastHealthOk = healthMatchesProvider && state?.lastHealthOk === true;
+        const error = healthMatchesProvider && state?.lastError ? String(state.lastError) : '';
         const model = settings?.model || getProviderDefaultModel(provider) || 'runtime default';
 
         const needsAttention = isChromeBuiltinAttentionState(provider, state, error);
@@ -652,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!enabled) {
             aiStatusTitle.textContent = 'AI disabled';
-            aiStatusSub.textContent = 'Provider settings are locked until AI is enabled.';
+            aiStatusSub.textContent = 'Provider settings remain editable while AI execution is off.';
             return;
         }
 
@@ -668,8 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const availability = response?.availability ? ` availability=${response.availability}` : '';
         const capabilityStatus = response?.capabilityStatus ? ` capabilityStatus=${response.capabilityStatus}` : '';
         const route = response?.route ? ` route=${response.route}` : '';
-        const downloadAttempt = response?.downloadAttempted
-            ? ` download=${response.downloadStarted ? 'started' : 'attempted'}`
+        const downloadAttempt = response?.downloadActionRequired
+            ? ' Download the on-device model with the explicit button under Chrome Built-in settings.'
             : '';
         const downloadError = response?.downloadError ? ` downloadError=${response.downloadError}` : '';
         const capability = response?.capability && typeof response.capability === 'object'
@@ -678,50 +710,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${error}${errorType}${availability}${capabilityStatus}${route}${downloadAttempt}${downloadError}${capability}`;
     }
 
-    function syncProviderDefaults(nextProvider) {
-        if (!lmstudioEndpoint || !lmstudioModel) {
-            lastSelectedProvider = nextProvider;
-            return;
-        }
-
-        const currentEndpoint = lmstudioEndpoint.value.trim();
-        const previousEndpoint = getProviderDefaultEndpoint(lastSelectedProvider);
-        if (!currentEndpoint || currentEndpoint === previousEndpoint) {
-            lmstudioEndpoint.value = getProviderDefaultEndpoint(nextProvider);
-        }
-
-        const currentModel = lmstudioModel.value.trim();
-        const knownDefaults = ['gpt-5.4-mini', 'gemini-2.5-flash', 'Gemini Nano', ''];
-        if (!currentModel || knownDefaults.includes(currentModel)) {
-            lmstudioModel.value = getProviderDefaultModel(nextProvider);
-        }
-
-        lastSelectedProvider = nextProvider;
-    }
-
     function selectProvider(nextProvider) {
-        if (aiServiceEnabled !== true) {
-            setLmStudioStatus('Enable AI before changing provider settings.', true);
-            return;
+        if (!providerCards.some((card) => card.dataset.provider === nextProvider)) return;
+        if (nextProvider === getSelectedProvider() && providerFormLoaded) return;
+        if (providerFormLoaded && dirtyProviders.has(lastSelectedProvider)) {
+            // Unsaved drafts stay in page memory, never in persistent storage.
+            providerDrafts.set(lastSelectedProvider, collectProviderSettings());
         }
+        providerFormLoaded = false;
         providerSelectionRevision += 1;
-        syncProviderDefaults(nextProvider);
-        if (aiProvider) {
-            aiProvider.value = nextProvider;
-        }
+        lastSelectedProvider = nextProvider;
+        if (aiProvider) aiProvider.value = nextProvider;
+        if (aiProviderToken) aiProviderToken.value = '';
+        if (lmstudioEndpoint) lmstudioEndpoint.value = getProviderDefaultEndpoint(nextProvider);
+        if (lmstudioModel) lmstudioModel.value = getProviderDefaultModel(nextProvider);
+        hasStoredCredential = false;
+        renderApiKeyState(false);
         setSelectedProviderCard(nextProvider);
         applyProviderFieldVisibility(nextProvider);
-        renderApiKeyState(hasStoredCredential, Boolean(aiProviderToken?.value.trim()));
-        if (nextProvider === 'chrome_builtin') window.FalconChromeBuiltin?.probe?.();
-        if (aiConfigurePanel) {
-            aiConfigurePanel.style.display = 'block';
-        }
-        renderAiStatusCard({
-            provider: nextProvider,
-            enabled: aiServiceEnabled === true,
-            mode: lmstudioMode?.value || 'off',
-            model: lmstudioModel?.value || getProviderDefaultModel(nextProvider)
-        });
+        applyAiServiceControlState();
+        renderProviderContext();
+        setLmStudioStatus(`Loading ${getProviderLabel(nextProvider)} settings...`);
         loadAiProviderSettings(nextProvider);
     }
 
@@ -972,20 +981,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderApiKeyState(hasStoredApiKey, false);
         if (lmstudioEnabled) lmstudioEnabled.checked = aiServiceEnabled === true;
-        if (lmstudioEndpoint) lmstudioEndpoint.value = settings?.endpoint || getProviderDefaultEndpoint(provider);
+        if (lmstudioEndpoint) lmstudioEndpoint.value = settings?.endpoint ?? getProviderDefaultEndpoint(provider);
         if (lmstudioModel) {
-            lmstudioModel.value = settings?.model || getProviderDefaultModel(provider);
+            lmstudioModel.value = settings?.model ?? getProviderDefaultModel(provider);
         }
         if (lmstudioModelStorage) {
             lmstudioModelStorage.value = settings?.modelStoragePath || '';
         }
         if (lmstudioMode) lmstudioMode.value = settings?.mode || 'hybrid';
-        if (lmstudioTimeout) lmstudioTimeout.value = String(settings?.timeoutMs || getProviderDefaultTimeout(provider));
-        if (lmstudioCooldown) lmstudioCooldown.value = String(settings?.cooldownMs || getProviderDefaultCooldown(provider));
+        if (lmstudioTimeout) lmstudioTimeout.value = String(settings?.timeoutMs ?? getProviderDefaultTimeout(provider));
+        if (lmstudioCooldown) lmstudioCooldown.value = String(settings?.cooldownMs ?? getProviderDefaultCooldown(provider));
         if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(settings?.temperature ?? getProviderDefaultTemperature(provider));
         if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(settings?.topK ?? getProviderDefaultTopK(provider));
         if (lmstudioDynamicRules) lmstudioDynamicRules.checked = settings?.enableDynamicRuleCandidates !== false;
-        window.FalconChromeBuiltin?.apply?.(settings || {});
+        if (provider === 'chrome_builtin') window.FalconChromeBuiltin?.apply?.(settings || {});
         applyProviderFieldVisibility(provider);
         setSelectedProviderCard(provider);
         setSelectedModeCard(lmstudioMode?.value || 'hybrid');
@@ -996,11 +1005,12 @@ document.addEventListener('DOMContentLoaded', () => {
         applyAiServiceControlState();
 
         if (state) {
-            const providerLabel = getProviderLabel(String(state.lastProvider || provider));
-            const health = state.lastHealthOk ? 'healthy' : 'not checked';
-            const latency = Number(state.lastLatencyMs || 0);
-            const modelInfo = state.lastResolvedModel ? ` model=${state.lastResolvedModel}` : '';
-            const error = state.lastError ? ` error=${state.lastError}` : '';
+            const providerLabel = getProviderLabel(provider);
+            const sameProvider = state.lastProvider === provider;
+            const health = sameProvider && state.lastHealthOk ? 'healthy' : 'not checked';
+            const latency = sameProvider ? Number(state.lastLatencyMs || 0) : 0;
+            const modelInfo = sameProvider && state.lastResolvedModel ? ` model=${state.lastResolvedModel}` : '';
+            const error = sameProvider && state.lastError ? ` error=${state.lastError}` : '';
             const credentialInfo = provider === 'lmstudio' || provider === 'chrome_builtin'
                 ? ' credential=not-required'
                 : hasStoredApiKey ? ' credential=session' : ' credential=empty';
@@ -1013,8 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             provider,
             enabled: aiServiceEnabled === true,
-            endpoint: lmstudioEndpoint?.value || getProviderDefaultEndpoint(provider),
-            model: lmstudioModel?.value || (
+            endpoint: lmstudioEndpoint?.value ?? getProviderDefaultEndpoint(provider),
+            model: lmstudioModel?.value ?? (
                 getProviderDefaultModel(provider)
             ),
             modelStoragePath: lmstudioModelStorage?.value || '',
@@ -1022,10 +1032,10 @@ document.addEventListener('DOMContentLoaded', () => {
             mode: lmstudioMode?.value || 'hybrid',
             timeoutMs: Number(lmstudioTimeout?.value || getProviderDefaultTimeout(provider)),
             cooldownMs: Number(lmstudioCooldown?.value || getProviderDefaultCooldown(provider)),
-            temperature: Number(chromeBuiltinTemperature?.value || getProviderDefaultTemperature(provider)),
-            topK: Number(chromeBuiltinTopK?.value || getProviderDefaultTopK(provider)),
+            temperature: Number(chromeBuiltinTemperature?.value ?? getProviderDefaultTemperature(provider)),
+            topK: Number(chromeBuiltinTopK?.value ?? getProviderDefaultTopK(provider)),
             enableDynamicRuleCandidates: lmstudioDynamicRules?.checked !== false,
-            ...(window.FalconChromeBuiltin?.collect?.() || {})
+            ...(provider === 'chrome_builtin' ? (window.FalconChromeBuiltin?.collect?.() || {}) : {})
         };
     }
 
@@ -1034,66 +1044,112 @@ document.addEventListener('DOMContentLoaded', () => {
         const providerLabel = getProviderLabel(provider);
         if (lmstudioEndpoint) lmstudioEndpoint.value = getProviderDefaultEndpoint(provider);
         if (lmstudioModel) lmstudioModel.value = getProviderDefaultModel(provider);
-        if (lmstudioModelStorage) lmstudioModelStorage.value = provider === 'lmstudio' ? '~/.lmstudio/models' : '';
+        if (lmstudioModelStorage) lmstudioModelStorage.value = '';
         if (lmstudioTimeout) lmstudioTimeout.value = String(getProviderDefaultTimeout(provider));
         if (lmstudioCooldown) lmstudioCooldown.value = String(getProviderDefaultCooldown(provider));
         if (chromeBuiltinTemperature) chromeBuiltinTemperature.value = String(getProviderDefaultTemperature(provider));
         if (chromeBuiltinTopK) chromeBuiltinTopK.value = String(getProviderDefaultTopK(provider));
         if (lmstudioDynamicRules) lmstudioDynamicRules.checked = true;
+        if (provider === 'chrome_builtin') {
+            window.FalconChromeBuiltin?.apply?.({ chromeSampling: 'runtime', chromeLanguages: ['en'], chromeResponseConstraint: true });
+        }
         renderAiStatusCard({
             provider,
             enabled: aiServiceEnabled === true,
             mode: lmstudioMode?.value || 'hybrid',
             model: getProviderDefaultModel(provider)
         });
+        markProviderDirty();
         setLmStudioStatus(`${providerLabel} defaults restored. Save settings to apply.`);
     }
 
-    async function loadAiProviderSettings(providerOverride = '') {
+    async function loadAiProviderSettings(providerOverride = '', initial = false) {
         const requestRevision = providerSelectionRevision;
-        const requestedProvider = providerOverride || getSelectedProvider();
+        const requestedProvider = initial ? '' : (providerOverride || getSelectedProvider());
         const response = await runtimeMessage({
             action: 'getAiProviderSettings',
-            provider: requestedProvider
+            ...(requestedProvider ? { provider: requestedProvider } : {})
         });
+        if (requestRevision !== providerSelectionRevision) return;
         if (!response?.success) {
+            providerFormLoaded = false;
+            applyAiServiceControlState();
             setLmStudioStatus('Unable to load AI provider settings.', true);
             return;
         }
-        if (requestRevision !== providerSelectionRevision) {
-            return;
+        if (requestedProvider && response.settings?.provider !== requestedProvider) return;
+        activeProvider = response.activeProvider || response.settings.provider;
+        const provider = response.settings.provider;
+        const draft = providerDrafts.get(provider);
+        hydrateProviderForm(draft
+            ? { ...response.settings, ...draft, hasApiKey: response.settings.hasApiKey }
+            : response.settings, response.state, response.aiEnabled);
+        if (draft?.apiKey && aiProviderToken) {
+            aiProviderToken.value = draft.apiKey;
+            renderApiKeyState(hasStoredCredential, true);
         }
-        if (String(response.settings?.provider || '') !== requestedProvider) {
-            return;
-        }
-        hydrateProviderForm(response.settings, response.state, response.aiEnabled);
+        providerFormLoaded = true;
+        applyAiServiceControlState();
+        renderProviderContext();
+        if (provider === 'chrome_builtin') window.FalconChromeBuiltin?.probe?.();
         await loadPolicyGateOverview();
     }
 
     async function saveAiProviderSettings() {
+        if (!providerFormLoaded || saveInFlight) return;
+        saveInFlight = true;
+        applyAiServiceControlState();
+        const revision = providerSelectionRevision;
         const settings = collectProviderSettings();
         const providerLabel = getProviderLabel(settings.provider);
-        const response = await runtimeMessage({
-            action: 'setAiProviderSettings',
-            settings
-        });
-        if (!response?.success) {
-            setLmStudioStatus(response?.error || `Failed to save ${providerLabel} settings.`, true);
-            return;
+        try {
+            const response = await runtimeMessage({
+                action: 'setAiProviderSettings',
+                settings
+            });
+            if (!response?.success) {
+                setLmStudioStatus(response?.error || `Failed to save ${providerLabel} settings.`, true);
+                return;
+            }
+            activeProvider = response.activeProvider || settings.provider;
+            const stillEditing = revision === providerSelectionRevision && getSelectedProvider() === settings.provider;
+            const unchanged = stillEditing && JSON.stringify(collectProviderSettings()) === JSON.stringify(settings);
+            const draft = providerDrafts.get(settings.provider);
+            if (unchanged) {
+                providerDrafts.delete(settings.provider);
+                dirtyProviders.delete(settings.provider);
+                hydrateProviderForm(response.settings, response.state, response.aiEnabled);
+                providerFormLoaded = true;
+            } else if (stillEditing) {
+                // A new change made during the save must not be overwritten by the response.
+                providerDrafts.delete(settings.provider);
+                dirtyProviders.add(settings.provider);
+            } else if (!draft || JSON.stringify(draft) === JSON.stringify(settings)) {
+                providerDrafts.delete(settings.provider);
+                dirtyProviders.delete(settings.provider);
+            }
+            renderProviderContext();
+            loadStatusBar();
+            setLmStudioStatus(`${providerLabel} saved and activated.${stillEditing && !unchanged ? ' Newer edits remain unsaved.' : ''}`);
+        } catch (error) {
+            setLmStudioStatus(String(error?.message || error), true);
+        } finally {
+            saveInFlight = false;
+            applyAiServiceControlState();
         }
-        hydrateProviderForm(response.settings, response.state, response.aiEnabled);
-        loadStatusBar();
-        setLmStudioStatus(`${providerLabel} provider settings saved.`);
     }
 
     async function runAiProviderHealthCheck() {
         const settings = collectProviderSettings();
         const providerLabel = getProviderLabel(settings.provider);
+        const revision = providerSelectionRevision;
+        if (dirtyProviders.has(settings.provider)) providerDrafts.set(settings.provider, settings);
         setLmStudioStatus(`Checking ${providerLabel}...`);
         const response = await runtimeMessage({
             action: 'runAiProviderHealthCheck',
             settings
         });
+        if (revision !== providerSelectionRevision) return;
         if (!response?.success) {
             setLmStudioStatus(formatAiHealthFailure(providerLabel, response), true);
             await loadAiProviderSettings(settings.provider);
@@ -1128,15 +1184,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modeCards.forEach((card) => {
         const activate = () => {
-            if (aiServiceEnabled !== true) {
-                setLmStudioStatus('Enable AI before changing mode settings.', true);
-                return;
-            }
             const mode = card.dataset.mode || 'off';
             if (lmstudioMode) {
                 lmstudioMode.value = mode;
             }
             setSelectedModeCard(mode);
+            markProviderDirty();
             renderAiStatusCard({
                 provider: lastSelectedProvider,
                 enabled: aiServiceEnabled === true,
@@ -1182,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             aiServiceEnabled = response.enabled !== false;
             applyAiServiceControlState();
+            renderProviderContext();
             renderAiStatusCard({
                 provider: lastSelectedProvider,
                 enabled: aiServiceEnabled === true,
@@ -1209,6 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         aiModelSelect.addEventListener('change', () => {
             if (!aiModelSelect.value || !lmstudioModel) return;
             lmstudioModel.value = aiModelSelect.value;
+            markProviderDirty();
             setLmStudioStatus(`Model set to ${aiModelSelect.value}. Save settings to apply.`);
         });
     }
@@ -1235,7 +1290,14 @@ document.addEventListener('DOMContentLoaded', () => {
         btnAcceptSelectedLmstudioCandidates.addEventListener('click', acceptSelectedDashboardCandidates);
     }
 
-    loadAiProviderSettings();
+    const onProviderFieldEdit = (event) => {
+        if (event.target?.closest?.('#ai-configure-panel, #chrome-builtin-panel, #ai .collapsible-section')) {
+            markProviderDirty();
+        }
+    };
+    document.getElementById('ai')?.addEventListener('input', onProviderFieldEdit);
+    document.getElementById('ai')?.addEventListener('change', onProviderFieldEdit);
+    loadAiProviderSettings('', true);
 
     // ========== Popup Player Settings ==========
     const togglePopupAutoFit = document.getElementById('toggle-popup-auto-fit');

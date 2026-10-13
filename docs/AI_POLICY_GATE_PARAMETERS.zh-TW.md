@@ -58,7 +58,7 @@
 
 目前重要事件權重大致如下：
 
-- `runtime_bootstrap`: `0.2`
+- `runtime_bootstrap`: `0`（診斷事件，不增加風險）
 - `blocked_popup`: `6`
 - `blocked_malicious_navigation`: `7`
 - `overlay_removed`: `4`
@@ -66,6 +66,8 @@
 - `suspicious_dom_churn`: `3`
 - `false_positive_signal`: `-5`
 - `user_override`: `-2`
+- `managed_redirect_listener_candidate`: `0`（未確認的導流候選事件）
+- 未定義的事件類型：預設權重為 `0`，記錄但不計分
 
 風險等級門檻：
 
@@ -137,8 +139,8 @@ Policy Gate 是 AI 建議真正進入 runtime 之前的安全閘門，用來決�
 
 顯示格式：
 
-- `Runtime Bootstrap ×6` 表示 `runtime_bootstrap` 事件累計 6 次
-- `Suspicious Dom Churn ×4` 表示觀察到 4 次可疑 DOM churn
+- `Runtime Bootstrap ×6` 屬於舊版範例；新版本的啟動事件仍保留在原始遙測，但不再列入主要風險證據
+- `Suspicious Dom Churn ×4` 表示 4 次實際計分的 DOM churn；20 秒內的重複事件仍可記錄，但不會重複計分
 - `Overlay Removed ×1` 表示移除過 1 次 overlay
 
 這些 evidence 只是在說明「為什麼現在分數是這樣」，不是單獨的封鎖命令。
@@ -172,3 +174,5 @@ Policy Gate 是 AI 建議真正進入 runtime 之前的安全閘門，用來決�
 - `AI_POLICY_GATE_DEFAULT_THRESHOLDS`
 - `AI_POLICY_GATE_ACTION_BUDGET`
 - Dashboard / Popup 中對應欄位名稱或顯示順序
+
+2026-10-10 計算規範修正詳見 [風險與遙測架構稽核](RISK_TELEMETRY_ARCHITECTURE_AUDIT_2026-10-10.zh-TW.md)：事件時間由背景決定、未知事件只紀錄不加分、DOM churn 計分冷卻、查詢時風險衰減、Policy Gate 需五分鐘內確認威脅佐證、拒絕過期策略與身分限制。

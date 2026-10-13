@@ -9,11 +9,10 @@
 /* ============================================================================
    Shadow DOM 覆蓋層 - 強制移除
    ============================================================================ */
+/* Only known ad-shadow hosts; never suppress generic Preact app roots. */
 #preact-border-shadow-host,
 [id*="preact-border"],
-[id*="shadow-host"],
-[id*="preact_border"],
-div[id^="preact"] {
+[id*="preact_border"] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
@@ -61,8 +60,6 @@ div[id^="preact"] {
 [class*=" ad-overlay"],
 [class*="click-overlay"],
 [class*="clickjack"],
-[class*="popup-overlay"],
-[class*="interstitial"],
 [class*="preroll-overlay"],
 [id*="overlay-ad"],
 [id*="ad-overlay"],
@@ -84,9 +81,7 @@ div[id^="preact"] {
 #colorbox,
 .cboxOverlay,
 #cboxOverlay,
-.fancybox-overlay,
-.modal-backdrop.ad,
-[class*="lightbox-overlay"] {
+.modal-backdrop.ad {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;

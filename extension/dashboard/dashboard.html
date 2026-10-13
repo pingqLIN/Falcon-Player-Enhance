@@ -299,6 +299,7 @@
                             <div class="provider-card-active" hidden>Active</div>
                         </div>
                     </div>
+                    <div class="info-text" id="ai-provider-context" role="status" aria-live="polite">Loading provider settings...</div>
                 </div>
 
                 <!-- Configure fields (per-provider, shown/hidden by JS) -->
@@ -349,6 +350,14 @@
                     <div class="info-text" id="chrome-probe-status" data-i18n="dashboardAiChromeIntro">Prompt API shipped for extensions in Chrome 138. Numeric temperature and topK stay extension-only and must be set together or omitted. Traditional Chinese is not a Prompt API output language yet.</div>
                     <div class="info-text" id="chrome-params-summary"></div>
                     <div class="input-row">
+                        <button type="button" class="btn-secondary" id="btn-download-chrome-model">Download / prepare on-device model</button>
+                        <span class="info-text" id="chrome-download-progress" role="status" aria-live="polite">Model download starts only when you click this button.</span>
+                    </div>
+                    <div class="input-row">
+                        <button type="button" class="btn-secondary" id="btn-chrome-test-inference">Run diagnostic Prompt API inference</button>
+                        <span class="info-text" id="chrome-test-inference-status" role="status">Run a user-triggered test using these sampling options.</span>
+                    </div>
+                    <div class="input-row">
                         <label class="ai-field-label" for="chrome-sampling-mode" data-i18n="dashboardAiSamplingLabel">Sampling</label>
                         <select id="chrome-sampling-mode" class="text-input">
                             <option value="runtime" data-i18n="dashboardAiSamplingRuntime">Runtime defaults</option>
@@ -372,6 +381,43 @@
                         <div class="collapsible-body" id="chrome-flags-list"></div>
                     </details>
                 </div>
+
+                <!-- Opt-in cross-layer observability (no autonomous data sharing) -->
+                <details class="settings-group" id="ai-observability-panel">
+                    <summary class="settings-header">AI Observability / ?? AI ??</summary>
+                    <div class="info-text">Temporary 15-minute, host-scoped diagnostics. Correlates browser risk events with Falcon Prompt API requests/results. Off by default. No cloud upload.</div>
+                    <div class="input-row">
+                        <label class="ai-field-label" for="ai-observer-host">Observe website</label>
+                        <select id="ai-observer-host" class="text-input">
+                            <option value="">Select an open browser tab...</option>
+                        </select>
+                        <button type="button" id="ai-observer-refresh-tabs" class="btn-secondary">Refresh tabs</button>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <div class="setting-title">Include model output excerpts (optional)</div>
+                            <div class="setting-desc">May contain site content. Off by default; text is length-limited and redacted, but automated redaction is not a privacy guarantee.</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input id="ai-observer-model-output" type="checkbox">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="input-row">
+                        <label class="ai-field-label" for="ai-observer-bridge-token">Local bridge token (optional)</label>
+                        <input id="ai-observer-bridge-token" type="password" class="text-input" autocomplete="off"
+                            placeholder="Leave blank for browser-only capture">
+                    </div>
+                    <div class="info-text">For a live external-AI read-only feed, run <code>node scripts/ai-observer-bridge.js</code> locally, then paste its token here. Events are written only to the localhost bridge, never directly to an AI service.</div>
+                    <div class="group-footer">
+                        <button type="button" id="ai-observer-start" class="btn-primary">Start 15-min capture</button>
+                        <button type="button" id="ai-observer-stop" class="btn-secondary">Stop capture</button>
+                        <button type="button" id="ai-observer-clear" class="btn-secondary">Clear trace</button>
+                        <button type="button" id="ai-observer-export" class="btn-secondary">Export JSON</button>
+                    </div>
+                    <div class="info-text" id="ai-observer-status" role="status" aria-live="polite">Off. No browsing data is being captured.</div>
+                    <pre id="ai-observer-events" style="white-space:pre-wrap;overflow:auto;max-height:320px;font-size:11px;line-height:1.4;border:1px solid var(--separator);border-radius:8px;padding:10px" aria-label="Recent diagnostic events">No diagnostic events.</pre>
+                </details>
 
                 <!-- Mode selection (radio cards) -->
                 <div class="settings-group">
@@ -565,6 +611,7 @@
     </div>
     <script src="../content/i18n.js"></script>
     <script src="chrome-builtin-panel.js"></script>
+    <script src="ai-observability-panel.js"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>

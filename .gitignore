@@ -34,6 +34,9 @@ _metadata/
 # Local browser profile snapshots
 .browser-profiles/
 
+# Opt-in AI diagnostic traces. Never commit browsing/model output logs.
+.falcon-observability/
+
 # Temporary scan files
 .tmp_*.js
 
