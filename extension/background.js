@@ -2866,6 +2866,7 @@ function buildDefaultAiProviderState() {
     lastRulePreviewAt: 0,
     lastDiagnosticAt: 0,
     recentRequests: [],
+    tokenUsage: {},
     perHostLastRun: {}
   };
 }
@@ -2963,6 +2964,15 @@ function normalizeAiProviderState(input = {}) {
     ...defaults,
     ...input,
     recentRequests,
+    tokenUsage: Object.fromEntries(
+      Object.entries(input.tokenUsage || {})
+        .filter(([provider]) => AI_PROVIDER_TYPES.includes(provider))
+        .map(([provider, counts]) => [provider, {
+          input: Math.max(0, Number(counts?.input || 0) || 0),
+          output: Math.max(0, Number(counts?.output || 0) || 0),
+          requests: Math.max(0, Number(counts?.requests || 0) || 0)
+        }])
+    ),
     perHostLastRun:
       input.perHostLastRun && typeof input.perHostLastRun === 'object' ? input.perHostLastRun : {}
   };
@@ -2990,6 +3000,29 @@ function recordAiProviderDiagnostic(type, detail = {}) {
       entry,
       ...(Array.isArray(aiState.providerState?.recentRequests) ? aiState.providerState.recentRequests : [])
     ].slice(0, AI_PROVIDER_ADVISORY_DIAGNOSTIC_MAX_ENTRIES)
+  });
+  scheduleAiPersist();
+}
+
+// Count only exact provider-reported token totals, never estimate using character counts.
+function recordAiProviderTokenUsage(provider, payload) {
+  if (!AI_PROVIDER_TYPES.includes(provider) || !payload || typeof payload !== 'object') return;
+  const usage = payload.usage || payload.usageMetadata;
+  if (!usage || typeof usage !== 'object') return;
+  const input = Number(usage.input_tokens ?? usage.prompt_tokens ?? usage.promptTokenCount);
+  const output = Number(usage.output_tokens ?? usage.completion_tokens ?? usage.candidatesTokenCount);
+  if (![input, output].every((value) => Number.isFinite(value) && value >= 0)) return;
+  const totals = aiState.providerState?.tokenUsage?.[provider] || { input: 0, output: 0, requests: 0 };
+  aiState.providerState = normalizeAiProviderState({
+    ...aiState.providerState,
+    tokenUsage: {
+      ...(aiState.providerState?.tokenUsage || {}),
+      [provider]: {
+        input: Number(totals.input || 0) + input,
+        output: Number(totals.output || 0) + output,
+        requests: Number(totals.requests || 0) + 1
+      }
+    }
   });
   scheduleAiPersist();
 }
@@ -6137,6 +6170,7 @@ async function requestLmStudioAdvisory(hostname, context, policy) {
   }
 
   const payload = await response.json();
+  recordAiProviderTokenUsage('lmstudio', payload);
   const rawText =
     payload?.choices?.[0]?.message?.content ||
     payload?.output_text ||
@@ -6215,6 +6249,7 @@ async function requestGatewayAdvisory(hostname, context, policy) {
   }
 
   const payload = await response.json();
+  recordAiProviderTokenUsage('gateway', payload);
   const advisory = normalizeGatewayAdvisory(hostname, payload, policy, settings);
   if (!advisory) {
     throw new Error('gateway_invalid_policy');
@@ -6286,6 +6321,7 @@ async function requestOpenAiAdvisory(hostname, context, policy) {
   }
 
   const payload = await response.json();
+  recordAiProviderTokenUsage('openai', payload);
   const advisory = normalizeOpenAiAdvisory(hostname, payload, policy, settings);
   if (!advisory) {
     throw new Error('openai_invalid_policy');
@@ -6353,6 +6389,7 @@ async function requestGeminiAdvisory(hostname, context, policy) {
   }
 
   const payload = await response.json();
+  recordAiProviderTokenUsage('gemini', payload);
   const advisory = normalizeGeminiAdvisory(hostname, payload, policy, settings);
   if (!advisory) {
     throw new Error('gemini_invalid_policy');
@@ -6625,6 +6662,7 @@ async function requestAiElementClassification(hostname, features = {}) {
       }
       if (!response?.ok) throw new Error(`openai_element_http_${response?.status || 0}`);
       const payload = await response.json();
+      recordAiProviderTokenUsage('openai', payload);
       const classification = {
         ...parseProviderElementClassification('openai', extractOpenAiOutputText(payload), localResult),
         provider: 'openai'
@@ -6660,6 +6698,7 @@ async function requestAiElementClassification(hostname, features = {}) {
       }
       if (!response?.ok) throw new Error(`gemini_element_http_${response?.status || 0}`);
       const payload = await response.json();
+      recordAiProviderTokenUsage('gemini', payload);
       const classification = {
         ...parseProviderElementClassification('gemini', extractGeminiOutputText(payload), localResult),
         provider: 'gemini'
@@ -6772,6 +6811,7 @@ async function requestAiElementClassification(hostname, features = {}) {
       }
       if (!response?.ok) throw new Error(`lmstudio_element_http_${response?.status || 0}`);
       const payload = await response.json();
+      recordAiProviderTokenUsage('lmstudio', payload);
       const rawText =
         payload?.choices?.[0]?.message?.content ||
         payload?.output_text ||

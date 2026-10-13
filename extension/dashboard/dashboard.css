@@ -1219,3 +1219,39 @@ details.collapsible-section[open] .collapsible-summary::after {
     font-size: 13px;
     font-weight: 600;
 }
+
+
+/* AI workspace: service editor + generated candidates, isolated from other tabs. */
+#ai .ai-workspace { display:grid;grid-template-columns:minmax(380px,1.07fr) minmax(320px,.93fr);align-items:start;gap:18px; }
+#ai .ai-settings-column { min-width:0;display:flex;flex-direction:column;gap:12px; }
+#ai .ai-settings-column > .settings-group, #ai .ai-candidates-pane { margin:0;min-width:0; }
+#ai .ai-provider-selector select { width:100%;margin:12px 0 8px;min-height:38px; }
+#ai .ai-provider-advanced > summary { cursor:pointer;list-style-position:inside; }
+#ai .ai-advanced-inner { padding-top:12px; }
+#ai .ai-advanced-inner > .settings-group { margin:0 0 10px; }
+#ai .ai-candidates-pane { position:sticky;top:12px;max-height:calc(100vh - 120px);overflow-y:auto; }
+#ai .ai-connection-type { font-size:11px;color:var(--text-secondary);padding:4px 8px;border:1px solid var(--separator);border-radius:999px;text-align:center; }
+#ai .ai-status-card { gap:10px;flex-wrap:wrap; }
+#ai .ai-token-metrics { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 8px; }
+#ai .ai-token-metrics > div { padding:12px;border:1px solid var(--separator);border-radius:8px;min-width:0; }
+#ai .ai-metric-caption { display:block;font-size:11px;color:var(--text-secondary);margin-bottom:6px; }
+#ai .ai-token-metrics strong { font-size:17px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+#ai .ai-log-heading { margin-top:18px; }
+#ai .ai-operation-log { padding:8px 10px 8px 30px;margin:8px 0 0;max-height:150px;overflow-y:auto;border:1px solid var(--separator);border-radius:8px;font-size:11px;line-height:1.6;overflow-wrap:anywhere; }
+#ai .ai-operation-log li { padding:3px 0;border-bottom:1px solid var(--separator); }
+#ai .ai-operation-log time { color:var(--text-secondary);margin-right:7px; }
+#ai .ai-save-bar .group-footer { display:flex;flex-wrap:wrap;gap:8px; }
+#ai .ai-save-bar button { min-width:70px; }
+#ai #btn-toggle-ai[aria-pressed="true"] { border-color:var(--toggle-on);color:var(--text-primary); }
+@media (max-width: 1080px) {
+  #ai .ai-workspace { grid-template-columns:minmax(0,1fr); }
+  #ai .ai-candidates-pane { position:static;max-height:none; }
+}
+@media (max-width:640px) {
+  #ai .ai-token-metrics { grid-template-columns:1fr; }
+  #ai .ai-save-bar button { flex:1 1 auto; }
+}
+
+/* Unlike compact settings tabs, AI requires room for the two independent panes. */
+#ai.tab-panel { max-width: 1380px; }
+#ai [hidden] { display: none !important; }
