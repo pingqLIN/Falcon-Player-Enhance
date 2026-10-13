@@ -389,6 +389,28 @@
                         <label class="toggle-switch"><input type="checkbox" id="chrome-response-constraint" checked><span class="slider"></span></label>
                     </div>
                     <div class="chrome-docs-links" id="chrome-docs-links"></div>
+                    <details class="collapsible-section" id="chrome-usecase-inspector">
+                        <summary class="collapsible-summary">Chrome Built-in AI · Use Cases / Model Assets (read-only)</summary>
+                        <div class="collapsible-body">
+                            <p class="info-text">Chrome internal Use Cases are not public API settings. Requested only indicates asset demand, not the actual model selected. Nothing here alters Chrome models or flags.</p>
+                            <div class="input-row">
+                                <button type="button" class="btn-secondary" id="chrome-usecase-open-native">Open original chrome://on-device-internals</button>
+                                <button type="button" class="btn-secondary" id="chrome-usecase-availability">Check public API availability</button>
+                            </div>
+                            <p class="info-text">Public availability checks are manually triggered and may initiate background downloads on some Chrome configurations. They do not call create().</p>
+                            <div class="input-row">
+                                <label for="chrome-usecase-file">Broker Use Cases snapshot (JSON)</label>
+                                <input id="chrome-usecase-file" type="file" accept=".json,application/json" aria-label="Import read-only Broker snapshot">
+                            </div>
+                            <div class="input-row">
+                                <label for="chrome-model-file">Per-model asset inventory (JSON)</label>
+                                <input id="chrome-model-file" type="file" accept=".json,application/json" aria-label="Import read-only asset inventory">
+                            </div>
+                            <div id="chrome-usecase-status" class="info-text" role="status" aria-live="polite">No imported snapshot. Native internals stay in Chrome's protected tab.</div>
+                            <div id="chrome-usecase-list" style="max-height:280px;overflow:auto" aria-label="Use Case availability results"></div>
+                            <div id="chrome-asset-list" style="max-height:280px;overflow:auto" aria-label="Per-model asset results"></div>
+                        </div>
+                    </details>
                     <details class="collapsible-section">
                         <summary class="collapsible-summary" data-i18n="dashboardAiFlagsHeader">Experimental flags</summary>
                         <div class="collapsible-body" id="chrome-flags-list"></div>
@@ -609,6 +631,7 @@
     </div>
     <script src="../content/i18n.js"></script>
     <script src="chrome-builtin-panel.js"></script>
+    <script src="chrome-usecase-inspector.js"></script>
     <script src="ai-observability-panel.js"></script>
     <script src="dashboard.js"></script>
 </body>
