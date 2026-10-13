@@ -69,9 +69,11 @@ assert.equal(secrets.chrome_builtin, undefined);
 
 assert(html.includes('id="ai-provider-context"'), 'active/editing context is missing');
 assert(dashboard.includes('const providerDrafts = new Map()'), 'per-provider unsaved drafts are missing');
-assert(dashboard.includes('providerDrafts.set(lastSelectedProvider, collectProviderSettings())'), 'provider switch does not isolate unsaved drafts');
+assert(dashboard.includes('providerDrafts.set(lastSelectedProvider, collectProviderSettings(lastSelectedProvider))'), 'provider switch does not isolate unsaved drafts');
 assert(dashboard.includes("loadAiProviderSettings('', true)"), 'initial dashboard must load active provider');
-assert(dashboard.includes('card.dataset.provider !== activeProvider'), 'selected card should not be mislabelled active');
+assert(html.includes('id="ai-provider"'), 'provider selector missing');
+assert(!html.includes('id="provider-card-grid"'), 'legacy provider cards should be removed');
+assert(dashboard.includes('if (aiProvider) aiProvider.value = provider'), 'provider dropdown must reflect active edit selection');
 assert(dashboard.includes('AI_PROVIDER_ENDPOINTS, provider'), 'empty Chrome endpoint needs its own default');
 assert(dashboard.includes('chromeBuiltinTemperature?.value ??'), 'temperature zero must not be treated as missing');
 assert(dashboard.includes("provider === 'chrome_builtin' ? (window.FalconChromeBuiltin?.collect?.()"), 'Chrome-only fields must not be applied to other providers');

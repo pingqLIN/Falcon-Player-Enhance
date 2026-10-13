@@ -106,6 +106,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const providerDrafts = new Map();
     const dirtyProviders = new Set();
     const aiProviderContext = document.getElementById('ai-provider-context');
+    const aiToggleButton = document.getElementById('btn-toggle-ai');
+    const aiOperationLog = document.getElementById('ai-operation-log');
+    const aiTokenSessionDisplay = document.getElementById('ai-tokens-session');
+    const aiTokenTotalDisplay = document.getElementById('ai-tokens-total');
+    const aiTokenNote = document.getElementById('ai-token-note');
+    const aiConnectionType = document.getElementById('ai-connection-type');
+    const aiUsageSessionBaseline = new Map();
+    const aiOperationEntries = [];
+    const aiSeenDiagnostics = new Set();
+    function safeAiLog(value) {
+        return String(value ?? '').replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+            .replace(/sk-[A-Za-z0-9_-]{8,}/g, '[redacted]')
+            .replace(/(api[_-]?key|token|access_token|secret)=([^\s&]+)/gi, '$1=[redacted]')
+            .slice(0, 240);
+    }
+    function appendAiLog(value, kind = 'info') {
+        if (!aiOperationLog) return;
+        const message = safeAiLog(value);
+        const last = aiOperationEntries[0];
+        if (last?.message === message) return;
+        aiOperationEntries.unshift({ message, kind, time: new Date().toLocaleTimeString() });
+        aiOperationEntries.length = Math.min(aiOperationEntries.length, 12);
+        aiOperationLog.replaceChildren();
+        aiOperationEntries.forEach((entry) => {
+            const item = document.createElement('li');
+            const time = document.createElement('time');
+            time.textContent = entry.time;
+            const text = document.createElement('span');
+            text.textContent = entry.message;
+            item.append(time, text);
+            aiOperationLog.appendChild(item);
+        });
+    }
+    function renderAiTelemetry(state) {
+        const provider = getSelectedProvider();
+        const reported = state?.tokenUsage?.[provider];
+        const valid = reported && Number.isFinite(reported.input) && Number.isFinite(reported.output);
+        if (valid) {
+            if (!aiUsageSessionBaseline.has(provider)) {
+                aiUsageSessionBaseline.set(provider, { input: reported.input, output: reported.output });
+            }
+            const baseline = aiUsageSessionBaseline.get(provider);
+            aiTokenSessionDisplay.textContent =
+                `${Math.max(0, reported.input - baseline.input).toLocaleString()} / ${Math.max(0, reported.output - baseline.output).toLocaleString()}`;
+            aiTokenTotalDisplay.textContent =
+                `${reported.input.toLocaleString()} / ${reported.output.toLocaleString()}`;
+        } else {
+            if (aiTokenSessionDisplay) aiTokenSessionDisplay.textContent = '— / —';
+            if (aiTokenTotalDisplay) aiTokenTotalDisplay.textContent = '— / —';
+        }
+        if (aiTokenNote) aiTokenNote.textContent = valid
+            ? 'In / Out · provider-reported usage only. Session starts when this Dashboard opens; unsupported requests are not estimated.'
+            : 'No reported token usage for this provider yet. Unsupported APIs are not estimated.';
+        (Array.isArray(state?.recentRequests) ? state.recentRequests : [])
+            .filter((entry) => entry.provider === provider).slice(0, 5).reverse()
+            .forEach((entry) => {
+                const key = [entry.ts, entry.type, entry.provider, entry.cacheKey, entry.errorType].join(':');
+                if (aiSeenDiagnostics.has(key)) return;
+                aiSeenDiagnostics.add(key);
+                if (aiSeenDiagnostics.size > 120) aiSeenDiagnostics.clear();
+                const stamp = Number(entry.ts) ? new Date(entry.ts).toLocaleTimeString() : '';
+                appendAiLog(`${stamp} ${entry.type} · ${entry.reason || entry.errorType || entry.latencyMs + 'ms'}`);
+            });
+    }
 
     async function initTheme() {
         const result = await chrome.storage.local.get(['theme']);
@@ -465,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setSelectedProviderCard(provider) {
+        if (aiProvider) aiProvider.value = provider;
         providerCards.forEach((card) => {
             const isSelected = card.dataset.provider === provider;
             card.classList.toggle('selected', isSelected);
@@ -562,8 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getSelectedProvider() {
-        const selectedCard = providerCards.find((card) => card.classList.contains('selected'));
-        return selectedCard?.dataset.provider || lastSelectedProvider || aiProvider?.value || 'openai';
+        return aiProvider?.value || lastSelectedProvider || 'openai';
     }
 
     function setSelectedModeCard(mode) {
@@ -652,6 +716,12 @@ document.addEventListener('DOMContentLoaded', () => {
             card.tabIndex = card.getAttribute('aria-checked') === 'true' ? 0 : -1;
         });
 
+        if (aiToggleButton) {
+            aiToggleButton.disabled = !providerFormLoaded;
+            aiToggleButton.textContent = aiServiceEnabled ? 'ON · disable' : 'OFF · enable';
+            aiToggleButton.setAttribute('aria-pressed', String(aiServiceEnabled));
+            aiToggleButton.title = aiServiceEnabled ? 'Disable AI service' : 'Enable AI service';
+        }
         if (disabled && lmstudioCandidateList) {
             lmstudioCandidateList.querySelectorAll('button, input').forEach((control) => {
                 control.disabled = true;
@@ -661,37 +731,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAiStatusCard(settings, state) {
         if (!aiStatusTitle || !aiStatusSub || !aiStatusDot) return;
-
         const provider = String(settings?.provider || lastSelectedProvider || 'openai');
-        const providerLabel = getProviderLabel(provider);
-        const mode = String(settings?.mode || 'off');
-        const enabled = aiServiceEnabled === true;
-        const healthMatchesProvider = state?.lastProvider === provider;
-        const lastHealthOk = healthMatchesProvider && state?.lastHealthOk === true;
-        const error = healthMatchesProvider && state?.lastError ? String(state.lastError) : '';
-        const model = settings?.model || getProviderDefaultModel(provider) || 'runtime default';
-
-        const needsAttention = isChromeBuiltinAttentionState(provider, state, error);
-
+        const label = getProviderLabel(provider);
+        const model = state?.lastProvider === provider && state?.lastResolvedModel
+            ? state.lastResolvedModel : settings?.model || getProviderDefaultModel(provider) || 'runtime default';
+        const checked = state?.lastProvider === provider && Number(state?.lastHealthCheckAt) > 0;
+        const healthy = checked && state?.lastHealthOk === true;
+        const error = checked ? safeAiLog(state?.lastError || '') : '';
+        const connection = provider === 'chrome_builtin' ? 'On-device · Prompt API'
+            : provider === 'lmstudio' ? 'Local API'
+            : 'API';
         aiStatusDot.classList.remove('online', 'warning', 'error');
-        if (enabled && lastHealthOk) {
-            aiStatusDot.classList.add('online');
-        } else if (enabled && needsAttention) {
-            aiStatusDot.classList.add('warning');
-        } else if (enabled && error) {
-            aiStatusDot.classList.add('error');
+        if (aiServiceEnabled && healthy) aiStatusDot.classList.add('online');
+        if (aiServiceEnabled && checked && !healthy) {
+            aiStatusDot.classList.add(isChromeBuiltinAttentionState(provider, state, error) ? 'warning' : 'error');
         }
-
-        if (!enabled) {
-            aiStatusTitle.textContent = 'AI disabled';
-            aiStatusSub.textContent = 'Provider settings remain editable while AI execution is off.';
-            return;
-        }
-
-        aiStatusTitle.textContent = 'AI enabled';
-        aiStatusSub.textContent = error
-            ? `${providerLabel} · ${model} · ${error}${needsAttention ? ' · setup needed' : ''}`
-            : `${providerLabel} · ${model} · mode=${mode}${lastHealthOk ? ' · healthy' : ''}`;
+        aiStatusTitle.textContent = `${label} · ${model}`;
+        const readiness = !aiServiceEnabled ? 'Disabled' : !checked ? 'Not tested'
+            : healthy ? 'Online · last test passed' : 'Check failed';
+        aiStatusSub.textContent = `${readiness} · ${settings?.mode || 'off'}${error ? ' · ' + error : ''}`;
+        if (aiConnectionType) aiConnectionType.textContent = connection;
     }
 
     function formatAiHealthFailure(providerLabel, response = {}) {
@@ -711,11 +770,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectProvider(nextProvider) {
-        if (!providerCards.some((card) => card.dataset.provider === nextProvider)) return;
-        if (nextProvider === getSelectedProvider() && providerFormLoaded) return;
+        if (!Object.prototype.hasOwnProperty.call(AI_PROVIDER_ENDPOINTS, nextProvider)) return;
+        if (nextProvider === lastSelectedProvider && providerFormLoaded) return;
         if (providerFormLoaded && dirtyProviders.has(lastSelectedProvider)) {
             // Unsaved drafts stay in page memory, never in persistent storage.
-            providerDrafts.set(lastSelectedProvider, collectProviderSettings());
+            providerDrafts.set(lastSelectedProvider, collectProviderSettings(lastSelectedProvider));
         }
         providerFormLoaded = false;
         providerSelectionRevision += 1;
@@ -964,6 +1023,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lmstudioStatus) return;
         lmstudioStatus.textContent = text;
         lmstudioStatus.style.color = isError ? 'var(--danger, #b42318)' : '';
+        appendAiLog(text, isError ? 'error' : 'info');
     }
 
     function hydrateProviderForm(settings, state, aiEnabled = aiServiceEnabled) {
@@ -1002,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiConfigurePanel.style.display = 'block';
         }
         renderAiStatusCard(settings, state);
+        renderAiTelemetry(state);
         applyAiServiceControlState();
 
         if (state) {
@@ -1018,8 +1079,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function collectProviderSettings() {
-        const provider = getSelectedProvider();
+    function collectProviderSettings(providerOverride = '') {
+        const provider = providerOverride || getSelectedProvider();
         return {
             provider,
             enabled: aiServiceEnabled === true,
@@ -1253,6 +1314,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSaveLmstudio) {
         btnSaveLmstudio.addEventListener('click', saveAiProviderSettings);
     }
+    if (aiToggleButton && lmstudioEnabled) {
+        aiToggleButton.addEventListener('click', () => {
+            if (!providerFormLoaded) return;
+            lmstudioEnabled.checked = !lmstudioEnabled.checked;
+            lmstudioEnabled.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
     if (btnCheckLmstudio) {
         btnCheckLmstudio.addEventListener('click', runAiProviderHealthCheck);
     }
@@ -1278,7 +1346,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-            downloadJsonFile(`falcon-ai-candidates-${stamp}.json`, response.candidates || {});
+            const settings = collectProviderSettings();
+            delete settings.apiKey;
+            // URL query credentials must never be present in an exported backup.
+            settings.endpoint = String(settings.endpoint || '').replace(
+                /([?&](?:api[_-]?key|key|token|access_token|secret|password)=)[^&#]+/gi,
+                '$1[redacted]'
+            );
+            downloadJsonFile(`falcon-ai-backup-${stamp}.json`, {
+                version: 1,
+                createdAt: new Date().toISOString(),
+                note: 'API credentials and observer tokens are intentionally excluded. Restore requires manual review.',
+                activeProvider,
+                selectedProvider: settings.provider,
+                settings,
+                candidates: response.candidates || {}
+            });
+            setLmStudioStatus('Settings and generated candidates backed up as JSON (without credentials).');
         });
     }
     if (btnSelectAllLmstudioCandidates) {

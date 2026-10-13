@@ -246,6 +246,8 @@
                 <header class="panel-header">
                     <h1 data-i18n="dashboardAiHeading">AI</h1>
                 </header>
+                <div class="ai-workspace">
+                <div class="ai-settings-column">
 
                 <!-- AI status card -->
                 <div class="settings-group">
@@ -257,54 +259,27 @@
                                 <div class="ai-status-sub" id="ai-status-sub">–</div>
                             </div>
                         </div>
-                        <label class="toggle-switch" title="Enable AI policy control">
-                            <input type="checkbox" id="lmstudio-enabled" aria-label="Enable AI policy control" title="Enable AI policy control">
-                            <span class="slider"></span>
-                        </label>
+                        <span class="ai-connection-type" id="ai-connection-type">Connection: not checked</span>
+                        <input type="checkbox" id="lmstudio-enabled" hidden aria-label="Enable AI policy control">
                     </div>
                 </div>
 
-                <!-- Provider cards -->
-                <div class="settings-group">
-                    <div class="settings-header" data-i18n="dashboardAiProviderHeader">Provider</div>
-                    <div class="provider-card-grid" id="provider-card-grid">
-                        <div class="provider-card" data-provider="openai" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">🤖</div>
-                            <div class="provider-card-name">OpenAI</div>
-                            <div class="provider-card-sub">GPT-5.4-mini</div>
-                            <div class="provider-card-active" hidden>Active</div>
-                        </div>
-                        <div class="provider-card" data-provider="gemini" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">✨</div>
-                            <div class="provider-card-name">Gemini</div>
-                            <div class="provider-card-sub">Google AI</div>
-                            <div class="provider-card-active" hidden>Active</div>
-                        </div>
-                        <div class="provider-card" data-provider="lmstudio" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">🖥️</div>
-                            <div class="provider-card-name">LM Studio</div>
-                            <div class="provider-card-sub">Local model</div>
-                            <div class="provider-card-active" hidden>Active</div>
-                        </div>
-                        <div class="provider-card" data-provider="gateway" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">🔗</div>
-                            <div class="provider-card-name">Gateway</div>
-                            <div class="provider-card-sub">Custom endpoint</div>
-                            <div class="provider-card-active" hidden>Active</div>
-                        </div>
-                        <div class="provider-card" data-provider="chrome_builtin" role="button" tabindex="0" aria-pressed="false">
-                            <div class="provider-card-logo">◆</div>
-                            <div class="provider-card-name">Chrome Built-in</div>
-                            <div class="provider-card-sub">Gemini Nano</div>
-                            <div class="provider-card-active" hidden>Active</div>
-                        </div>
-                    </div>
+                <!-- Only one provider runs at a time; all providers share the same editor. -->
+                <div class="settings-group ai-provider-selector">
+                    <label class="settings-header" for="ai-provider">AI service / Provider</label>
+                    <select id="ai-provider" class="text-input" aria-label="Choose AI service">
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Google Gemini API</option>
+                        <option value="lmstudio">LM Studio · Local</option>
+                        <option value="gateway">Custom Gateway</option>
+                        <option value="chrome_builtin">Chrome Built-in Gemini</option>
+                    </select>
                     <div class="info-text" id="ai-provider-context" role="status" aria-live="polite">Loading provider settings...</div>
                 </div>
 
                 <!-- Configure fields (per-provider, shown/hidden by JS) -->
                 <div class="settings-group" id="ai-configure-panel" style="display:none">
-                    <div class="settings-header" data-i18n="dashboardAiConfigureHeader">Configure</div>
+                    <div class="settings-header">01 / Common settings</div>
 
                     <!-- API key row (always masked) -->
                     <div class="input-row ai-key-row" id="ai-key-row">
@@ -345,6 +320,44 @@
                 </div>
 
 
+                <!-- Mode selection (radio cards) -->
+                <div class="settings-group">
+                    <div class="settings-header" data-i18n="dashboardAiModeHeader">Mode</div>
+                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" aria-label="AI mode">
+                        <div class="mode-card" data-mode="off" role="radio" tabindex="0" aria-checked="true">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeOffTitle">Off</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeOffDesc">No AI assessment — all decisions by rule engine</div>
+                            </div>
+                        </div>
+                        <div class="mode-card" data-mode="advisory" role="radio" tabindex="0" aria-checked="false">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeAdvisoryTitle">Advisory</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeAdvisoryDesc">AI suggests actions, rule engine decides — low risk</div>
+                            </div>
+                        </div>
+                        <div class="mode-card" data-mode="hybrid" role="radio" tabindex="0" aria-checked="false">
+                            <div class="mode-card-radio"></div>
+                            <div>
+                                <div class="mode-card-title" data-i18n="dashboardAiModeHybridTitle">Hybrid</div>
+                                <div class="mode-card-desc" data-i18n="dashboardAiModeHybridDesc">AI actively applies safe policies for complex sites</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Hidden select kept for JS compat -->
+                    <select id="lmstudio-mode" style="display:none" aria-hidden="true">
+                        <option value="off">off</option>
+                        <option value="advisory">advisory</option>
+                        <option value="hybrid">hybrid</option>
+                    </select>
+                </div>
+
+                <!-- Provider-specific settings (second level, collapsed by default). -->
+                <details class="settings-group ai-provider-advanced" id="ai-advanced-settings">
+                    <summary class="settings-header">02 / Advanced and provider-specific settings</summary>
+                    <div class="ai-advanced-inner">
                 <div class="settings-group" id="chrome-builtin-panel" hidden>
                     <div class="settings-header" data-i18n="dashboardAiChromeHeader">Chrome Built-in Gemini</div>
                     <div class="info-text" id="chrome-probe-status" data-i18n="dashboardAiChromeIntro">Prompt API shipped for extensions in Chrome 138. Numeric temperature and topK stay extension-only and must be set together or omitted. Traditional Chinese is not a Prompt API output language yet.</div>
@@ -419,40 +432,6 @@
                     <pre id="ai-observer-events" style="white-space:pre-wrap;overflow:auto;max-height:320px;font-size:11px;line-height:1.4;border:1px solid var(--separator);border-radius:8px;padding:10px" aria-label="Recent diagnostic events">No diagnostic events.</pre>
                 </details>
 
-                <!-- Mode selection (radio cards) -->
-                <div class="settings-group">
-                    <div class="settings-header" data-i18n="dashboardAiModeHeader">Mode</div>
-                    <div class="mode-card-list" id="mode-card-list" role="radiogroup" aria-label="AI mode">
-                        <div class="mode-card" data-mode="off" role="radio" tabindex="0" aria-checked="true">
-                            <div class="mode-card-radio"></div>
-                            <div>
-                                <div class="mode-card-title" data-i18n="dashboardAiModeOffTitle">Off</div>
-                                <div class="mode-card-desc" data-i18n="dashboardAiModeOffDesc">No AI assessment — all decisions by rule engine</div>
-                            </div>
-                        </div>
-                        <div class="mode-card" data-mode="advisory" role="radio" tabindex="0" aria-checked="false">
-                            <div class="mode-card-radio"></div>
-                            <div>
-                                <div class="mode-card-title" data-i18n="dashboardAiModeAdvisoryTitle">Advisory</div>
-                                <div class="mode-card-desc" data-i18n="dashboardAiModeAdvisoryDesc">AI suggests actions, rule engine decides — low risk</div>
-                            </div>
-                        </div>
-                        <div class="mode-card" data-mode="hybrid" role="radio" tabindex="0" aria-checked="false">
-                            <div class="mode-card-radio"></div>
-                            <div>
-                                <div class="mode-card-title" data-i18n="dashboardAiModeHybridTitle">Hybrid</div>
-                                <div class="mode-card-desc" data-i18n="dashboardAiModeHybridDesc">AI actively applies safe policies for complex sites</div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Hidden select kept for JS compat -->
-                    <select id="lmstudio-mode" style="display:none" aria-hidden="true">
-                        <option value="off">off</option>
-                        <option value="advisory">advisory</option>
-                        <option value="hybrid">hybrid</option>
-                    </select>
-                </div>
-
                 <!-- Advanced (collapsible) -->
                 <details class="collapsible-section">
                     <summary class="collapsible-summary" data-i18n="dashboardAiAdvancedHeader">Advanced settings</summary>
@@ -486,21 +465,38 @@
                     </div>
                 </details>
 
+                    </div>
+                </details>
+
+                <!-- Live diagnostics are local to this settings page; token totals use provider-reported usage only. -->
+                <div class="settings-group ai-metrics">
+                    <div class="settings-header">Token usage</div>
+                    <div class="ai-token-metrics" aria-live="polite">
+                        <div><span class="ai-metric-caption">This dashboard session · In / Out</span><strong id="ai-tokens-session">— / —</strong></div>
+                        <div><span class="ai-metric-caption">Cumulative · In / Out</span><strong id="ai-tokens-total">— / —</strong></div>
+                    </div>
+                    <div class="info-text" id="ai-token-note">Only provider-reported tokens are counted; unavailable usage is shown as —.</div>
+                    <div class="settings-header ai-log-heading">Operation log</div>
+                    <ol id="ai-operation-log" class="ai-operation-log" role="log" aria-live="polite" aria-label="Recent AI diagnostics"></ol>
+                </div>
+
                 <!-- Save bar -->
                 <div class="settings-group">
                     <div class="ai-save-bar">
                         <div class="group-footer">
-                            <button class="btn-primary" id="btn-save-lmstudio" data-i18n="dashboardAiSave">Save settings</button>
-                            <button class="btn-secondary" id="btn-check-lmstudio" data-i18n="dashboardAiHealthCheck">Health check</button>
-                            <button class="btn-secondary" id="btn-reset-ai-provider-defaults" data-i18n="dashboardAiRestoreDefaults">Restore defaults</button>
-                            <button class="btn-secondary" id="btn-export-lmstudio-candidates" data-i18n="dashboardAiExportCandidates">Export candidates</button>
+                            <button type="button" class="btn-primary" id="btn-save-lmstudio">SAVE</button>
+                            <button type="button" class="btn-secondary" id="btn-check-lmstudio">TEST</button>
+                            <button type="button" class="btn-secondary" id="btn-toggle-ai" aria-pressed="false">ON</button>
+                            <button type="button" class="btn-secondary" id="btn-reset-ai-provider-defaults">RESET</button>
+                            <button type="button" class="btn-secondary" id="btn-export-lmstudio-candidates">BACKUP</button>
                         </div>
                         <div class="info-text" id="lmstudio-status" data-i18n="dashboardAiNotConfigured">AI provider is not configured yet.</div>
                     </div>
                 </div>
 
+                </div><!-- /AI service settings -->
+                <aside class="settings-group ai-candidates-pane" aria-label="Generated candidates">
                 <!-- Generated candidates -->
-                <div class="settings-group">
                     <div class="settings-header" data-i18n="dashboardAiCandidatesListHeader">Generated candidates</div>
                     <div class="info-text ai-candidate-help" data-i18n="dashboardAiCandidateHelp">Accept records that a generated candidate passed review. Promote installs an accepted candidate as confirmed rules; use Rollback to undo that promotion.</div>
                     <div class="candidate-bulk-actions">
@@ -511,7 +507,8 @@
                     <div class="policy-host-list" id="lmstudio-candidate-list">
                         <div class="empty-state" data-i18n="dashboardAiNoCandidates">No generated rule candidates yet.</div>
                     </div>
-                </div>
+                </aside>
+                </div><!-- /AI two-column workspace -->
             </section>
 
             <!-- ═══ TAB 4: Advanced (Security + Blocked elements) ═══ -->
