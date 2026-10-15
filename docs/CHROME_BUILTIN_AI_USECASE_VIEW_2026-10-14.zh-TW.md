@@ -1,6 +1,6 @@
 # Falcon — Chrome Built-in AI Use Cases / Model Assets 檢視介面
 
-狀態：2026-10-14 隔離分支實作，未部署至日常 Chrome；不修改既有模型。
+狀態：2026-10-14 隔離分支實作；2026-10-15 已在整合候選的實際 Chromium 擴充頁驗證匯入與導覽，未部署至日常 Chrome；不修改既有模型。
 分支：\`feat/chrome-builtin-usecases-panel-20261014\`
 
 ## 使用方式
@@ -30,4 +30,6 @@ node scripts/chrome-ai/model-inventory.mjs --policy registry/chrome-ai-model-all
 - 官方公開 API 無法查詢指定 Gemma 4B/12B 的確實路由。Requested 也不是模型選取。
 - 組態 Snapshot 的採集時間、來源與 Chrome Profile 必須與資料一起保留；此面板不認定上傳檔案本身等於信任來源。
 - 現有程式未對 Chrome Flags、Local State、Profile 模型目錄、ACL、Junction、下載及使用者資訊執行任何修改。
-- Node 假 DOM 測試 \`node tests/ai/run_chrome_usecase_panel_regression.js\` 驗證導覽、載入 Broker/Inventory、使用者主動檢查 API、缺失 DOM 風險；**尚未在實際已安裝的擴充 UI 手動驗收**。
+- Node 假 DOM 測試 \`node tests/ai/run_chrome_usecase_panel_regression.js\` 驗證導覽、載入 Broker/Inventory、使用者主動檢查 API、缺失 DOM 風險。
+- 2026-10-15 實際 Chromium 153.0.8010.12 擴充 UI 驗收：打開 AI 與二級設定，匯入合成 Broker / Asset inventory JSON，確認列內容及「Historical snapshot, NOT LIVE」「File states are not Runtime readiness」標示。Overview / AI 導覽可操作。
+- 這次未點擊公開 API availability 檢查、未開 Chrome 內部頁、未下載模型或推論。這些動作的 runtime 行為仍不屬於上述匯入／導覽驗收。
