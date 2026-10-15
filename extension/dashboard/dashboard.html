@@ -408,7 +408,7 @@
                     </div>
                     <div class="setting-item">
                         <div class="setting-info">
-                            <div class="setting-title">Include model output excerpts (optional)</div>
+                            <div class="setting-title">Include generated Prompt and model output excerpts (optional)</div>
                             <div class="setting-desc">May contain site content. Off by default; text is length-limited and redacted, but automated redaction is not a privacy guarantee.</div>
                         </div>
                         <label class="toggle-switch">
@@ -424,6 +424,7 @@
                     <div class="info-text">For a live external-AI read-only feed, run <code>node scripts/ai-observer-bridge.js</code> locally, then paste its token here. Events are written only to the localhost bridge, never directly to an AI service.</div>
                     <div class="group-footer">
                         <button type="button" id="ai-observer-start" class="btn-primary">Start 15-min capture</button>
+                        <button type="button" id="ai-observer-preview-prompt" class="btn-secondary" title="Generate the current Falcon policy prompt from real observed telemetry; no model inference">Preview current Prompt</button>
                         <button type="button" id="ai-observer-stop" class="btn-secondary">Stop capture</button>
                         <button type="button" id="ai-observer-clear" class="btn-secondary">Clear trace</button>
                         <button type="button" id="ai-observer-export" class="btn-secondary">Export JSON</button>

@@ -432,7 +432,7 @@ const GATEWAY_DEFAULT_COOLDOWN_MS = 30000;
 const GATEWAY_DEFAULT_TEMPERATURE = 0.1;
 const GATEWAY_DEFAULT_TOP_K = 40;
 const CHROME_BUILTIN_DEFAULT_MODEL = 'Gemini Nano';
-const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 10000;
+const CHROME_BUILTIN_DEFAULT_TIMEOUT_MS = 45000; // Cold on-device session creation can exceed 10 seconds.
 const CHROME_BUILTIN_DEFAULT_COOLDOWN_MS = 30000;
 const CHROME_BUILTIN_DEFAULT_TEMPERATURE = 1;
 const CHROME_BUILTIN_DEFAULT_TOP_K = 3;
@@ -2834,12 +2834,14 @@ function getProviderDefaults(provider = 'lmstudio') {
 }
 
 function buildDefaultAiProviderSettings() {
-  const defaults = getProviderDefaults('openai');
+  // Fresh installs use local Chrome AI advisories when the model is already ready.
+  // No credentials or setup are required; rules remain the primary protection.
+  const defaults = getProviderDefaults('chrome_builtin');
   return {
     version: AI_PROVIDER_VERSION,
     provider: defaults.provider,
-    enabled: false,
-    mode: 'hybrid',
+    enabled: true,
+    mode: 'advisory',
     endpoint: defaults.endpoint,
     model: defaults.model,
     apiKey: defaults.apiKey,
@@ -2849,7 +2851,7 @@ function buildDefaultAiProviderSettings() {
     maxRecentEvents: LM_STUDIO_DEFAULT_MAX_RECENT_EVENTS,
     temperature: defaults.temperature,
     topK: defaults.topK,
-    enableDynamicRuleCandidates: true
+    enableDynamicRuleCandidates: false
   };
 }
 
@@ -2867,7 +2869,8 @@ function buildDefaultAiProviderState() {
     lastDiagnosticAt: 0,
     recentRequests: [],
     tokenUsage: {},
-    perHostLastRun: {}
+    perHostLastRun: {},
+    chromeBuiltinBackoffUntil: 0
   };
 }
 
@@ -2884,21 +2887,27 @@ function normalizeAiProviderSettings(input = {}) {
   return {
     version: AI_PROVIDER_VERSION,
     provider,
-    enabled: input.enabled === true,
+    enabled: input.enabled === undefined
+      ? (provider === 'chrome_builtin' && defaults.enabled)
+      : input.enabled === true,
     mode: ['off', 'advisory', 'hybrid'].includes(String(input.mode || '').toLowerCase())
       ? String(input.mode).toLowerCase()
       : defaults.mode,
     endpoint: endpoint || providerDefaults.endpoint,
     model,
     apiKey: apiKey || providerDefaults.apiKey,
-    timeoutMs: clamp(Number(input.timeoutMs || providerDefaults.timeoutMs), 1000, 60000),
+    // Migrate the historical Chrome on-device 10-second default. It times out
+    // during legitimate cold model creation even on a capable GPU.
+    timeoutMs: provider === 'chrome_builtin' && Number(input.timeoutMs) === 10000
+      ? CHROME_BUILTIN_DEFAULT_TIMEOUT_MS
+      : clamp(Number(input.timeoutMs || providerDefaults.timeoutMs), 1000, 60000),
     cooldownMs: clamp(Number(input.cooldownMs || providerDefaults.cooldownMs || defaults.cooldownMs), 500, 5 * 60 * 1000),
     minRiskScore: clamp(Number(input.minRiskScore || defaults.minRiskScore), 0, 50),
     maxRecentEvents: clamp(Number(input.maxRecentEvents || defaults.maxRecentEvents), 2, 20),
     temperature: clamp(Number(input.temperature ?? providerDefaults.temperature ?? defaults.temperature), 0, 2),
     topK: clamp(Number(input.topK ?? providerDefaults.topK ?? defaults.topK), 1, 128),
-    enableDynamicRuleCandidates:
-      input.enableDynamicRuleCandidates !== false && defaults.enableDynamicRuleCandidates === true,
+    enableDynamicRuleCandidates: input.enableDynamicRuleCandidates === undefined
+      ? defaults.enableDynamicRuleCandidates : input.enableDynamicRuleCandidates === true,
     chromeSampling: String(input.chromeSampling || '').toLowerCase() === 'custom' ? 'custom' : 'runtime',
     chromeLanguages: normalizeChromeBuiltinLanguages(input.chromeLanguages),
     chromeResponseConstraint: input.chromeResponseConstraint !== false,
@@ -6014,7 +6023,9 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
       };
     }
 
-    const probeTimeout = createRequestTimeout(Math.min(Number(normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 3000));
+    // A cold on-device model can need tens of seconds to initialize, even when
+    // availability already reports ready. Do not mark it unhealthy after 3 s.
+    const probeTimeout = createRequestTimeout(Math.min(Number(normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 30000));
     let probeSession = null;
     try {
       probeSession = await api.create({
@@ -6104,10 +6115,31 @@ async function runAiProviderHealthCheck(settings = aiState.providerSettings) {
   return runLmStudioHealthCheck(normalized);
 }
 
+// Missing or not-yet-downloaded Chrome models are environmental conditions, not
+// page threats. Cool off all sites instead of retrying on every new navigation.
+function isChromeBuiltinBackoffActive() {
+  return getNow() < Number(aiState.providerState?.chromeBuiltinBackoffUntil || 0);
+}
+
+function recordChromeBuiltinRetryState(error = null) {
+  const category = error ? classifyAiProviderError(error) : '';
+  const retryMs = category === 'unsupported_context' || category === 'unavailable'
+    ? 30 * 60 * 1000
+    : category === 'downloadable' || category === 'downloading'
+      ? 5 * 60 * 1000
+      : error ? 60 * 1000 : 0;
+  aiState.providerState = normalizeAiProviderState({
+    ...aiState.providerState,
+    chromeBuiltinBackoffUntil: error ? getNow() + retryMs : 0
+  });
+  scheduleAiPersist();
+}
+
 function shouldQueryAiProvider(hostname, policy, events = []) {
   const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   if (settings.enabled !== true) return false;
   if (settings.mode === 'off') return false;
+  if (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive()) return false;
 
   const nowTs = getNow();
   const normalized = getHostname(hostname);
@@ -6452,6 +6484,10 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
       signal: timeout.signal
     });
     const prompt = buildChromeBuiltinPrompt(hostname, context, policy, recentEvents, settings);
+    // Prompt text is included only in the explicit, host-scoped observer opt-in.
+    traceFalconAi(hostname, 'chrome_builtin_prompt', {
+      task: 'policy_advisory', promptChars: prompt.length, model: CHROME_BUILTIN_DEFAULT_MODEL
+    }, prompt);
     traceFalconAi(hostname, 'chrome_builtin_request', {
       task: 'policy_advisory', promptChars: prompt.length, model: CHROME_BUILTIN_DEFAULT_MODEL
     });
@@ -6594,6 +6630,7 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
 
     try {
       const advisory = await requestAiProviderAdvisoryUncached(hostname, context, policy);
+      if (descriptor.provider === 'chrome_builtin') recordChromeBuiltinRetryState();
       const cachedAdvisory = rememberProviderAdvisory(descriptor.key, normalizedHost, advisory, descriptor) || advisory;
       aiState.providerAdvisories[normalizedHost] = cachedAdvisory;
       recordAiProviderDiagnostic('completed', {
@@ -6605,6 +6642,7 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
       });
       return cachedAdvisory;
     } catch (error) {
+      if (descriptor.provider === 'chrome_builtin') recordChromeBuiltinRetryState(error);
       recordAiProviderDiagnostic('failed', {
         provider: descriptor.provider,
         hostname: normalizedHost,
@@ -6625,7 +6663,8 @@ async function requestAiProviderAdvisory(hostname, context, policy) {
 async function requestAiElementClassification(hostname, features = {}) {
   const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   const localResult = classifyElementLocally(hostname, features);
-  if (settings.enabled !== true || settings.mode === 'off') {
+  if (settings.enabled !== true || settings.mode === 'off' ||
+      (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive())) {
     return localResult;
   }
 
@@ -6729,6 +6768,10 @@ async function requestAiElementClassification(hostname, features = {}) {
           signal: timeout.signal
         });
         const debugPromptStartedAt = getNow();
+        traceFalconAi(hostname, 'chrome_builtin_prompt', {
+          task: 'element_classification', promptChars: prompt.length,
+          model: CHROME_BUILTIN_DEFAULT_MODEL
+        }, prompt);
         traceFalconAi(hostname, 'chrome_builtin_request', {
           task: 'element_classification', promptChars: prompt.length,
           model: CHROME_BUILTIN_DEFAULT_MODEL
@@ -6764,9 +6807,11 @@ async function requestAiElementClassification(hostname, features = {}) {
           confidence: classification.confidence,
           suggestedAction: classification.suggestedAction
         }, rawText);
+        recordChromeBuiltinRetryState();
         rememberElementClassification(cacheKey, hostname, classification, cacheMeta, evidenceSignature);
         return classification;
       } catch (error) {
+        recordChromeBuiltinRetryState(error);
         traceFalconAi(hostname, 'chrome_builtin_error', {
           task: 'element_classification', success: false,
           errorCode: String(error?.name || 'prompt_api_failed')
@@ -7875,6 +7920,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fallback: getHostFallbackState(hostname),
       metrics: getOrCreateHostMetrics(hostname)
     });
+    return true;
+  }
+
+  if (request.action === 'previewChromeBuiltinPrompt') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ success: false, error: 'forbidden_sender' });
+      return true;
+    }
+    (async () => {
+      await falconObserverReady;
+      const config = falconAiObserver.publicConfig();
+      if (!config.enabled) {
+        sendResponse({ success: false, error: 'observation_must_be_enabled' });
+        return;
+      }
+      const hostname = config.hostname;
+      const policy = getPolicyForHostname(hostname);
+      const settings = resolveAiProviderSettings(aiState.providerSettings || {},
+        getAiProviderSecret(aiState.providerSettings?.provider));
+      const recentEvents = getRecentTelemetryForHost(hostname, 8);
+      const prompt = buildChromeBuiltinPrompt(hostname,
+        { source: 'observed_browser_page', task: 'live_prompt_preview' },
+        policy, recentEvents, settings);
+      const entry = falconAiObserver.record(hostname, 'chrome_builtin_prompt', {
+        task: 'real_page_policy_preview', promptChars: prompt.length,
+        count: recentEvents.length, model: CHROME_BUILTIN_DEFAULT_MODEL
+      }, prompt);
+      sendResponse({
+        success: true, captured: Boolean(entry), hostname,
+        promptChars: prompt.length, telemetryEvents: recentEvents.length,
+        inferencePerformed: false
+      });
+    })().catch((error) => sendResponse({
+      success: false, error: String(error?.message || error)
+    }));
     return true;
   }
 

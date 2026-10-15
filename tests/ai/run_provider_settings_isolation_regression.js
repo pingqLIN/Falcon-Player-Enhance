@@ -34,6 +34,21 @@ const code = [
 const ctx = vm.createContext({});
 vm.runInContext(code, ctx);
 
+// First-run defaults must work without an API key or manual model sampling.
+const fresh = ctx.normalizeAiProviderSettings({});
+assert.equal(fresh.provider, 'chrome_builtin');
+assert.equal(fresh.enabled, true);
+assert.equal(fresh.mode, 'advisory');
+assert.equal(fresh.chromeSampling, 'runtime');
+assert.deepEqual(Array.from(fresh.chromeLanguages), ['en']);
+assert.equal(fresh.enableDynamicRuleCandidates, false);
+assert.equal(ctx.normalizeAiProviderSettings({ ...fresh, enabled: false }).enabled, false,
+  'explicitly disabled existing installation must remain disabled');
+assert.equal(ctx.normalizeAiProviderSettings({ provider: 'openai' }).enabled, false,
+  'switching to external providers must not enable them without consent');
+assert.equal(ctx.normalizeAiProviderSettings({ ...fresh, enableDynamicRuleCandidates: true })
+  .enableDynamicRuleCandidates, true, 'advanced users must be able to opt in to candidate previews');
+
 const original = {
   openai: { provider: 'openai', endpoint: 'https://api.openai.com/v1/responses', model: 'gpt-custom', timeoutMs: 12345, temperature: 0, apiKey: 'OPENAI_SECRET' },
   gemini: { provider: 'gemini', endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-custom:generateContent', model: 'gemini-custom', timeoutMs: 23456, apiKey: 'GEMINI_SECRET' },

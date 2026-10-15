@@ -13,6 +13,7 @@
   const clear = document.getElementById('ai-observer-clear');
   const exportButton = document.getElementById('ai-observer-export');
   const refreshTabs = document.getElementById('ai-observer-refresh-tabs');
+  const previewPrompt = document.getElementById('ai-observer-preview-prompt');
   let lastSnapshot = null;
 
   function setStatus(message, error = false) {
@@ -36,7 +37,7 @@
       const remaining = Math.max(0, Math.ceil((Number(scope.expiresAt || 0) - Date.now()) / 1000));
       setStatus('Recording ' + scope.hostname + ' · ' + remaining + 's remaining · ' +
         rows.length + ' events · local bridge ' + (scope.bridgeEnabled ? 'configured' : 'off') +
-        (scope.includeModelOutput ? ' · bounded model output ON' : ' · output excerpts OFF'));
+        (scope.includeModelOutput ? ' · bounded prompt/output excerpts ON' : ' · text excerpts OFF'));
     } else {
       setStatus('Capture off. ' + rows.length + ' retained event(s), available for export until expiry.');
     }
@@ -48,7 +49,7 @@
       ? rows.slice(-35).map((item) => {
         const stamp = new Date(item.at).toLocaleTimeString();
         return stamp + ' #' + item.seq + ' ' + item.kind + ' ' + JSON.stringify(item.details) +
-          (item.modelOutput ? '\n  MODEL OUTPUT: ' + item.modelOutput : '');
+          (item.modelOutput ? '\n  ' + (item.kind === 'chrome_builtin_prompt' ? 'GENERATED PROMPT: ' : 'MODEL OUTPUT: ') + item.modelOutput : '');
       }).join('\n')
       : 'No diagnostic events.';
   }
@@ -84,7 +85,7 @@
     const wantsText = outputToggle.checked;
     const token = tokenInput.value.trim();
     if (wantsText && !window.confirm(
-      'Capture bounded model output text from ' + hostname + '? It may include page content. Only enable for a test site.')) return;
+      'Capture generated Prompt and model output excerpts from ' + hostname + '? They may contain page content. Only enable for a test site.')) return;
     if (token && !window.confirm(
       'Send diagnostic entries for ' + hostname + ' to the localhost bridge? Ensure the bridge is running and keep its token private.')) return;
     try {
@@ -93,6 +94,23 @@
       }));
       tokenInput.value = '';
     } catch (error) { setStatus('Unable to start: ' + String(error?.message || error), true); }
+  });
+
+  previewPrompt?.addEventListener('click', async () => {
+    if (!lastSnapshot?.scope?.enabled) {
+      setStatus('Start site-scoped capture before generating the observed Prompt.', true);
+      return;
+    }
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'previewChromeBuiltinPrompt' });
+      if (!response?.success) throw new Error(response?.error || 'Prompt preview unavailable');
+      await refresh();
+      setStatus('Prompt generated from current browsing telemetry (' +
+        response.promptChars + ' characters; ' + response.telemetryEvents +
+        ' telemetry events). No model inference was performed.');
+    } catch (error) {
+      setStatus(String(error?.message || error), true);
+    }
   });
 
   stop?.addEventListener('click', async () => {
