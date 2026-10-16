@@ -468,6 +468,10 @@
         },
         (response) => {
           if (chrome.runtime.lastError) return;
+          if (response?.enabled === false) {
+            stopRuntime();
+            return;
+          }
           if (response?.policy) {
             applyAiPolicy(response.policy);
           }
@@ -481,7 +485,7 @@
   function requestCurrentBlockingLevel() {
     try {
       chrome.runtime.sendMessage({ action: 'getBlockingLevel' }, (response) => {
-        if (chrome.runtime.lastError) return;
+        if (chrome.runtime.lastError || !monitorEnabled) return;
         if (response?.success) {
           sameTabRedirectGuardEnabled = response.sameTabRedirectGuardEnabled !== false;
           publishBlockingLevelToPage(response.blockingLevel, 'runtime_bootstrap');

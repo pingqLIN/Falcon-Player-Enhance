@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 aiSeenDiagnostics.add(key);
                 if (aiSeenDiagnostics.size > 120) aiSeenDiagnostics.clear();
                 const stamp = Number(entry.ts) ? new Date(entry.ts).toLocaleTimeString() : '';
-                appendAiLog(`${stamp} ${entry.type} · ${entry.reason || entry.errorType || entry.latencyMs + 'ms'}`);
+                appendAiLog(`${stamp} ${entry.hostname || ''} ${entry.type} · ${entry.reason || entry.errorType || entry.latencyMs + 'ms'}`);
             });
     }
 
@@ -739,17 +739,23 @@ document.addEventListener('DOMContentLoaded', () => {
             ? state.lastResolvedModel : settings?.model || getProviderDefaultModel(provider) || 'runtime default';
         const checked = state?.lastProvider === provider && Number(state?.lastHealthCheckAt) > 0;
         const healthy = checked && state?.lastHealthOk === true;
+        const retryMs = provider === 'chrome_builtin'
+            ? Math.max(0, Number(state?.chromeBuiltinBackoffUntil || 0) - Date.now()) : 0;
+        const inBackoff = retryMs > 0;
         const error = checked ? safeAiLog(state?.lastError || '') : '';
         const connection = provider === 'chrome_builtin' ? 'On-device · Prompt API'
             : provider === 'lmstudio' ? 'Local API'
             : 'API';
         aiStatusDot.classList.remove('online', 'warning', 'error');
-        if (aiServiceEnabled && healthy) aiStatusDot.classList.add('online');
-        if (aiServiceEnabled && checked && !healthy) {
+        if (aiServiceEnabled && healthy && !inBackoff) aiStatusDot.classList.add('online');
+        if (aiServiceEnabled && inBackoff) aiStatusDot.classList.add('warning');
+        else if (aiServiceEnabled && checked && !healthy) {
             aiStatusDot.classList.add(isChromeBuiltinAttentionState(provider, state, error) ? 'warning' : 'error');
         }
         aiStatusTitle.textContent = `${label} · ${model}`;
-        const readiness = !aiServiceEnabled ? 'Disabled' : !checked ? 'Not tested'
+        const readiness = !aiServiceEnabled ? 'Disabled' : inBackoff
+            ? 'Paused - retry in ' + Math.ceil(retryMs / 60000) + ' min'
+            : !checked ? 'Not tested'
             : healthy ? 'Online · last test passed' : 'Check failed';
         aiStatusSub.textContent = `${readiness} · ${settings?.mode || 'off'}${error ? ' · ' + error : ''}`;
         if (aiConnectionType) aiConnectionType.textContent = connection;
@@ -1863,8 +1869,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (changes.aiProfiles || changes.aiTelemetryLog || changes.aiPolicyCache || changes.aiHostFallbacks) {
                 loadPolicyGateOverview();
             }
-            if (changes.aiProviderSettings || changes.aiProviderProfiles || changes.aiProviderState || changes.aiProviderAdvisories || changes.aiGeneratedRuleCandidates) {
+            if (changes.aiProviderSettings || changes.aiProviderProfiles) {
+                // Configuration changed: update the editor only for actual profile writes.
                 loadAiProviderSettings(lastSelectedProvider || getSelectedProvider());
+                loadPolicyGateOverview();
+                loadStatusBar();
+            } else if (changes.aiProviderState || changes.aiProviderAdvisories || changes.aiGeneratedRuleCandidates) {
+                // Diagnostics must not overwrite unsaved advanced-setting edits.
+                if (changes.aiProviderState) {
+                    const state = changes.aiProviderState.newValue || {};
+                    renderAiTelemetry(state);
+                    if (providerFormLoaded) renderAiStatusCard(collectProviderSettings(), state);
+                }
                 loadPolicyGateOverview();
                 loadStatusBar();
             }

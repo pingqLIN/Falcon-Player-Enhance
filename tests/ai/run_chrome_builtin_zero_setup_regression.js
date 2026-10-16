@@ -55,7 +55,7 @@ assert.equal(shouldQuery(), true);
 assert(persistCalls >= 5, 'retry state should be saved');
 state.providerSettings = { ...state.providerSettings, provider: 'openai', enabled: false };
 assert.equal(shouldQuery(), false, 'disabled external provider must remain off');
-assert(source.includes("if (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive()) return false;"),
+assert(source.includes("if (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive()) {"),
   'advisory route must respect backoff');
 assert(source.includes("(settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive())"),
   'element classification must respect backoff');

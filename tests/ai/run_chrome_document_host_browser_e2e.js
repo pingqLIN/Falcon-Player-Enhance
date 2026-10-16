@@ -1,5 +1,5 @@
 ﻿'use strict';
-const fs=require('fs'), path=require('path'), cp=require('child_process'), assert=require('assert').strict;
+const fs=require('fs'), path=require('path'), cp=require('child_process'), assert=require('assert').strict, http=require('http');
 const root=path.resolve(__dirname,'../..');
 const folder=path.join(root,'.falcon-observability','chrome-document-host-e2e');
 fs.mkdirSync(folder,{recursive:true});
@@ -46,6 +46,8 @@ class CDP{
  close(){try{this.child.stdio[3].end();}catch(_){}}
 }
 async function main(){
+ const server=http.createServer((req,res)=>{const body='<!doctype html><html><body><h1>Generic Falcon test page</h1><main></main></body></html>';res.writeHead(200,{'Content-Type':'text/html','Content-Length':Buffer.byteLength(body)});res.end(body);});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=cp.spawn(chromePath,[
   '--no-first-run','--no-default-browser-check','--disable-background-networking',
   '--start-minimized','--window-position=-32000,-32000',
@@ -66,6 +68,80 @@ async function main(){
   await c.call('Runtime.enable',{},sid);await c.call('Page.enable',{},sid);
   await until(()=>c.eval(sid,"document.getElementById('ai-configure-panel')?.style.display==='block'"),20000);
   pass('dashboard initialized');
+  // A real http page validates content script injection; extension document tests cannot.
+  const aiRegistered = await until(async () => {
+    const found = await c.eval(sid, "chrome.scripting.getRegisteredContentScripts()");
+    return Array.isArray(found) && found.some(x=>x.id==='shield-ai-baseline-runtime') ? found : null;
+  },20000);
+  const baseline = aiRegistered.find(x=>x.id==='shield-ai-baseline-runtime');
+  const enhanced = aiRegistered.find(x=>x.id==='shield-ai-runtime');
+  assert(baseline.matches.includes('<all_urls>') && baseline.allFrames===false);
+  assert(enhanced && !enhanced.matches.includes('<all_urls>'));
+  pass('baseline telemetry scoped to generic top frame', {
+    baseline:baseline.matches, excludes:baseline.excludeMatches?.length, enhanced:enhanced.matches.length
+  });
+  const browserPageUrl = 'http://127.0.0.1:' + server.address().port + '/';
+  const siteTarget = await c.call('Target.createTarget',{url:browserPageUrl});
+  const siteSid=(await c.call('Target.attachToTarget',{targetId:siteTarget.targetId,flatten:true})).sessionId;
+  await c.call('Runtime.enable',{},siteSid);
+  const loaded = await until(async () => {
+    const v=await c.eval(siteSid,"({risk:document.documentElement.dataset.shieldAiRisk,gate:document.documentElement.dataset.shieldAiGateTier})");
+    return v?.risk && v?.gate ? v:null;
+  },20000);
+  pass('normal website receives AI runtime policy and monitoring',loaded);
+  const monitor=await until(async()=>{
+    const v=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return {enabled:r.snapshot?.enabled,events:r.snapshot?.telemetrySize,requests:r.snapshot?.provider?.recentRequests?.slice(0,3)}})()");
+    return v?.events>0 ? v:null;
+  },20000);
+  assert.equal(monitor.enabled,true);
+  pass('real generic browsing emitted telemetry to background',monitor);
+  await c.eval(siteSid,"(()=>{const root=document.querySelector('main');for(let i=0;i<16;i++){const n=document.createElement('div');n.className='ad-popup-overlay-test';n.textContent='test'+i;root.appendChild(n)}})()");
+  const risk=await until(async()=>{
+    const v=await c.eval(siteSid,"Number(document.documentElement.dataset.shieldAiScore||0)");
+    return v>0?v:null;
+  },15000);
+  pass('real DOM overlay churn updates browser risk score',{risk});
+  const skipped=await until(async()=>{
+    const state=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return r.snapshot?.provider?.recentRequests||[]})()");
+    return state.find(x=>x.type==='skipped_threshold'&&x.hostname==='127.0.0.1')||null;
+  },15000);
+  assert(skipped.reason.includes('threshold=8'));
+  pass('safe page activity explains why model was not requested',skipped);
+  // Explicitly synthetic confirmed-threat signal: validates threshold -> Provider dispatch,
+  // not a claim that the browser blocked a real popup or that the model is ready.
+  const thresholdProbe=await c.eval(sid,"(async()=>await chrome.runtime.sendMessage({action:'aiTelemetry',context:{hostname:'127.0.0.1',url:'http://127.0.0.1/test'},events:[{type:'blocked_popup',source:'controlled_test',severity:1.5,confidence:1}]}))()");
+  assert.equal(thresholdProbe.success,true);
+  assert(Number(thresholdProbe.riskScore)>=8,'controlled event should cross default risk threshold');
+  assert.equal(thresholdProbe.provider?.provider,'chrome_builtin','risk-eligible navigation must dispatch selected provider');
+  const requests=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return r.snapshot?.provider?.recentRequests?.slice(0,8)||[]})()");
+  assert(requests.some(x=>x.type==='started'),'a real provider request must begin at threshold');
+  pass('controlled threshold crossing dispatches actual Chrome Built-in provider route',{
+    riskScore:thresholdProbe.riskScore,applied:thresholdProbe.provider?.advisoryApplied,
+    error:thresholdProbe.provider?.error,
+    diagnostics:requests.filter(x=>['started','failed','completed'].includes(x.type)).slice(0,3).map(x=>({type:x.type,reason:x.reason,errorType:x.errorType}))
+  });
+
+
+  const retryProbe=await c.eval(sid,"(async()=>await chrome.runtime.sendMessage({action:'aiTelemetry',context:{hostname:'127.0.0.1',url:'http://127.0.0.1/test'},events:[{type:'blocked_popup',source:'controlled_test',severity:1,confidence:1}]}))()");
+  assert.equal(retryProbe.success,true);
+  assert.equal(retryProbe.provider,undefined,'Chrome model backoff must suppress repeated requests');
+  const afterRetry=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return r.snapshot?.provider?.recentRequests?.[0]})()");
+  assert.equal(afterRetry.type,'skipped_backoff');
+  pass('failed model readiness enters bounded backoff instead of repeated inference',afterRetry);
+  const prior=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return r.snapshot?.telemetrySize})()");
+  const disableResult=await c.eval(sid,"chrome.runtime.sendMessage({action:'setAiMonitorEnabled',enabled:false})");
+  assert.equal(disableResult?.enabled,false);
+  const disabledTarget=await c.call('Target.createTarget',{url:browserPageUrl+'?off=1'});
+  const disabledSid=(await c.call('Target.attachToTarget',{targetId:disabledTarget.targetId,flatten:true})).sessionId;
+  await c.call('Runtime.enable',{},disabledSid);
+  await until(()=>c.eval(disabledSid,"document.readyState==='complete'"),15000);
+  await new Promise(resolve=>setTimeout(resolve,1800));
+  const disabledAfter=await c.eval(sid,"(async()=>{const r=await chrome.runtime.sendMessage({action:'getAiInsights'});return r.snapshot?.telemetrySize})()");
+  assert.equal(disabledAfter,prior,'disabling AI must prevent newly opened sites from generating retained telemetry');
+  const enabledResult=await c.eval(sid,"chrome.runtime.sendMessage({action:'setAiMonitorEnabled',enabled:true})");
+  assert.equal(enabledResult?.enabled,true);
+  pass('AI disable and re-enable preserves opt-out on future browsing',{telemetryBefore:prior,telemetryAfter:disabledAfter});
+
   await c.eval(sid,"(()=>{const el=document.getElementById('ai-provider');el.value='chrome_builtin';el.dispatchEvent(new Event('change',{bubbles:true}));document.getElementById('ai-advanced-settings').open=true;})()");
   await until(()=>c.eval(sid,"!document.getElementById('chrome-builtin-panel').hidden&&document.getElementById('ai-provider-context').textContent.includes('Chrome Built-in')"),18000);
   pass('advanced settings visible for Chrome provider');
@@ -81,18 +157,30 @@ async function main(){
   }
   const state=await c.eval(sid,"(async()=>{let r=await chrome.runtime.sendMessage({action:'getAiProviderSettings',provider:'chrome_builtin'});return r;})()");
   assert(state?.success,'provider settings not returned');
+  assert.equal(Number(state.state?.chromeBuiltinBackoffUntil || 0),0,
+    'saving changed Chrome sampling settings must release backoff from an unrelated prior configuration');
   const s=state.settings;
   for(const [key,value] of Object.entries({provider:'chrome_builtin',mode:'advisory',chromeSampling:'custom',temperature:0.4,topK:7,timeoutMs:45000,cooldownMs:90000,chromeResponseConstraint:false,enableDynamicRuleCandidates:false})){
     assert.deepEqual(s[key],value,'settings mismatch '+key);
   }
   assert(s.chromeLanguages.includes('ja'));
   pass('advanced settings persisted and reloaded',{mode:s.mode,sampling:s.chromeSampling,temp:s.temperature,topK:s.topK,languages:s.chromeLanguages,timeout:s.timeoutMs});
+  // A live diagnostic must update the Operation Log without clobbering unsaved inputs.
+  await c.eval(sid,"(()=>{const f=document.getElementById('chrome-builtin-temperature');f.value='0.9';f.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  const draftEvent=await c.eval(sid,"(async()=>await chrome.runtime.sendMessage({action:'aiTelemetry',context:{hostname:'draft-check.example',url:'https://draft-check.example'},events:[{type:'runtime_bootstrap',source:'controlled_test',severity:0.2,confidence:1}]}))()");
+  assert.equal(draftEvent.success,true);
+  await until(()=>c.eval(sid,"document.getElementById('ai-operation-log').textContent.includes('draft-check.example')"),16000);
+  const unsavedValue=await c.eval(sid,"document.getElementById('chrome-builtin-temperature').value");
+  assert.equal(unsavedValue,'0.9','live diagnostics must not overwrite an unsaved setting');
+  pass('live diagnostic updates the log while preserving unsaved advanced fields',{unsavedValue});
+
   await c.eval(sid,"(()=>{const el=document.getElementById('ai-provider');el.value='lmstudio';el.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await until(()=>c.eval(sid,"document.getElementById('ai-provider-context').textContent.includes('LM Studio')"),18000);
   assert(await c.eval(sid,"document.getElementById('chrome-builtin-panel').hidden"));
   pass('Chrome-only settings hidden on provider switch');
   await c.eval(sid,"(()=>{const el=document.getElementById('ai-provider');el.value='chrome_builtin';el.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await until(()=>c.eval(sid,"document.getElementById('chrome-sampling-mode').value==='custom'&&document.getElementById('chrome-builtin-topk').value==='7'"),18000);
+  assert.equal(await c.eval(sid,"document.getElementById('chrome-builtin-temperature').value"),'0.9','unsaved advanced edits must survive provider switching');
   pass('advanced sampling configuration restored after switching');
   await c.eval(sid,"(()=>{document.getElementById('chrome-usecase-inspector').open=true;})()");
   assert(await c.eval(sid,"document.getElementById('chrome-usecase-open-native').isConnected && document.getElementById('chrome-usecase-availability').isConnected"));
@@ -119,6 +207,7 @@ async function main(){
   const screenshot=await c.call('Page.captureScreenshot',{format:'png'},sid);
   if(screenshot.data){fs.writeFileSync(path.join(folder,'advanced-settings.png'),Buffer.from(screenshot.data,'base64'));pass('dashboard screenshot saved');}
  }finally{
+  server.close();
   c?.close();browser.kill();
   await new Promise(resolve => {
    if(browser.exitCode!==null)return resolve();

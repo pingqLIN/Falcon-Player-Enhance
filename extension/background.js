@@ -54,6 +54,7 @@ const CONTENT_SCRIPT_IDS = [
   'shield-embedded-player-anti-detect',
   'shield-basic-docidle',
   'shield-ai-runtime',
+  'shield-ai-baseline-runtime',
   'shield-main-world',
   'shield-docstart-isolated',
   'shield-enhanced-docidle',
@@ -341,6 +342,16 @@ const BASIC_GLOBAL_CONTENT_SCRIPT_DEFINITIONS = [
     ],
     runAt: 'document_idle',
     allFrames: true,
+    persistAcrossSessions: true
+  },
+  {
+    // Basic sites need lightweight AI telemetry; enhanced sites already have
+    // the all-frame runtime below. The registration layer excludes overlaps.
+    id: 'shield-ai-baseline-runtime',
+    matches: ['<all_urls>'],
+    js: ['content/ai-runtime.js'],
+    runAt: 'document_start',
+    allFrames: false,
     persistAcrossSessions: true
   }
 ];
@@ -6128,7 +6139,10 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
       lastModelCount: 1,
       lastResolvedModel: normalized.model || CHROME_BUILTIN_DEFAULT_MODEL,
       lastProvider: 'chrome_builtin',
-      lastService: `chrome_prompt_api:${String(availability || 'available')}:probed`
+      lastService: `chrome_prompt_api:${String(availability || 'available')}:probed`,
+      // A successful real create/prompt/destroy probe invalidates an earlier
+      // unavailable cooldown; otherwise Online health and browsing disagree.
+      chromeBuiltinBackoffUntil: 0
     });
     scheduleAiPersist();
 
@@ -6216,17 +6230,28 @@ function shouldQueryAiProvider(hostname, policy, events = []) {
   const settings = resolveAiProviderSettings(aiState.providerSettings || {}, getAiProviderSecret(aiState.providerSettings?.provider));
   if (settings.enabled !== true) return false;
   if (settings.mode === 'off') return false;
-  if (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive()) return false;
-
   const nowTs = getNow();
   const normalized = getHostname(hostname);
   if (!normalized) return false;
+  if (settings.provider === 'chrome_builtin' && isChromeBuiltinBackoffActive()) {
+    recordAiProviderDiagnostic('skipped_backoff', {
+      provider: settings.provider,
+      hostname: normalized,
+      reason: String(Math.max(0, Number(aiState.providerState?.chromeBuiltinBackoffUntil || 0) - nowTs)) + 'ms_remaining'
+    });
+    return false;
+  }
   const lastRun = Number(aiState.providerState?.perHostLastRun?.[normalized] || 0);
   const hasPriorityEvent = events.some((event) =>
     ['blocked_malicious_navigation', 'clickjacking_detected', 'blocked_popup'].includes(event.type)
   );
 
   if (!hasPriorityEvent && Number(policy?.riskScore || 0) < Number(settings.minRiskScore || 0)) {
+    recordAiProviderDiagnostic('skipped_threshold', {
+      provider: settings.provider,
+      hostname: normalized,
+      reason: 'risk=' + Number(policy?.riskScore || 0).toFixed(2) + ' threshold=' + Number(settings.minRiskScore || 0)
+    });
     return false;
   }
 
@@ -7735,10 +7760,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     (async () => {
       const nextSettings = normalizeAiProviderSettings(request.settings || {});
+      const priorSettings = normalizeAiProviderSettings(aiState.providerSettings || {});
+      const chromeModelConfigChanged = nextSettings.provider === 'chrome_builtin' && (
+        ['provider', 'model', 'chromeSampling', 'chromeResponseConstraint',
+          'temperature', 'topK', 'timeoutMs'].some((name) => priorSettings[name] !== nextSettings[name]) ||
+        JSON.stringify(priorSettings.chromeLanguages) !== JSON.stringify(nextSettings.chromeLanguages)
+      );
       const nextSecret = nextSettings.provider === 'lmstudio' || nextSettings.provider === 'chrome_builtin'
         ? ''
         : String(nextSettings.apiKey || getAiProviderSecret(nextSettings.provider)).trim();
       aiState.providerSettings = getPersistableAiProviderSettings(nextSettings);
+      if (chromeModelConfigChanged) {
+        // Explicit sampling/language changes should not inherit a stale model cooldown.
+        aiState.providerState = normalizeAiProviderState({
+          ...aiState.providerState,
+          chromeBuiltinBackoffUntil: 0
+        });
+      }
       aiState.providerProfiles = normalizeAiProviderProfiles(aiState.providerProfiles || {}, aiState.providerSettings);
       if (nextSecret) {
         aiState.providerSecrets = normalizeAiProviderSecrets({
