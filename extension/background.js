@@ -4754,20 +4754,97 @@ function isChromeBuiltinDownloadAvailability(value) {
   return status === 'downloadable' || status === 'downloading' || status === 'after-download';
 }
 
-async function resolveChromeLanguageModel() {
-  const api = globalThis.LanguageModel;
-  if (!api?.create) {
-    throw new Error('chrome_builtin_prompt_api_unavailable');
+// Service workers cannot own Prompt API sessions: route through an extension document.
+const CHROME_PROMPT_HOST_PATH = 'ai/chrome-prompt-host.html';
+let chromePromptHostCreating = null;
+
+async function ensureChromePromptDocument() {
+  if (!chrome.offscreen?.createDocument || !chrome.runtime?.getContexts) {
+    throw new Error('chrome_builtin_document_host_not_supported');
   }
-  return api;
+  const url = chrome.runtime.getURL(CHROME_PROMPT_HOST_PATH);
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [url]
+  });
+  if (contexts.length) return;
+  if (chromePromptHostCreating) return chromePromptHostCreating;
+  chromePromptHostCreating = (async () => {
+    const others = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+    if (others.length) throw new Error('chrome_builtin_document_host_conflict');
+    await chrome.offscreen.createDocument({
+      url: CHROME_PROMPT_HOST_PATH,
+      reasons: ['LOCAL_STORAGE'],
+      justification: 'Retain non-sensitive AI readiness status with localStorage while the document owns Chrome Prompt API sessions (unsupported in service workers).'
+    });
+  })().finally(() => { chromePromptHostCreating = null; });
+  return chromePromptHostCreating;
+}
+
+async function sendChromePromptHostRequest(operation, payload = {}) {
+  await ensureChromePromptDocument();
+  let timer;
+  try {
+    const response = await Promise.race([
+      chrome.runtime.sendMessage({ target: 'falconChromePromptHostRequest', operation, payload }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('chrome_builtin_document_host_timeout')), 95000);
+      })
+    ]);
+    if (!response || response.success !== true) {
+      const error = new Error(response?.error?.message || 'chrome_builtin_document_host_no_response');
+      error.name = response?.error?.name || 'ChromePromptHostError';
+      throw error;
+    }
+    return response.result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function chromePromptHostAbortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error('request_timeout'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new Error('request_timeout'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+async function resolveChromeLanguageModel() {
+  await ensureChromePromptDocument();
+  return {
+    availability: (options) => sendChromePromptHostRequest('availability', { options }),
+    params: () => sendChromePromptHostRequest('params'),
+    create: async (options = {}) => {
+      const { signal, ...sessionOptions } = options;
+      const pending = sendChromePromptHostRequest('create', { options: sessionOptions });
+      pending.then((result) => {
+        if (signal?.aborted && result?.sessionId) {
+          sendChromePromptHostRequest('destroy', { sessionId: result.sessionId }).catch(() => {});
+        }
+      }).catch(() => {});
+      const result = await chromePromptHostAbortable(pending, signal);
+      const sessionId = result.sessionId;
+      return {
+        prompt: (prompt, promptOptions = {}) => {
+          const { signal: promptSignal, ...safeOptions } = promptOptions;
+          return chromePromptHostAbortable(sendChromePromptHostRequest('prompt', {
+            sessionId, prompt, options: safeOptions
+          }), promptSignal);
+        },
+        destroy: () => sendChromePromptHostRequest('destroy', { sessionId })
+      };
+    }
+  };
 }
 
 function getChromeBuiltinCapabilitySnapshot() {
   return {
-    hasLanguageModel: Boolean(globalThis.LanguageModel),
-    hasAiLanguageModel: Boolean(globalThis.ai?.languageModel),
-    workerLikeContext: typeof WorkerGlobalScope !== 'undefined' && globalThis instanceof WorkerGlobalScope,
-    hasWindow: typeof globalThis.window !== 'undefined'
+    executionHost: 'offscreen_document',
+    brokerEnabled: Boolean(chrome.offscreen?.createDocument),
+    hasLanguageModelInWorker: Boolean(globalThis.LanguageModel),
+    workerLikeContext: typeof WorkerGlobalScope !== 'undefined' && globalThis instanceof WorkerGlobalScope
   };
 }
 
@@ -6025,18 +6102,18 @@ async function runChromeBuiltinHealthCheck(settings = aiState.providerSettings) 
 
     // A cold on-device model can need tens of seconds to initialize, even when
     // availability already reports ready. Do not mark it unhealthy after 3 s.
-    const probeTimeout = createRequestTimeout(Math.min(Number(normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS), 30000));
+    const probeTimeout = createRequestTimeout(Math.max(45000, Number(normalized.timeoutMs || CHROME_BUILTIN_DEFAULT_TIMEOUT_MS)));
     let probeSession = null;
     try {
       probeSession = await api.create({
         ...sessionConfig.options,
         signal: probeTimeout.signal
       });
-      await promptChromeBuiltinSession(probeSession, 'Return exactly OK.', {}, 3000);
+      await promptChromeBuiltinSession(probeSession, 'Return exactly OK.', {}, 30000);
     } finally {
       probeTimeout.cleanup();
       try {
-        probeSession?.destroy?.();
+        await probeSession?.destroy?.();
       } catch (_) {
         // no-op
       }
@@ -6562,7 +6639,7 @@ async function requestChromeBuiltinAdvisory(hostname, context, policy) {
   } finally {
     timeout.cleanup();
     try {
-      session?.destroy?.();
+      await session?.destroy?.();
     } catch (_) {
       // no-op
     }
@@ -6820,7 +6897,7 @@ async function requestAiElementClassification(hostname, features = {}) {
       } finally {
         timeout.cleanup();
         try {
-          session?.destroy?.();
+          await session?.destroy?.();
         } catch (_) {
           // no-op
         }

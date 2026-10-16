@@ -202,11 +202,11 @@
       options = configuredSessionOptions();
       const availability = String(await api.availability(options));
       if (!['available', 'readily', 'ready'].includes(availability.toLowerCase())) {
-        throw new Error('Model is not ready: ' + availability + '. Use Prepare model first.');
+        throw new Error('Model is not ready: ' + availability + (['downloadable', 'downloading'].includes(availability.toLowerCase()) ? '. Use Prepare model first.' : '. Check Chrome settings > On-device AI, device support, and chrome://on-device-internals.'))
       }
       session = await api.create(options);
       rawText = String(await session.prompt('Return the word OK, without any other text.', {
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(Math.max(15000, Number(document.getElementById('lmstudio-timeout')?.value || 45000)))
       }));
       taskStatus = 'success';
       if (inferenceStatus) inferenceStatus.textContent =

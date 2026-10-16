@@ -11,6 +11,8 @@
     "test:ai": "node tests/ai-eval/run-ai-evaluation.js",
     "test:ai:chrome-builtin-element": "python tests/ai/run_chrome_builtin_element_classification_regression.py",
     "test:ai:chrome-builtin-contract": "node tests/ai/run_chrome_builtin_prompt_api_contract_regression.js",
+    "test:ai:chrome-builtin-host": "node tests/ai/run_chrome_document_host_broker_regression.js",
+    "test:ai:chrome-builtin-host:browser": "node tests/ai/run_chrome_document_host_browser_e2e.js",
     "test:ai:zero-setup": "node tests/ai/run_chrome_builtin_zero_setup_regression.js",
     "test:ai:chrome-usecases": "node tests/ai/run_chrome_usecase_panel_regression.js",
     "test:ai:risk-telemetry": "node tests/ai/run_risk_telemetry_integrity_regression.js",

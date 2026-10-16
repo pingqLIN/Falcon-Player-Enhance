@@ -16,6 +16,7 @@
     "sidePanel",
     "scripting",
     "storage",
+    "offscreen",
     "unlimitedStorage",
     "tabs",
     "activeTab",

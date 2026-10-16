@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiModelSelect.innerHTML = '';
             const placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = models.length ? 'Select a discovered model' : 'No discovered models yet';
+            placeholder.textContent = provider === 'chrome_builtin' ? 'Chrome-managed model (not enumerable)' : models.length ? 'Select a discovered model' : 'No discovered models yet';
             aiModelSelect.appendChild(placeholder);
             models.forEach((model) => {
                 const option = document.createElement('option');
@@ -600,7 +600,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (aiModelHint) {
             const missing = current && models.length > 0 && !models.includes(current);
-            aiModelHint.textContent = models.length
+            aiModelHint.textContent = provider === 'chrome_builtin'
+                ? 'Chrome selects the built-in model. Run Health Check; if unavailable, check chrome://settings/system > On-device AI and chrome://on-device-internals.'
+                : models.length
                 ? `${models.length} models from the last check${missing ? `. ${current} is not in the list.` : '.'}`
                 : 'Run a health check to load models from this provider.';
         }
